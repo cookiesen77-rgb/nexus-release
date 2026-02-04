@@ -1,5 +1,5 @@
 import React from 'react'
-import { Brush, Camera, Film, Hand, LayoutGrid, Link2, MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch, Save } from 'lucide-react'
+import { Brush, Camera, Film, Hand, LayoutGrid, Link2, MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch, Save, Wand2 } from 'lucide-react'
 
 export type CanvasTool = 'select' | 'pan' | 'connect'
 
@@ -13,6 +13,7 @@ type Props = {
   onOpenDirector?: () => void
   onOpenSketch?: () => void
   onOpenAudio?: () => void
+  onOpenBlend?: () => void
   onOpenPromptLibrary?: () => void
   onOpenPromptReverse?: () => void
   onOpenCameraControl?: () => void
@@ -66,6 +67,7 @@ export default function CanvasSidebar({
   onOpenDirector,
   onOpenSketch,
   onOpenAudio,
+  onOpenBlend,
   onOpenPromptLibrary,
   onOpenPromptReverse,
   onOpenCameraControl,
@@ -125,7 +127,13 @@ export default function CanvasSidebar({
       </IconButton>
 
       <IconButton
-        title="提示词库"
+        title="图像融合"
+        onClick={() => onOpenBlend?.()}
+      >
+        <Wand2 className="h-5 w-5" />
+      </IconButton>
+
+      <IconButton
         onClick={() => onOpenPromptLibrary?.()}
       >
         <BookOpen className="h-5 w-5" />

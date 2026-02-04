@@ -27,6 +27,7 @@ import WorkflowTemplatesModal from '@/components/canvas/WorkflowTemplatesModal'
 import DirectorConsole from '@/components/canvas/DirectorConsole'
 import SketchEditor from '@/components/canvas/SketchEditor'
 import SonicStudio from '@/components/canvas/SonicStudio'
+import BlendToolPanel from '@/components/canvas/BlendToolPanel'
 import PromptReverseModal from '@/components/canvas/PromptReverseModal'
 import CameraControlModal from '@/components/cameraControl/CameraControlModal'
 import { getWorkflowById } from '@/config/workflows'
@@ -71,6 +72,7 @@ export default function Canvas() {
   const [directorOpen, setDirectorOpen] = useState(false)
   const [sketchOpen, setSketchOpen] = useState(false)
   const [audioOpen, setAudioOpen] = useState(false)
+  const [blendToolOpen, setBlendToolOpen] = useState(false)
   const [promptReverseOpen, setPromptReverseOpen] = useState(false)
   const [cameraControlOpen, setCameraControlOpen] = useState(false)
   const [batchGenerating, setBatchGenerating] = useState(false)
@@ -1544,6 +1546,7 @@ export default function Canvas() {
               onOpenDirector={() => setDirectorOpen(true)}
               onOpenSketch={() => setSketchOpen(true)}
               onOpenAudio={() => setAudioOpen(true)}
+              onOpenBlend={() => setBlendToolOpen(true)}
               onOpenPromptLibrary={() => setPromptLibraryOpen(true)}
               onOpenPromptReverse={() => setPromptReverseOpen(true)}
               onSaveAsTemplate={handleSaveAsTemplate}
@@ -1848,6 +1851,42 @@ export default function Canvas() {
           
           window.$message?.success?.('音频已添加到画布')
           setAudioOpen(false)
+        }}
+      />
+      
+      <BlendToolPanel
+        open={blendToolOpen}
+        onClose={() => setBlendToolOpen(false)}
+        onAddToCanvas={(imageData, fileName) => {
+          const store = useGraphStore.getState()
+          const vp = store.viewport
+          const el = canvasWrapRef.current
+          let x = 100, y = 100
+          if (el) {
+            const rect = el.getBoundingClientRect()
+            const z = vp.zoom || 1
+            x = (rect.width * 0.5 - vp.x) / z
+            y = (rect.height * 0.5 - vp.y) / z
+          }
+
+          // 创建融合结果 image 节点
+          const newNodeId = store.addNode('image', { x, y }, {
+            label: fileName || '融合结果',
+            url: imageData,
+            base64: imageData,
+            createdAt: Date.now()
+          })
+
+          // 保存到 IndexedDB
+          const projectId = store.projectId || 'default'
+          saveMedia({
+            nodeId: newNodeId,
+            projectId,
+            type: 'image',
+            data: imageData,
+          }).catch(() => null)
+
+          window.$message?.success?.('融合结果已添加到画布')
         }}
       />
       
