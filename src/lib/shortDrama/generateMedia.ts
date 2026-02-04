@@ -264,8 +264,9 @@ export async function generateShortDramaImage(req: ShortDramaImageRequest): Prom
   const quality = String(req?.quality || modelCfg?.defaultParams?.quality || '').trim()
   const refImages = Array.isArray(req?.refImages) ? req!.refImages!.map((x) => String(x || '').trim()).filter(Boolean) : []
 
-  // gemini 特殊：最多 14 张参考图
-  const limitedRefImages = refImages.slice(0, modelCfg?.key === 'gemini-3-pro-image-preview' ? 14 : Math.max(0, refImages.length))
+  // 根据模型配置限制参考图数量
+  const maxRefImages = modelCfg?.maxRefImages ?? (modelCfg?.supportsReferenceImages === false ? 0 : 4)
+  const limitedRefImages = refImages.slice(0, maxRefImages)
 
   if (!prompt && limitedRefImages.length === 0) {
     throw new Error('请提供提示词或参考图')

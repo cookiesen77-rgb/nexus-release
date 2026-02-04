@@ -643,6 +643,7 @@ export async function callAiAssistant(
 
 /**
  * 流式调用 AI 助手模型
+ * 根据模型配置自动选择正确的端点和请求格式
  */
 export async function* streamAiAssistant(
   modelKey: string,
@@ -651,50 +652,101 @@ export async function* streamAiAssistant(
 ): AsyncGenerator<string> {
   const { signal, filterThinking = true } = options
   const apiKey = getApiKey()
-  
+
   if (!apiKey) {
     throw new Error('未配置 API Key')
   }
 
-  const endpoint = resolveEndpointUrl('/chat/completions')
-  
+  // 动态导入模型配置
+  const { CHAT_MODELS } = await import('@/config/models')
+  const modelCfg = (CHAT_MODELS as any[]).find(m => m.key === modelKey)
+
+  // 判断是否为 Gemini 模型（需要特殊处理）
+  const isGeminiModel = modelKey.includes('gemini') || modelCfg?.format === 'gemini-chat'
+
+  if (isGeminiModel && modelCfg) {
+    // Gemini 模型：使用 Gemini 原生格式
+    yield* streamGeminiChat(modelCfg, messages, apiKey, signal, filterThinking)
+  } else {
+    // OpenAI 兼容模型：使用 /chat/completions
+    yield* streamOpenAIChat(modelKey, messages, apiKey, signal, filterThinking)
+  }
+}
+
+/**
+ * Gemini 原生格式流式请求
+ */
+async function* streamGeminiChat(
+  modelCfg: any,
+  messages: ChatMessage[],
+  apiKey: string,
+  signal?: AbortSignal,
+  filterThinking: boolean = true
+): AsyncGenerator<string> {
+  // Gemini 使用 query 参数认证
+  const baseEndpoint = modelCfg.endpoint || `${DEFAULT_API_BASE_URL}/v1beta/models/gemini-3-pro-preview:generateContent`
+  const endpoint = `${baseEndpoint}?key=${apiKey}`
+
+  // 转换消息格式为 Gemini 格式
+  const contents = messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: typeof m.content === 'string'
+        ? [{ text: m.content }]
+        : m.content.map((c: any) => {
+            if (c.type === 'text') return { text: c.text || '' }
+            if (c.type === 'image_url' && c.image_url?.url) {
+              const url = c.image_url.url
+              if (url.startsWith('data:')) {
+                const match = url.match(/^data:([^;]+);base64,(.*)$/)
+                if (match) {
+                  return { inline_data: { mime_type: match[1], data: match[2] } }
+                }
+              }
+              return { text: `[Image: ${url}]` }
+            }
+            return { text: '' }
+          })
+    }))
+
+  // 提取 system prompt
+  const systemMsg = messages.find(m => m.role === 'system')
+  const systemInstruction = systemMsg && typeof systemMsg.content === 'string'
+    ? { parts: [{ text: systemMsg.content }] }
+    : undefined
+
+  const body: any = { contents }
+  if (systemInstruction) body.systemInstruction = systemInstruction
+
+  // Gemini 流式请求需要 alt=sse
+  const streamEndpoint = endpoint + '&alt=sse'
+
   const fetchOptions: RequestInit = {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: modelKey,
-      messages,
-      stream: true
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
   }
-  
+
   if (!isTauri && signal) {
     fetchOptions.signal = signal
   }
 
-  const response = await safeFetch(endpoint, fetchOptions)
-  
+  const response = await safeFetch(streamEndpoint, fetchOptions)
+
   if (!response.ok) {
     let errorText = ''
-    try {
-      errorText = await response.text()
-    } catch {
-      errorText = ''
-    }
-    throw new Error(errorText || `Request failed (${response.status})`)
+    try { errorText = await response.text() } catch {}
+    throw new Error(errorText || `Gemini request failed (${response.status})`)
   }
 
   const reader = response.body?.getReader()
   if (!reader) return
-  
+
   const decoder = new TextDecoder()
   let buffer = ''
-  let fullContent = ''
   let inThinkingBlock = false
-  
+
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
@@ -707,40 +759,105 @@ export async function* streamAiAssistant(
       const trimmed = line.trim()
       if (!trimmed || !trimmed.startsWith('data:')) continue
       const payload = trimmed.slice(5).trim()
-      if (payload === '[DONE]') {
-        // 流结束，如果需要过滤，对完整内容进行处理
-        if (filterThinking && fullContent) {
-          const filtered = filterThinkingContent(fullContent)
-          // 如果过滤后内容不同，说明有思考内容被过滤
-          // 这里我们已经实时过滤了，所以不需要额外处理
+      if (payload === '[DONE]') return
+
+      try {
+        const parsed = JSON.parse(payload)
+        // Gemini 响应格式：candidates[0].content.parts[0].text
+        const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        if (text) {
+          if (filterThinking) {
+            if (text.includes('<think>') || text.includes('<thinking>')) {
+              inThinkingBlock = true
+            }
+            if (text.includes('</think>') || text.includes('</thinking>')) {
+              inThinkingBlock = false
+              continue
+            }
+            if (inThinkingBlock) continue
+          }
+          yield text
         }
-        return
-      }
+      } catch {}
+    }
+  }
+}
+
+/**
+ * OpenAI 兼容格式流式请求
+ */
+async function* streamOpenAIChat(
+  modelKey: string,
+  messages: ChatMessage[],
+  apiKey: string,
+  signal?: AbortSignal,
+  filterThinking: boolean = true
+): AsyncGenerator<string> {
+  const endpoint = resolveEndpointUrl('/chat/completions')
+
+  const fetchOptions: RequestInit = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: modelKey,
+      messages,
+      stream: true
+    })
+  }
+
+  if (!isTauri && signal) {
+    fetchOptions.signal = signal
+  }
+
+  const response = await safeFetch(endpoint, fetchOptions)
+
+  if (!response.ok) {
+    let errorText = ''
+    try { errorText = await response.text() } catch {}
+    throw new Error(errorText || `Request failed (${response.status})`)
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) return
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let inThinkingBlock = false
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || !trimmed.startsWith('data:')) continue
+      const payload = trimmed.slice(5).trim()
+      if (payload === '[DONE]') return
 
       try {
         const parsed = JSON.parse(payload)
         const content = parsed.choices?.[0]?.delta?.content
         if (content) {
-          // 实时检测并过滤思考标签
           if (filterThinking) {
-            // 检测思考块的开始和结束
             if (content.includes('<think>') || content.includes('<thinking>')) {
               inThinkingBlock = true
             }
             if (content.includes('</think>') || content.includes('</thinking>')) {
               inThinkingBlock = false
-              continue // 跳过结束标签
+              continue
             }
-            if (inThinkingBlock) {
-              continue // 跳过思考内容
-            }
+            if (inThinkingBlock) continue
           }
-          fullContent += content
           yield content
         }
-      } catch {
-        // ignore invalid json
-      }
+      } catch {}
     }
   }
 }
