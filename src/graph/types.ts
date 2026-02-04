@@ -4,6 +4,7 @@ export type NodeType =
   | 'video'
   | 'imageConfig'
   | 'videoConfig'
+  | 'blendConfig'
   | 'audio'
   | 'localSave'
   | 'klingVideoTool'

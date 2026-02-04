@@ -49,13 +49,16 @@ export const BlendConfigNodeComponent = memo(function BlendConfigNode({
     if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
     updateTimerRef.current = window.setTimeout(() => {
       const store = useGraphStore.getState()
-      store.patchNodeData(id, updates)
+      const node = store.nodes.find(n => n.id === id)
+      if (node) {
+        store.updateNode(id, { data: { ...node.data, ...updates } })
+      }
     }, 100)
   }, [id])
 
   const handleDelete = useCallback(() => {
     const store = useGraphStore.getState()
-    store.deleteNode(id)
+    store.removeNode(id)
   }, [id])
 
   return (

@@ -182,13 +182,18 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
   // 预设模式
   const [selectedPreset, setSelectedPreset] = useState<string>('none')
   const [showPresetDropdown, setShowPresetDropdown] = useState(false)
-  
-  // 参考图
-  const [referenceImage, setReferenceImage] = useState<string | null>(null)
-  const [referenceImageFile, setReferenceImageFile] = useState<File | null>(null)
+
+  // 多参考图支持
+  const [referenceImages, setReferenceImages] = useState<string[]>([])
   const [showImagePicker, setShowImagePicker] = useState(false)
+  const [activeImageSlot, setActiveImageSlot] = useState<number>(0) // 当前选择的槽位
   const fileInputRef = useRef<HTMLInputElement>(null)
-  
+
+  // 重试状态
+  const [retryCount, setRetryCount] = useState(0)
+  const [retryMessage, setRetryMessage] = useState<string | null>(null)
+  const MAX_RETRIES = 3
+
   // Form state
   const [userPrompt, setUserPrompt] = useState('')
   const [styleBible, setStyleBible] = useState('')
@@ -198,6 +203,22 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
   const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL || 'gemini-3-pro-image-preview')
   const [autoGenerateImages, setAutoGenerateImages] = useState(true)
   const [resolution, setResolution] = useState<'1K' | '2K' | '4K'>('2K')
+
+  // 根据当前模型获取最大参考图数量
+  const maxRefImages = useMemo(() => {
+    const modelCfg = (IMAGE_MODELS as any[]).find(m => m.key === imageModel)
+    // 默认值：如果模型不支持参考图则为0，否则为4
+    if (!modelCfg) return 4
+    if (modelCfg.supportsReferenceImages === false) return 0
+    return modelCfg.maxRefImages ?? 4
+  }, [imageModel])
+
+  // 当模型切换时，如果参考图数量超过新模型限制，自动截断
+  useEffect(() => {
+    if (referenceImages.length > maxRefImages) {
+      setReferenceImages(prev => prev.slice(0, maxRefImages))
+    }
+  }, [maxRefImages, referenceImages.length])
 
   // AI 润色相关
   type PolishLang = 'zh' | 'en'
@@ -301,44 +322,105 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
     saveHistory([])
   }, [saveHistory])
 
-  // 参考图上传处理
+  // 参考图上传处理（支持多图）
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    setReferenceImageFile(file)
     const reader = new FileReader()
     reader.onload = (ev) => {
-      setReferenceImage(ev.target?.result as string)
+      const dataUrl = ev.target?.result as string
+      setReferenceImages(prev => {
+        const newImages = [...prev]
+        if (activeImageSlot < newImages.length) {
+          newImages[activeImageSlot] = dataUrl
+        } else {
+          newImages.push(dataUrl)
+        }
+        return newImages.slice(0, maxRefImages)
+      })
     }
     reader.readAsDataURL(file)
-  }, [])
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [activeImageSlot])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     const file = e.dataTransfer.files?.[0]
     if (!file || !file.type.startsWith('image/')) return
 
-    setReferenceImageFile(file)
     const reader = new FileReader()
     reader.onload = (ev) => {
-      setReferenceImage(ev.target?.result as string)
+      const dataUrl = ev.target?.result as string
+      setReferenceImages(prev => {
+        const newImages = [...prev]
+        if (activeImageSlot < newImages.length) {
+          newImages[activeImageSlot] = dataUrl
+        } else {
+          newImages.push(dataUrl)
+        }
+        return newImages.slice(0, maxRefImages)
+      })
     }
     reader.readAsDataURL(file)
+  }, [activeImageSlot, maxRefImages])
+
+  const removeReferenceImage = useCallback((index: number) => {
+    setReferenceImages(prev => prev.filter((_, i) => i !== index))
   }, [])
 
-  const clearReferenceImage = useCallback(() => {
-    setReferenceImage(null)
-    setReferenceImageFile(null)
+  const clearAllReferenceImages = useCallback(() => {
+    setReferenceImages([])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [])
 
   // 从画布或历史选择参考图
   const handleSelectFromPicker = useCallback((src: string) => {
-    setReferenceImage(src)
-    setReferenceImageFile(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    setReferenceImages(prev => {
+      const newImages = [...prev]
+      if (activeImageSlot < newImages.length) {
+        newImages[activeImageSlot] = src
+      } else {
+        newImages.push(src)
+      }
+      return newImages.slice(0, maxRefImages)
+    })
     setShowImagePicker(false)
+  }, [activeImageSlot, maxRefImages])
+
+  // 带重试的图片生成
+  const generateImageWithRetry = useCallback(async (
+    generateFn: () => Promise<string>,
+    maxRetries: number = MAX_RETRIES
+  ): Promise<string> => {
+    let lastError: Error | null = null
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        setRetryCount(attempt)
+        if (attempt > 1) {
+          setRetryMessage(`第 ${attempt}/${maxRetries} 次尝试...`)
+        }
+        const result = await generateFn()
+        setRetryMessage(null)
+        setRetryCount(0)
+        return result
+      } catch (err: any) {
+        lastError = err
+        console.warn(`[DirectorConsole] 生图尝试 ${attempt}/${maxRetries} 失败:`, err?.message)
+
+        if (attempt < maxRetries) {
+          // 指数退避：2s, 4s, 8s
+          const waitMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000)
+          setRetryMessage(`生成失败，${Math.round(waitMs / 1000)}秒后重试 (${attempt}/${maxRetries})...`)
+          await new Promise(r => setTimeout(r, waitMs))
+        }
+      }
+    }
+
+    setRetryMessage(null)
+    setRetryCount(0)
+    throw lastError || new Error('生成失败')
   }, [])
 
   const parsePolishDualLang = useCallback((raw: string): { zh: string; en: string } => {
@@ -382,19 +464,21 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
     try {
       // 获取全局 AI 助手模型设置
       const aiModel = useSettingsStore.getState().aiAssistantModel || 'gpt-5-mini'
-      
+
       // 构建消息
       const messages: any[] = [
         { role: 'system', content: currentPreset.systemPrompt || POLISH_SYSTEM_PROMPT }
       ]
 
-      // 如果有参考图，添加图片分析
+      // 构建用户消息（支持多参考图）
       let userContent: any
-      if (referenceImage) {
-        userContent = [
-          {
-            type: 'text',
-            text: `Please analyze this reference image and use it to enhance the following prompt. Extract product/subject details, style, and visual elements from the image.
+      if (referenceImages.length > 0) {
+        const imageDescriptions = referenceImages.map((_, i) => `Image ${i + 1}: Reference image ${i + 1}`).join('\n')
+        const textPart = {
+          type: 'text',
+          text: `Please analyze these ${referenceImages.length} reference image(s) and use them to enhance the following prompt.
+${referenceImages.length > 1 ? `Image order significance:\n- Image 1: Primary subject/style reference\n- Image 2+: Additional style/element references\n` : ''}
+Extract product/subject details, style, and visual elements from the images.
 
 User's description:
 ${userPrompt}
@@ -403,12 +487,12 @@ ${currentPreset.promptTemplate ? `Use this template structure:\n${currentPreset.
 
 Output STRICT JSON only (no markdown, no code fences):
 {"zh":"<polished prompt in Simplified Chinese>","en":"<polished prompt in English>"}`
-          },
-          {
-            type: 'image_url',
-            image_url: { url: referenceImage }
-          }
-        ]
+        }
+        const imageParts = referenceImages.map(img => ({
+          type: 'image_url',
+          image_url: { url: img }
+        }))
+        userContent = [textPart, ...imageParts]
       } else {
         userContent = `Polish this prompt into a professional, detailed image generation prompt:
 
@@ -442,7 +526,7 @@ Output STRICT JSON only (no markdown, no code fences):
     } finally {
       setIsPolishing(false)
     }
-  }, [userPrompt, referenceImage, currentPreset, parsePolishDualLang])
+  }, [userPrompt, referenceImages, currentPreset, parsePolishDualLang])
 
   // 生成图片 - 支持多种模型格式（用于单独生图，已有润色结果时）
   const handleGenerateImage = useCallback(async () => {
@@ -456,101 +540,143 @@ Output STRICT JSON only (no markdown, no code fences):
     setIsGeneratingImage(true)
     setGenerateError(null)
     setGeneratedImageUrl(null)
+    setRetryMessage(null)
+    setRetryCount(0)
 
     try {
-      const modelCfg = (IMAGE_MODELS as any[]).find(m => m.key === imageModel) || (IMAGE_MODELS as any[])[0]
-      const format = modelCfg?.format || 'openai-image'
-      let imageUrl = ''
-      
-      if (format === 'gemini-image') {
-        // Gemini 格式
-        const requestParts: any[] = []
-        if (promptToUse) requestParts.push({ text: promptToUse })
-        if (referenceImage) {
-          const match = referenceImage.match(/^data:(.+?);base64,(.+)$/)
-          if (match) {
-            requestParts.push({ inline_data: { mime_type: match[1], data: match[2] } })
+      const imageUrl = await generateImageWithRetry(async () => {
+        const modelCfg = (IMAGE_MODELS as any[]).find(m => m.key === imageModel) || (IMAGE_MODELS as any[])[0]
+        const format = modelCfg?.format || 'openai-image'
+        let resultUrl = ''
+
+        if (format === 'gemini-image') {
+          // Gemini 格式 - 支持多参考图
+          const requestParts: any[] = []
+          if (promptToUse) requestParts.push({ text: promptToUse })
+          for (const refImg of referenceImages) {
+            const match = refImg.match(/^data:(.+?);base64,(.+)$/)
+            if (match) {
+              requestParts.push({ inline_data: { mime_type: match[1], data: match[2] } })
+            }
           }
-        }
-        if (requestParts.length === 0) throw new Error('请提供提示词或参考图')
-        
-        const payload = {
-          contents: [{ role: 'user', parts: requestParts }],
-          generationConfig: {
-            responseModalities: ['IMAGE'],
-            imageConfig: { aspectRatio: aspectRatio || '1:1', imageSize: resolution || '2K' }
+          if (requestParts.length === 0) throw new Error('请提供提示词或参考图')
+
+          const payload = {
+            contents: [{ role: 'user', parts: requestParts }],
+            generationConfig: {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: aspectRatio || '1:1', imageSize: resolution || '2K' }
+            }
           }
+          const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
+          const parts = rsp?.candidates?.[0]?.content?.parts || []
+          const inline = parts.map((p: any) => p.inlineData || p.inline_data).filter(Boolean)[0]
+          if (inline?.data) {
+            resultUrl = `data:${inline.mimeType || inline.mime_type || 'image/png'};base64,${inline.data}`
+          }
+          if (!resultUrl) throw new Error('生图返回为空，请重试')
+        } else if (format === 'openai-chat-image') {
+          // Chat 方式生图
+          const chatMessages = [{ role: 'user', content: `Generate an image: ${promptToUse}` }]
+          const result = await chatCompletions({ model: imageModel, messages: chatMessages })
+          const content = result?.choices?.[0]?.message?.content || ''
+          const urlMatch = content.match(/https?:\/\/[^\s<>"{}|\\^`[\]]+\.(png|jpg|jpeg|webp|gif)/i)
+          if (urlMatch) resultUrl = urlMatch[0]
+          else {
+            const b64Match = content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/)
+            if (b64Match) resultUrl = b64Match[0]
+          }
+          if (!resultUrl) throw new Error('Chat 生图未返回有效图片')
+        } else if (format === 'kling-image' || format === 'kling-omni-image') {
+          // Kling 格式 - 支持多参考图
+          const klingRes = String(resolution || '').trim().toLowerCase() || String(modelCfg.defaultParams?.quality || '1k')
+          const endpoint = format === 'kling-omni-image' ? '/kling/v1/images/omni-image' : modelCfg.endpoint
+          const klingPayload: any = {
+            model_name: modelCfg.defaultParams?.model_name || (format === 'kling-omni-image' ? 'kling-image-o1' : 'kling-v2-1'),
+            prompt: promptToUse,
+            n: 1,
+            aspect_ratio: aspectRatio || '16:9',
+            resolution: klingRes
+          }
+          // 添加参考图
+          if (referenceImages.length > 0) {
+            if (format === 'kling-omni-image') {
+              klingPayload.image_list = referenceImages.map(img => ({ image: img }))
+            } else {
+              klingPayload.image = referenceImages[0]
+            }
+          }
+          const resp = await postJson<any>(endpoint, klingPayload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
+
+          // 尝试直接获取结果
+          const extractUrls = (obj: any): string[] => {
+            const urls: string[] = []
+            const walk = (o: any, depth = 0) => {
+              if (!o || depth > 5) return
+              if (typeof o === 'string' && (o.startsWith('http') || o.startsWith('data:'))) {
+                urls.push(o)
+                return
+              }
+              if (Array.isArray(o)) {
+                o.forEach(i => walk(i, depth + 1))
+                return
+              }
+              if (typeof o === 'object') {
+                for (const k of ['url', 'image_url', 'imageUrl', 'output_url']) {
+                  if (typeof o[k] === 'string') urls.push(o[k])
+                }
+                Object.values(o).forEach(v => walk(v, depth + 1))
+              }
+            }
+            walk(obj)
+            return urls
+          }
+          resultUrl = extractUrls(resp)[0] || ''
+
+          if (!resultUrl) {
+            // 轮询任务
+            const taskId = resp?.data?.task_id || resp?.data?.id || resp?.task_id || resp?.id
+            if (!taskId) throw new Error('Kling 生图返回异常：未获取到图片或任务 ID')
+            const statusUrl = format === 'kling-omni-image'
+              ? `/kling/v1/images/omni-image/${encodeURIComponent(String(taskId))}`
+              : `${String(modelCfg.endpoint).replace(/\/$/, '')}/${encodeURIComponent(String(taskId))}`
+
+            for (let i = 0; i < 60; i++) {
+              await new Promise(r => setTimeout(r, 3000))
+              setRetryMessage(`等待 Kling 生成... (${i + 1}/60)`)
+              const statusRes = await postJson<any>(statusUrl, {}, { authMode: modelCfg.authMode, timeoutMs: 30000 })
+              resultUrl = extractUrls(statusRes)[0] || ''
+              if (resultUrl) break
+              const status = String(statusRes?.data?.task_status || statusRes?.task_status || statusRes?.status || '').toLowerCase()
+              if (/(fail|error)/i.test(status)) {
+                throw new Error(statusRes?.data?.task_status_msg || statusRes?.message || 'Kling 生成失败')
+              }
+            }
+          }
+          if (!resultUrl) throw new Error('Kling 生成超时')
+        } else {
+          // OpenAI 标准格式
+          const pickedSize = pickBestSizeKeyForAspect(modelCfg, aspectRatio)
+          const result = await generateImage({
+            model: imageModel,
+            prompt: promptToUse,
+            size: pickedSize || aspectRatio,
+          }, {
+            endpoint: modelCfg?.endpoint || '/images/generations',
+            authMode: modelCfg?.authMode || 'bearer',
+            timeout: modelCfg?.timeout
+          })
+          if (result?.url) resultUrl = result.url
+          else if (result?.data?.[0]?.url) resultUrl = result.data[0].url
+          else if (result?.data?.[0]?.b64_json) resultUrl = `data:image/png;base64,${result.data[0].b64_json}`
+          else throw new Error('未获取到图片结果')
         }
-        const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
-        const parts = rsp?.candidates?.[0]?.content?.parts || []
-        const inline = parts.map((p: any) => p.inlineData || p.inline_data).filter(Boolean)[0]
-        if (inline?.data) {
-          imageUrl = `data:${inline.mimeType || inline.mime_type || 'image/png'};base64,${inline.data}`
-        }
-        if (!imageUrl) throw new Error('生图返回为空，请重试')
-      } else if (format === 'openai-chat-image') {
-        // Chat 方式生图
-        const chatMessages = [{ role: 'user', content: `Generate an image: ${promptToUse}` }]
-        const result = await chatCompletions({ model: imageModel, messages: chatMessages })
-        const content = result?.choices?.[0]?.message?.content || ''
-        const urlMatch = content.match(/https?:\/\/[^\s<>"{}|\\^`[\]]+\.(png|jpg|jpeg|webp|gif)/i)
-        if (urlMatch) imageUrl = urlMatch[0]
-        else {
-          const b64Match = content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/)
-          if (b64Match) imageUrl = b64Match[0]
-        }
-        if (!imageUrl) throw new Error('Chat 生图未返回有效图片')
-      } else if (format === 'kling-image') {
-        // Kling 格式
-        const klingRes = String(resolution || '').trim().toLowerCase() || String(modelCfg.defaultParams?.quality || '1k')
-        const klingPayload = {
-          model_name: modelCfg.defaultParams?.model_name || 'kling-v2-1',
-          prompt: promptToUse,
-          aspect_ratio: aspectRatio || '1:1',
-          resolution: klingRes === '4k' ? '2k' : klingRes,
-          n: 1
-        }
-        const rsp = await postJson<any>(modelCfg.endpoint, klingPayload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 120000 })
-        if (rsp?.data?.images?.[0]?.url) imageUrl = rsp.data.images[0].url
-        else if (rsp?.data?.[0]?.url) imageUrl = rsp.data[0].url
-        else throw new Error('Kling 生图未返回有效图片')
-      } else if (format === 'doubao-seedream') {
-        // 豆包 Seedream（云雾 OpenAPI）：ratio(16:9等)+resolution(1K/2K/4K) 合成写入 size(像素)
-        const finalSize = seedreamSizeByRatioAndResolution(aspectRatio || modelCfg.defaultParams?.size || '3:4', resolution || modelCfg.defaultParams?.quality || '2K')
-        const payload: any = {
-          model: imageModel,
-          prompt: promptToUse,
-          size: finalSize,
-          response_format: 'url',
-          watermark: false,
-          sequential_image_generation: 'disabled',
-        }
-        // Seedream 参考图要求 http(s) URL；当前导演台上传是 dataURL，这里不自动上传，避免隐式外部依赖
-        const rsp = await postJson<any>(modelCfg.endpoint || '/images/generations', payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
-        if (rsp?.url) imageUrl = rsp.url
-        else if (rsp?.data?.[0]?.url) imageUrl = rsp.data[0].url
-        else if (rsp?.data?.[0]?.b64_json) imageUrl = `data:image/png;base64,${rsp.data[0].b64_json}`
-        else throw new Error('Seedream 未获取到图片结果')
-      } else {
-        // OpenAI 兼容格式
-        const pickedSize = pickBestSizeKeyForAspect(modelCfg, aspectRatio || '')
-        const result = await generateImage({
-          model: imageModel,
-          prompt: promptToUse,
-          size: pickedSize || aspectRatio,
-        }, {
-          endpoint: modelCfg?.endpoint || '/images/generations',
-          authMode: modelCfg?.authMode || 'bearer',
-          timeout: modelCfg?.timeout
-        })
-        if (result?.url) imageUrl = result.url
-        else if (result?.data?.[0]?.url) imageUrl = result.data[0].url
-        else if (result?.data?.[0]?.b64_json) imageUrl = `data:image/png;base64,${result.data[0].b64_json}`
-        else throw new Error('未获取到图片结果')
-      }
-      
+
+        return resultUrl
+      })
+
       setGeneratedImageUrl(imageUrl)
-      
+
       // 同步到历史素材
       try {
         useAssetsStore.getState().addAsset({
@@ -567,10 +693,11 @@ Output STRICT JSON only (no markdown, no code fences):
       setGenerateError(err?.message || '生成失败')
     } finally {
       setIsGeneratingImage(false)
+      setRetryMessage(null)
+      setRetryCount(0)
     }
-  }, [polishLang, polishedPromptZh, polishedPromptEn, userPrompt, imageModel, aspectRatio, referenceImage, resolution])
-
-  // 一键生成：先润色，再生图
+  }, [polishLang, polishedPromptZh, polishedPromptEn, userPrompt, imageModel, aspectRatio, referenceImages, resolution, generateImageWithRetry])
+  // 一键生成：先润色，再生图（带重试）
   const handlePolishAndGenerate = useCallback(async () => {
     if (!userPrompt.trim()) {
       setGenerateError('请先输入描述')
@@ -584,6 +711,8 @@ Output STRICT JSON only (no markdown, no code fences):
     setPolishedPromptEn('')
     setGenerateError(null)
     setGeneratedImageUrl(null)
+    setRetryMessage(null)
+    setRetryCount(0)
 
     let raw = ''
     let finalPrompt = ''
@@ -591,19 +720,20 @@ Output STRICT JSON only (no markdown, no code fences):
     try {
       // 获取全局 AI 助手模型设置
       const aiModel = useSettingsStore.getState().aiAssistantModel || 'gpt-5-mini'
-      
+
       // 构建消息
       const messages: any[] = [
         { role: 'system', content: currentPreset.systemPrompt || POLISH_SYSTEM_PROMPT }
       ]
 
-      // 如果有参考图，添加图片分析
+      // 构建用户消息（支持多参考图）
       let userContent: any
-      if (referenceImage) {
-        userContent = [
-          {
-            type: 'text',
-            text: `Please analyze this reference image and use it to enhance the following prompt. Extract product/subject details, style, and visual elements from the image.
+      if (referenceImages.length > 0) {
+        const textPart = {
+          type: 'text',
+          text: `Please analyze these ${referenceImages.length} reference image(s) and use them to enhance the following prompt.
+${referenceImages.length > 1 ? `Image order significance:\n- Image 1: Primary subject/style reference\n- Image 2+: Additional style/element references\n` : ''}
+Extract product/subject details, style, and visual elements from the images.
 
 User's description:
 ${userPrompt}
@@ -612,12 +742,12 @@ ${currentPreset.promptTemplate ? `Use this template structure:\n${currentPreset.
 
 Output STRICT JSON only (no markdown, no code fences):
 {"zh":"<polished prompt in Simplified Chinese>","en":"<polished prompt in English>"}`
-          },
-          {
-            type: 'image_url',
-            image_url: { url: referenceImage }
-          }
-        ]
+        }
+        const imageParts = referenceImages.map(img => ({
+          type: 'image_url',
+          image_url: { url: img }
+        }))
+        userContent = [textPart, ...imageParts]
       } else {
         userContent = `Polish this prompt into a professional, detailed image generation prompt:
 
@@ -642,10 +772,10 @@ Output STRICT JSON only (no markdown, no code fences):
       setIsPolishing(false)
       return
     }
-    
+
     setIsPolishing(false)
 
-    // 第二步：生成图片
+    // 第二步：生成图片（带重试）
     const dual = parsePolishDualLang(raw)
     setPolishedPromptZh(dual.zh)
     setPolishedPromptEn(dual.en)
@@ -659,107 +789,149 @@ Output STRICT JSON only (no markdown, no code fences):
     setIsGeneratingImage(true)
 
     try {
-      // 查找模型配置
-      const modelCfg = (IMAGE_MODELS as any[]).find(m => m.key === imageModel) || (IMAGE_MODELS as any[])[0]
-      const format = modelCfg?.format || 'openai-image'
-      
-      let imageUrl = ''
-      
-      if (format === 'gemini-image') {
-        // Gemini 格式
-        const requestParts: any[] = []
-        if (finalPrompt) requestParts.push({ text: finalPrompt })
-        if (referenceImage) {
-          const match = referenceImage.match(/^data:(.+?);base64,(.+)$/)
-          if (match) {
-            requestParts.push({ inline_data: { mime_type: match[1], data: match[2] } })
+      const imageUrl = await generateImageWithRetry(async () => {
+        const modelCfg = (IMAGE_MODELS as any[]).find(m => m.key === imageModel) || (IMAGE_MODELS as any[])[0]
+        const format = modelCfg?.format || 'openai-image'
+        let resultUrl = ''
+
+        if (format === 'gemini-image') {
+          // Gemini 格式 - 支持多参考图
+          const requestParts: any[] = []
+          if (finalPrompt) requestParts.push({ text: finalPrompt })
+          for (const refImg of referenceImages) {
+            const match = refImg.match(/^data:(.+?);base64,(.+)$/)
+            if (match) {
+              requestParts.push({ inline_data: { mime_type: match[1], data: match[2] } })
+            }
           }
-        }
-        if (requestParts.length === 0) throw new Error('请提供提示词或参考图')
-        
-        const payload = {
-          contents: [{ role: 'user', parts: requestParts }],
-          generationConfig: {
-            responseModalities: ['IMAGE'],
-            imageConfig: { aspectRatio: aspectRatio || '1:1', imageSize: resolution || '2K' }
+          if (requestParts.length === 0) throw new Error('请提供提示词或参考图')
+
+          const payload = {
+            contents: [{ role: 'user', parts: requestParts }],
+            generationConfig: {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: aspectRatio || '1:1', imageSize: resolution || '2K' }
+            }
           }
-        }
-        
-        const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
-        const parts = rsp?.candidates?.[0]?.content?.parts || []
-        const inline = parts.map((p: any) => p.inlineData || p.inline_data).filter(Boolean)[0]
-        if (inline?.data) {
-          imageUrl = `data:${inline.mimeType || inline.mime_type || 'image/png'};base64,${inline.data}`
-        }
-        if (!imageUrl) throw new Error('生图返回为空，请重试')
-      } else if (format === 'openai-chat-image') {
-        // Chat 方式生图（Grok、通义千问等）
-        const chatMessages = [
-          { role: 'user', content: `Generate an image based on this description: ${finalPrompt}\n\nPlease return the image directly.` }
-        ]
-        const result = await chatCompletions({ model: imageModel, messages: chatMessages })
-        const content = result?.choices?.[0]?.message?.content || ''
-        // 尝试提取 URL 或 base64
-        const urlMatch = content.match(/https?:\/\/[^\s<>"{}|\\^`[\]]+\.(png|jpg|jpeg|webp|gif)/i)
-        if (urlMatch) {
-          imageUrl = urlMatch[0]
+          const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
+          const parts = rsp?.candidates?.[0]?.content?.parts || []
+          const inline = parts.map((p: any) => p.inlineData || p.inline_data).filter(Boolean)[0]
+          if (inline?.data) {
+            resultUrl = `data:${inline.mimeType || inline.mime_type || 'image/png'};base64,${inline.data}`
+          }
+          if (!resultUrl) throw new Error('生图返回为空，请重试')
+        } else if (format === 'openai-chat-image') {
+          // Chat 方式生图
+          const chatMessages = [{ role: 'user', content: `Generate an image based on this description: ${finalPrompt}\n\nPlease return the image directly.` }]
+          const result = await chatCompletions({ model: imageModel, messages: chatMessages })
+          const content = result?.choices?.[0]?.message?.content || ''
+          const urlMatch = content.match(/https?:\/\/[^\s<>"{}|\\^`[\]]+\.(png|jpg|jpeg|webp|gif)/i)
+          if (urlMatch) resultUrl = urlMatch[0]
+          else {
+            const b64Match = content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/)
+            if (b64Match) resultUrl = b64Match[0]
+          }
+          if (!resultUrl) throw new Error('Chat 生图未返回有效图片')
+        } else if (format === 'kling-image' || format === 'kling-omni-image') {
+          // Kling 格式 - 支持多参考图
+          const klingRes = String(resolution || '').trim().toLowerCase() || String(modelCfg.defaultParams?.quality || '1k')
+          const endpoint = format === 'kling-omni-image' ? '/kling/v1/images/omni-image' : modelCfg.endpoint
+          const klingPayload: any = {
+            model_name: modelCfg.defaultParams?.model_name || (format === 'kling-omni-image' ? 'kling-image-o1' : 'kling-v2-1'),
+            prompt: finalPrompt,
+            n: 1,
+            aspect_ratio: aspectRatio || '16:9',
+            resolution: klingRes === '4k' ? '2k' : klingRes
+          }
+          if (referenceImages.length > 0) {
+            if (format === 'kling-omni-image') {
+              klingPayload.image_list = referenceImages.map(img => ({ image: img }))
+            } else {
+              klingPayload.image = referenceImages[0]
+            }
+          }
+          const resp = await postJson<any>(endpoint, klingPayload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
+
+          const extractUrls = (obj: any): string[] => {
+            const urls: string[] = []
+            const walk = (o: any, depth = 0) => {
+              if (!o || depth > 5) return
+              if (typeof o === 'string' && (o.startsWith('http') || o.startsWith('data:'))) {
+                urls.push(o)
+                return
+              }
+              if (Array.isArray(o)) {
+                o.forEach(i => walk(i, depth + 1))
+                return
+              }
+              if (typeof o === 'object') {
+                for (const k of ['url', 'image_url', 'imageUrl', 'output_url']) {
+                  if (typeof o[k] === 'string') urls.push(o[k])
+                }
+                Object.values(o).forEach(v => walk(v, depth + 1))
+              }
+            }
+            walk(obj)
+            return urls
+          }
+          resultUrl = extractUrls(resp)[0] || ''
+
+          if (!resultUrl) {
+            const taskId = resp?.data?.task_id || resp?.data?.id || resp?.task_id || resp?.id
+            if (!taskId) throw new Error('Kling 生图返回异常：未获取到图片或任务 ID')
+            const statusUrl = format === 'kling-omni-image'
+              ? `/kling/v1/images/omni-image/${encodeURIComponent(String(taskId))}`
+              : `${String(modelCfg.endpoint).replace(/\/$/, '')}/${encodeURIComponent(String(taskId))}`
+
+            for (let i = 0; i < 60; i++) {
+              await new Promise(r => setTimeout(r, 3000))
+              setRetryMessage(`等待 Kling 生成... (${i + 1}/60)`)
+              const statusRes = await postJson<any>(statusUrl, {}, { authMode: modelCfg.authMode, timeoutMs: 30000 })
+              resultUrl = extractUrls(statusRes)[0] || ''
+              if (resultUrl) break
+              const status = String(statusRes?.data?.task_status || statusRes?.task_status || statusRes?.status || '').toLowerCase()
+              if (/(fail|error)/i.test(status)) {
+                throw new Error(statusRes?.data?.task_status_msg || statusRes?.message || 'Kling 生成失败')
+              }
+            }
+          }
+          if (!resultUrl) throw new Error('Kling 生成超时')
+        } else if (format === 'doubao-seedream') {
+          const finalSize = seedreamSizeByRatioAndResolution(aspectRatio || modelCfg.defaultParams?.size || '3:4', resolution || modelCfg.defaultParams?.quality || '2K')
+          const payload: any = {
+            model: imageModel,
+            prompt: finalPrompt,
+            size: finalSize,
+            response_format: 'url',
+            watermark: false,
+            sequential_image_generation: 'disabled'
+          }
+          const rsp = await postJson<any>(modelCfg.endpoint || '/images/generations', payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
+          if (rsp?.url) resultUrl = rsp.url
+          else if (rsp?.data?.[0]?.url) resultUrl = rsp.data[0].url
+          else if (rsp?.data?.[0]?.b64_json) resultUrl = `data:image/png;base64,${rsp.data[0].b64_json}`
+          else throw new Error('Seedream 未获取到图片结果')
         } else {
-          const b64Match = content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/)
-          if (b64Match) imageUrl = b64Match[0]
+          // OpenAI 兼容格式
+          const pickedSize = pickBestSizeKeyForAspect(modelCfg, aspectRatio || '')
+          const result = await generateImage({
+            model: imageModel,
+            prompt: finalPrompt,
+            size: pickedSize || aspectRatio
+          }, {
+            endpoint: modelCfg?.endpoint || '/images/generations',
+            authMode: modelCfg?.authMode || 'bearer',
+            timeout: modelCfg?.timeout
+          })
+          if (result?.url) resultUrl = result.url
+          else if (result?.data?.[0]?.url) resultUrl = result.data[0].url
+          else if (result?.data?.[0]?.b64_json) resultUrl = `data:image/png;base64,${result.data[0].b64_json}`
+          else throw new Error('未获取到图片结果')
         }
-        if (!imageUrl) throw new Error('Chat 生图未返回有效图片')
-      } else if (format === 'kling-image') {
-        // Kling 格式
-        const klingRes = String(resolution || '').trim().toLowerCase() || String(modelCfg.defaultParams?.quality || '1k')
-        const klingPayload = {
-          model_name: modelCfg.defaultParams?.model_name || 'kling-v2-1',
-          prompt: finalPrompt,
-          aspect_ratio: aspectRatio || '1:1',
-          resolution: klingRes === '4k' ? '2k' : klingRes,
-          n: 1
-        }
-        const rsp = await postJson<any>(modelCfg.endpoint, klingPayload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 120000 })
-        // Kling 可能返回 task_id 需要轮询，或直接返回图片
-        if (rsp?.data?.images?.[0]?.url) {
-          imageUrl = rsp.data.images[0].url
-        } else if (rsp?.data?.[0]?.url) {
-          imageUrl = rsp.data[0].url
-        } else {
-          throw new Error('Kling 生图未返回有效图片')
-        }
-      } else if (format === 'doubao-seedream') {
-        const finalSize = seedreamSizeByRatioAndResolution(aspectRatio || modelCfg.defaultParams?.size || '3:4', resolution || modelCfg.defaultParams?.quality || '2K')
-        const payload: any = {
-          model: imageModel,
-          prompt: finalPrompt,
-          size: finalSize,
-          response_format: 'url',
-          watermark: false,
-          sequential_image_generation: 'disabled',
-        }
-        const rsp = await postJson<any>(modelCfg.endpoint || '/images/generations', payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
-        if (rsp?.url) imageUrl = rsp.url
-        else if (rsp?.data?.[0]?.url) imageUrl = rsp.data[0].url
-        else if (rsp?.data?.[0]?.b64_json) imageUrl = `data:image/png;base64,${rsp.data[0].b64_json}`
-        else throw new Error('Seedream 未获取到图片结果')
-      } else {
-        // OpenAI 兼容格式
-        const pickedSize = pickBestSizeKeyForAspect(modelCfg, aspectRatio || '')
-        const result = await generateImage({
-          model: imageModel,
-          prompt: finalPrompt,
-          size: pickedSize || aspectRatio,
-        }, {
-          endpoint: modelCfg?.endpoint || '/images/generations',
-          authMode: modelCfg?.authMode || 'bearer',
-          timeout: modelCfg?.timeout
-        })
-        if (result?.url) imageUrl = result.url
-        else if (result?.data?.[0]?.url) imageUrl = result.data[0].url
-        else if (result?.data?.[0]?.b64_json) imageUrl = `data:image/png;base64,${result.data[0].b64_json}`
-        else throw new Error('未获取到图片结果')
-      }
-      
+
+        return resultUrl
+      })
+
       setGeneratedImageUrl(imageUrl)
       
       // 同步到历史素材
@@ -778,8 +950,10 @@ Output STRICT JSON only (no markdown, no code fences):
       setGenerateError(err?.message || '生成失败')
     } finally {
       setIsGeneratingImage(false)
+      setRetryMessage(null)
+      setRetryCount(0)
     }
-  }, [userPrompt, referenceImage, currentPreset, imageModel, aspectRatio, resolution, parsePolishDualLang, polishLang])
+  }, [userPrompt, referenceImages, currentPreset, imageModel, aspectRatio, resolution, parsePolishDualLang, polishLang, generateImageWithRetry])
 
   // 复制润色后的提示词
   const handleCopyPrompt = useCallback(() => {
@@ -1072,48 +1246,79 @@ Output STRICT JSON only (no markdown, no code fences):
                     </button>
                   </div>
                 </div>
-                <div
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={handleDrop}
-                  className={cn(
-                    'relative flex h-[140px] items-center justify-center rounded-xl border-2 border-dashed transition-colors',
-                    referenceImage
-                      ? 'border-[var(--accent-color)] bg-[rgb(var(--accent-rgb)/0.1)]'
-                      : 'border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--accent-color)]'
-                  )}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="absolute inset-0 cursor-pointer opacity-0"
-                  />
 
-                  {referenceImage ? (
-                    <div className="relative h-full w-full p-2">
-                      <img
-                        src={referenceImage}
-                        alt="Reference"
-                        className="h-full w-full object-contain rounded-lg"
-                      />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          clearReferenceImage()
-                        }}
-                        className="absolute right-3 top-3 rounded-full bg-black/50 p-1 text-white hover:bg-black/70"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+                {/* 多参考图区域 */}
+                <div className="grid grid-cols-4 gap-2">
+                  {/* 已添加的参考图 */}
+                  {referenceImages.map((img, index) => (
+                    <div
+                      key={index}
+                      className="relative aspect-square rounded-lg border border-[var(--accent-color)] bg-[rgb(var(--accent-rgb)/0.1)] overflow-hidden group"
+                    >
+                      <img src={img} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          onClick={() => removeReferenceImage(index)}
+                          className="rounded-full bg-red-500/80 p-1.5 text-white hover:bg-red-500"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                        {index === 0 ? '主图' : `参考${index + 1}`}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2 text-[var(--text-secondary)]">
-                      <Upload className="h-8 w-8" />
-                      <span className="text-xs">拖拽或点击上传参考图</span>
+                  ))}
+
+                  {/* 添加新图片的槽位（根据模型限制） */}
+                  {referenceImages.length < maxRefImages && maxRefImages > 0 && (
+                    <div
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        setActiveImageSlot(referenceImages.length)
+                        handleDrop(e)
+                      }}
+                      onClick={() => {
+                        setActiveImageSlot(referenceImages.length)
+                        setShowImagePicker(true)
+                      }}
+                      className="relative aspect-square rounded-lg border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--accent-color)] cursor-pointer flex flex-col items-center justify-center gap-1 transition-colors"
+                    >
+                      <Plus className="h-5 w-5 text-[var(--text-secondary)]" />
+                      <span className="text-[10px] text-[var(--text-secondary)]">
+                        {referenceImages.length === 0 ? '添加参考图' : '添加更多'}
+                      </span>
                     </div>
                   )}
                 </div>
+
+                {/* 参考图说明和限制 */}
+                <div className="flex items-center justify-between text-[10px] text-[var(--text-secondary)]">
+                  {maxRefImages === 0 ? (
+                    <span className="text-amber-500">当前模型不支持参考图</span>
+                  ) : referenceImages.length > 0 ? (
+                    <span>第1张为主参考图，后续为风格/元素参考（{referenceImages.length}/{maxRefImages}）</span>
+                  ) : (
+                    <span>支持最多 {maxRefImages} 张参考图</span>
+                  )}
+                  {referenceImages.length > 0 && (
+                    <button
+                      onClick={clearAllReferenceImages}
+                      className="text-red-400 hover:text-red-500"
+                    >
+                      清空全部
+                    </button>
+                  )}
+                </div>
+
+                {/* 隐藏的文件上传 input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
 
                 {/* 图片选择器弹窗 */}
                 {showImagePicker && (
@@ -1345,7 +1550,7 @@ Output STRICT JSON only (no markdown, no code fences):
                     ) : (
                       <ImageIcon className="mr-2 h-4 w-4" />
                     )}
-                    {isPolishing ? '润色中...' : isGeneratingImage ? '生成中...' : '一键生成'}
+                    {isPolishing ? '润色中...' : isGeneratingImage ? (retryCount > 1 ? `重试中 (${retryCount}/${MAX_RETRIES})...` : '生成中...') : '一键生成'}
                   </Button>
                 </>
               ) : (
@@ -1462,7 +1667,12 @@ Output STRICT JSON only (no markdown, no code fences):
                         {isGeneratingImage ? (
                           <div className="flex flex-col items-center gap-3">
                             <Loader2 className="h-8 w-8 animate-spin text-[var(--accent-color)]" />
-                            <span>正在生成图片...</span>
+                            <span>{retryMessage || '正在生成图片...'}</span>
+                            {retryCount > 1 && (
+                              <span className="text-[11px] text-[var(--text-secondary)]">
+                                已尝试 {retryCount}/{MAX_RETRIES} 次
+                              </span>
+                            )}
                           </div>
                         ) : (
                           '点击「生成图片」开始'

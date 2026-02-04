@@ -134,6 +134,7 @@ export default function CanvasSidebar({
       </IconButton>
 
       <IconButton
+        title="提示词库"
         onClick={() => onOpenPromptLibrary?.()}
       >
         <BookOpen className="h-5 w-5" />

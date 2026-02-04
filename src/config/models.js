@@ -1250,6 +1250,14 @@ export const CHAT_MODELS = [
         endpoint: toAbsoluteUrl('/v1beta/models/gemini-3-pro-preview:generateContent'),
         authMode: 'query',
         format: 'gemini-chat'
+    },
+    {
+        label: 'Gemini 3 Pro（AI 助手）',
+        key: 'gemini-3-pro-assistant',
+        endpoint: toAbsoluteUrl('/v1beta/models/gemini-3-pro-preview:generateContent'),
+        authMode: 'query',
+        format: 'gemini-chat',
+        tips: '使用 Gemini 3 Pro 作为 AI 助手'
     }
 ]
 

@@ -77,13 +77,14 @@ export async function generateBlendFromConfigNode(
     }
 
     // Step 2: 获取融合配置
+    const d = cfg.data as Record<string, unknown>
     const blendConfig: BlendConfig = {
-      method: (cfg.data?.method as BlendMethod) || 'laplacian',
-      alpha: cfg.data?.alpha || 0.5,
-      pyramidLevels: cfg.data?.pyramidLevels || 4,
-      enableAutoAlign: cfg.data?.enableAutoAlign !== false,
-      enableSeamCutting: cfg.data?.enableSeamCutting !== false,
-      enableGradientDomain: cfg.data?.enableGradientDomain !== false,
+      method: (d?.method as BlendMethod) || 'laplacian',
+      alpha: typeof d?.alpha === 'number' ? d.alpha : 0.5,
+      pyramidLevels: typeof d?.pyramidLevels === 'number' ? d.pyramidLevels : 4,
+      enableAutoAlign: d?.enableAutoAlign !== false,
+      enableSeamCutting: d?.enableSeamCutting !== false,
+      enableGradientDomain: d?.enableGradientDomain !== false,
       ...config
     }
 
@@ -124,8 +125,13 @@ export async function generateBlendFromConfigNode(
       data: { ...cfg.data, status: 'processing', progress: 80, message: '保存结果...' }
     })
 
-    const mediaId = `blend-${configNodeId}-${Date.now()}`
-    await saveMedia(mediaId, blendedImage)
+    const projectId = store.projectId || 'default'
+    const mediaId = await saveMedia({
+      nodeId: configNodeId,
+      projectId,
+      type: 'image',
+      data: blendedImage
+    })
 
     // Step 5: 创建输出 image 节点
     const outputNodeId = findOrCreateOutputImageNode(configNodeId, blendedImage)
@@ -378,11 +384,12 @@ async function blendViaGemini(
           maxOutputTokens: 1024
         }
       },
-      { authMode: 'query', timeout: 120000 }
+      { authMode: 'query', timeoutMs: 120000 }
     )
 
     // 从响应中提取图像
-    const imageUrl = response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data
+    const rsp = response as any
+    const imageUrl = rsp?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data
     if (!imageUrl) {
       throw new Error('No image in Gemini response')
     }
@@ -429,10 +436,11 @@ async function blendViaKling(
         quality: '2k',
         n: 1
       },
-      { authMode: 'bearer', timeout: 120000 }
+      { authMode: 'bearer', timeoutMs: 120000 }
     )
 
-    const imageUrl = response?.images?.[0]?.url
+    const rsp = response as any
+    const imageUrl = rsp?.images?.[0]?.url
     if (!imageUrl) {
       throw new Error('No image in Kling response')
     }
@@ -504,25 +512,16 @@ function findOrCreateOutputImageNode(configNodeId: string, imageData: string): s
   }
 
   // 创建新的输出节点
-  const newNodeId = `node_${Date.now()}_blend_output`
-  store.addNode({
-    id: newNodeId,
-    type: 'image',
-    x: (cfg?.x || 0) + 300,
-    y: (cfg?.y || 0) + 100,
-    zIndex: (cfg?.zIndex || 0) + 1,
-    data: { url: imageData, base64: imageData, name: 'Blended Image' }
-  })
+  const newId = store.addNode(
+    'image',
+    { x: (cfg?.x || 0) + 300, y: (cfg?.y || 0) + 100 },
+    { url: imageData, base64: imageData, label: 'Blended Image' }
+  )
 
   // 连接边
-  store.addEdge({
-    id: `edge_${Date.now()}`,
-    source: configNodeId,
-    target: newNodeId,
-    type: 'default'
-  })
+  store.addEdge(configNodeId, newId, {})
 
-  return newNodeId
+  return newId
 }
 
 /**

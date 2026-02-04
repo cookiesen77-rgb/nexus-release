@@ -9,8 +9,18 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 // 检测 Tauri 环境
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
-// 根据环境选择 fetch 实现（Windows Tauri 必须用插件 fetch）
-const safeFetch = isTauri ? tauriFetch : globalThis.fetch
+// 根据环境选择 fetch 实现（带兜底）
+// Windows 用户环境下 Tauri plugin-http 可能因代理/证书链问题失败，fallback 到 WebView fetch
+const webFetch = globalThis.fetch ? globalThis.fetch.bind(globalThis) : (async () => { throw new Error('fetch is not available') }) as typeof fetch
+const safeFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  if (!isTauri) return await webFetch(input, init)
+  try {
+    return await (tauriFetch as typeof fetch)(input, init)
+  } catch (err: any) {
+    console.warn('[assets.safeFetch] tauriFetch failed, fallback:', String(err?.message || '').slice(0, 120))
+    return await webFetch(input, init)
+  }
+}) as typeof fetch
 
 // ==================== Types ====================
 

@@ -41,6 +41,7 @@ export interface CircuitBreakerState {
 // AI 助手模型配置（通过代理统一使用 OpenAI 兼容格式）
 export const AI_ASSISTANT_MODELS = [
   { key: 'gpt-5-mini', label: 'GPT-5 Mini' },
+  { key: 'gemini-3-pro-preview', label: 'Gemini 3 Pro' },
   { key: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
   { key: 'doubao-seed-1-8-251228-thinking', label: 'Doubao Seed (思考)' },
 ] as const

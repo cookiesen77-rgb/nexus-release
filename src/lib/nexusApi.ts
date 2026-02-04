@@ -7,12 +7,29 @@ import { DEFAULT_API_BASE_URL } from '@/utils/constants'
 import { ERROR_MESSAGES, MODELS, NEXUS_SYSTEM_PROMPT } from '@/config/nexusPrompt'
 import { resolveEndpointUrl } from '@/lib/workflow/request'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
+import { useSettingsStore } from '@/store/settings'
 
 // 检测 Tauri 环境
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
-// 根据环境选择 fetch 实现（Windows Tauri 必须用插件 fetch）
-const safeFetch = isTauri ? tauriFetch : globalThis.fetch
+// 根据环境选择 fetch 实现（带兜底）
+// 说明：少量 Windows 用户环境下，Tauri plugin-http 可能因为系统代理/证书链等原因完全无法联网，
+// 导致所有请求都失败。此处在 Tauri 下对"抛异常"的情况做一次 fallback 到 WebView 原生 fetch，
+// 以提升兼容性（WebView 会走系统网络栈/系统代理）。
+const webFetch = globalThis.fetch ? globalThis.fetch.bind(globalThis) : (async () => { throw new Error('fetch is not available') }) as typeof fetch
+const safeFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  if (!isTauri) return await webFetch(input, init)
+  try {
+    return await (tauriFetch as typeof fetch)(input, init)
+  } catch (err: any) {
+    const msg = String(err?.message || err || '')
+    console.warn('[nexusApi.safeFetch] tauriFetch failed, fallback to web fetch:', {
+      url: String(input || '').slice(0, 120),
+      message: msg.slice(0, 220),
+    })
+    return await webFetch(input, init)
+  }
+}) as typeof fetch
 
 // ==================== 类型定义 ====================
 
@@ -27,7 +44,7 @@ export interface ClassifiedError {
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
-  content: string
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
 }
 
 export interface TwoStageParams {
@@ -436,14 +453,17 @@ export async function* twoStageStream(params: TwoStageParams): AsyncGenerator<st
     throw new Error(keyCheck.message)
   }
 
+  // 获取用户选择的 AI 助手模型
+  const userModel = useSettingsStore.getState().aiAssistantModel || MODELS.CHAT
+
   // 如果不需要思考/联网，直接走主模型
   if (!useThinking && !useWebSearch) {
     // 直接使用调用方构建好的 messages（包含：系统提示词 + 记忆/画布上下文 + 历史）
-    // 之前丢弃 system messages 会导致“记忆/检索/上下文工程失效”
+    // 之前丢弃 system messages 会导致"记忆/检索/上下文工程失效"
     const messagesWithContext: ChatMessage[] = Array.isArray(input) ? input : []
 
     yield* streamWithRetry('chat/completions', {
-      model: MODELS.CHAT,
+      model: userModel,
       messages: messagesWithContext
     }, { maxRetries: 2, signal })
     return
@@ -482,14 +502,14 @@ ${useWebSearch ? '如果需要，可以搜索网络获取最新信息。' : ''}
     // 思考阶段失败，降级到直接主模型回答
     console.warn('[NexusAPI] 思考阶段失败，降级处理:', error)
     yield '（深度思考暂不可用，直接回答）\n\n'
-    
+
     const messagesWithIdentity: ChatMessage[] = [
       { role: 'system', content: NEXUS_SYSTEM_PROMPT },
       ...input.filter((m) => m.role !== 'system')
     ]
-    
+
     yield* streamWithRetry('chat/completions', {
-      model: MODELS.CHAT,
+      model: userModel,
       messages: messagesWithIdentity
     }, { maxRetries: 2, signal })
     return
@@ -520,7 +540,7 @@ ${thinkingResult}
   ]
 
   yield* streamWithRetry('chat/completions', {
-    model: MODELS.CHAT,
+    model: userModel,
     messages: finalMessages
   }, { maxRetries: 2, signal })
 }
