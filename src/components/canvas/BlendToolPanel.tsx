@@ -328,6 +328,12 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
   const [imageAnalysis, setImageAnalysis] = useState<{ descA: string; descB: string } | null>(null)
   const [progressMsg, setProgressMsg] = useState('')
 
+  // 重试和取消机制
+  const [retryCount, setRetryCount] = useState(0)
+  const [retryMessage, setRetryMessage] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const MAX_RETRIES = 3
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const store = useGraphStore()
   const assetsStore = useAssetsStore()
@@ -350,6 +356,13 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
     setOptimizedPrompt('')
     setImageAnalysis(null)
     setProgressMsg('')
+    setRetryCount(0)
+    setRetryMessage(null)
+    // 取消正在进行的请求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
   }, [])
 
   useEffect(() => {
@@ -460,7 +473,20 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
     })
   }, [])
 
-  // 执行融合
+  // 取消当前请求
+  const handleAbort = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setIsProcessing(false)
+    setProgressMsg('')
+    setRetryMessage(null)
+    setRetryCount(0)
+    setError('已取消')
+  }, [])
+
+  // 执行融合（带重试机制）
   const handleBlend = useCallback(async () => {
     if (!imageA || !imageB) {
       setError('请选择两张图像')
@@ -473,50 +499,141 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
       return
     }
 
+    // 创建新的 AbortController
+    abortControllerRef.current = new AbortController()
+
     setIsProcessing(true)
     setError(null)
     setProgressMsg('')
     setOptimizedPrompt('')
     setImageAnalysis(null)
+    setRetryCount(0)
+    setRetryMessage(null)
 
-    try {
-      let result: string
+    // 定义生成函数（可重试）
+    const generateFn = async (attempt: number): Promise<string> => {
+      // 检查是否已取消
+      if (abortControllerRef.current?.signal.aborted) {
+        throw new Error('已取消')
+      }
 
       if (method === 'laplacian' || method === 'enhanced') {
         setProgressMsg('本地融合中...')
-        result = await blendLocal(imageA, imageB, alpha)
-      } else if (method === 'gemini' || method === 'kling') {
-        // Step 1: 分析两张图片
-        setProgressMsg('AI 正在分析两张图片...')
-        const analysis = await analyzeImages(imageA, imageB)
-        setImageAnalysis(analysis)
-        console.log('[BlendPanel] 图片分析结果:', analysis)
-
-        // Step 2: 基于分析结果优化提示词
-        setProgressMsg('AI 正在优化提示词...')
-        const optimized = await optimizePromptWithAI(userPrompt, analysis, method)
-        setOptimizedPrompt(optimized)
-        console.log('[BlendPanel] 优化后的提示词:', optimized)
-
-        // Step 3: 调用生图 AI
-        if (method === 'gemini') {
-          result = await blendWithGemini(imageA, imageB, optimized, setProgressMsg)
-        } else {
-          result = await blendWithKling(imageA, imageB, optimized, setProgressMsg)
-        }
-      } else {
-        throw new Error('未知的融合方法')
+        return await blendLocal(imageA, imageB, alpha)
       }
 
-      setBlendResult(result)
-      setProgressMsg('')
-    } catch (err: any) {
-      setError(err?.message || '融合失败')
-      console.error('Blend error:', err)
-    } finally {
-      setIsProcessing(false)
+      // AI 融合模式
+      // Step 1: 分析两张图片（仅首次尝试时分析）
+      let analysis = imageAnalysis
+      if (!analysis) {
+        setProgressMsg('AI 正在分析两张图片...')
+        analysis = await analyzeImages(imageA, imageB)
+        setImageAnalysis(analysis)
+        console.log('[BlendPanel] 图片分析结果:', analysis)
+      }
+
+      // 检查是否已取消
+      if (abortControllerRef.current?.signal.aborted) {
+        throw new Error('已取消')
+      }
+
+      // Step 2: 基于分析结果优化提示词（仅首次尝试时优化）
+      let optimized = optimizedPrompt
+      if (!optimized) {
+        setProgressMsg('AI 正在优化提示词...')
+        optimized = await optimizePromptWithAI(userPrompt, analysis, method)
+        setOptimizedPrompt(optimized)
+        console.log('[BlendPanel] 优化后的提示词:', optimized)
+      }
+
+      // 检查是否已取消
+      if (abortControllerRef.current?.signal.aborted) {
+        throw new Error('已取消')
+      }
+
+      // Step 3: 调用生图 AI
+      if (method === 'gemini') {
+        return await blendWithGemini(imageA, imageB, optimized, setProgressMsg)
+      } else {
+        return await blendWithKling(imageA, imageB, optimized, setProgressMsg)
+      }
     }
-  }, [imageA, imageB, method, alpha, userPrompt, blendLocal])
+
+    // 带重试的执行
+    let lastError: Error | null = null
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        setRetryCount(attempt)
+        if (attempt > 1) {
+          setRetryMessage(`第 ${attempt}/${MAX_RETRIES} 次尝试...`)
+        }
+
+        const result = await generateFn(attempt)
+
+        // 成功 - 保存结果并添加到历史素材
+        setBlendResult(result)
+        setProgressMsg('')
+        setRetryMessage(null)
+        setRetryCount(0)
+
+        // 自动保存到历史素材
+        assetsStore.addAsset({
+          type: 'image',
+          src: result,
+          title: `融合图片 ${new Date().toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+          model: method === 'gemini' ? 'gemini-blend' : method === 'kling' ? 'kling-blend' : 'local-blend'
+        })
+
+        return
+      } catch (err: any) {
+        lastError = err
+
+        // 如果是用户取消，不重试
+        if (err?.message === '已取消' || abortControllerRef.current?.signal.aborted) {
+          setError('已取消')
+          break
+        }
+
+        console.warn(`[BlendPanel] 尝试 ${attempt}/${MAX_RETRIES} 失败:`, err?.message)
+
+        if (attempt < MAX_RETRIES) {
+          // 指数退避：2s, 4s, 8s
+          const waitMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000)
+          setRetryMessage(`生成失败，${Math.round(waitMs / 1000)}秒后重试 (${attempt}/${MAX_RETRIES})...`)
+          setError(null) // 清除错误，显示重试消息
+
+          // 等待时检查是否取消
+          await new Promise<void>((resolve) => {
+            const timeout = setTimeout(resolve, waitMs)
+            const checkAbort = () => {
+              if (abortControllerRef.current?.signal.aborted) {
+                clearTimeout(timeout)
+                resolve()
+              }
+            }
+            const interval = setInterval(checkAbort, 100)
+            setTimeout(() => {
+              clearInterval(interval)
+              resolve()
+            }, waitMs)
+          })
+
+          if (abortControllerRef.current?.signal.aborted) {
+            setError('已取消')
+            break
+          }
+        }
+      }
+    }
+
+    // 所有重试都失败
+    if (lastError && lastError.message !== '已取消') {
+      setError(lastError.message || '融合失败')
+    }
+    setRetryMessage(null)
+    setRetryCount(0)
+    setIsProcessing(false)
+  }, [imageA, imageB, method, alpha, userPrompt, blendLocal, imageAnalysis, optimizedPrompt, assetsStore])
 
   const handleAddToCanvas = useCallback(() => {
     if (!blendResult) return
@@ -546,17 +663,40 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
 
       {/* Error */}
       {error && (
-        <div className="border-b border-red-500/30 bg-red-900/20 p-3 flex gap-2 items-start">
-          <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-red-400">{error}</p>
+        <div className="border-b border-red-500/30 bg-red-900/20 p-3 flex gap-2 items-start justify-between">
+          <div className="flex gap-2 items-start">
+            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-400">{error}</p>
+          </div>
+          {error !== '已取消' && (
+            <button
+              onClick={handleBlend}
+              className="text-xs text-red-400 hover:text-red-300 underline flex-shrink-0"
+            >
+              重试
+            </button>
+          )}
         </div>
       )}
 
-      {/* Progress */}
-      {isProcessing && progressMsg && (
-        <div className="border-b border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 p-3 flex gap-2 items-center">
-          <Loader2 className="h-4 w-4 text-[var(--accent-color)] animate-spin" />
-          <p className="text-xs text-[var(--accent-color)]">{progressMsg}</p>
+      {/* Progress with Retry/Abort */}
+      {isProcessing && (
+        <div className="border-b border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 p-3 flex gap-2 items-center justify-between">
+          <div className="flex gap-2 items-center flex-1 min-w-0">
+            <Loader2 className="h-4 w-4 text-[var(--accent-color)] animate-spin flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-[var(--accent-color)] truncate">{retryMessage || progressMsg}</p>
+              {retryCount > 1 && (
+                <p className="text-[10px] text-[var(--text-secondary)]">尝试 {retryCount}/{MAX_RETRIES}</p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={handleAbort}
+            className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-400/30 hover:bg-red-400/10 flex-shrink-0"
+          >
+            取消
+          </button>
         </div>
       )}
 
