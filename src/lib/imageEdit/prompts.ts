@@ -6,7 +6,7 @@
 import { chatCompletions } from '@/lib/nexusApi'
 
 // 编辑类型
-export type EditType = 'pose' | 'angle' | 'expand' | 'cutout' | 'erase'
+export type EditType = 'pose' | 'angle' | 'expand' | 'cutout' | 'erase' | 'inpaint'
 
 // 提示词模板
 const PROMPT_TEMPLATES: Record<EditType, string> = {
@@ -75,7 +75,20 @@ Extract [object] from the image with precise edges. Use transparent background. 
 用户要擦除的对象：{userInput}
 
 请直接输出提示词，不要解释。格式示例：
-Remove [object] from the image. Intelligently fill the area with surrounding context. Maintain natural and seamless result.`
+Remove [object] from the image. Intelligently fill the area with surrounding context. Maintain natural and seamless result.`,
+
+  inpaint: `你是专业的 AI 绘图提示词工程师。用户想要在图片的指定区域（蒙版区域）重新生成内容。
+
+要求：
+1. 只修改蒙版（白色）区域
+2. 新生成的内容要与周围环境自然融合
+3. 保持整体画面风格一致
+4. 输出简洁的英文提示词
+
+用户想要生成的内容：{userInput}
+
+请直接输出提示词，不要解释。格式示例：
+In the masked area, generate [content description]. Seamlessly blend with surrounding context. Maintain consistent style, lighting and color tone.`
 }
 
 /**
@@ -127,6 +140,8 @@ function getDefaultPrompt(type: EditType, userInput: string): string {
       return `Extract ${userInput} from the image with precise edges. Use transparent background. Maintain object details and quality.`
     case 'erase':
       return `Remove ${userInput} from the image. Intelligently fill the area with surrounding context. Maintain natural and seamless result.`
+    case 'inpaint':
+      return `In the masked area, generate ${userInput}. Seamlessly blend with surrounding context. Maintain consistent style, lighting and color tone.`
     default:
       return userInput
   }

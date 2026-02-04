@@ -346,29 +346,29 @@ export async function cropFourGrid(options: Omit<EditOptions, 'userInput'>): Pro
  */
 export async function cropNineGrid(options: Omit<EditOptions, 'userInput'>): Promise<string[]> {
   const { sourceNodeId, sourceImageUrl, onProgress } = options
-  
+
   onProgress?.('正在裁剪图片...')
   const cropArea = (options as any)?.cropArea as GridCropAreaPx | undefined
   const results = await cropToNineGrid(sourceImageUrl, cropArea)
-  
+
   onProgress?.('正在保存结果...')
   const store = useGraphStore.getState()
   const sourceNode = store.nodes.find(n => n.id === sourceNodeId)
   const baseX = sourceNode?.x || 0
   const baseY = sourceNode?.y || 0
-  
+
   const nodeIds: string[] = []
-  
+
   for (let i = 0; i < results.length; i++) {
     const result = results[i]
     const pos = calculateNodePosition(baseX, baseY, i, 3, 280)
-    
+
     const nodeId = store.addNode('image', { x: pos.x + 350, y: pos.y }, {
       url: result.dataUrl,
       label: `九宫格 ${result.row + 1}-${result.col + 1}`,
       loading: false
     })
-    
+
     // 保存到 IndexedDB
     try {
       const projectId = store.projectId || 'default'
@@ -382,9 +382,207 @@ export async function cropNineGrid(options: Omit<EditOptions, 'userInput'>): Pro
     } catch (err) {
       console.error('[cropNineGrid] 保存到 IndexedDB 失败:', err)
     }
-    
+
     nodeIds.push(nodeId)
   }
-  
+
   return nodeIds
+}
+
+/**
+ * 选区重绘 (Inpaint)
+ */
+export interface InpaintOptions extends EditOptions {
+  maskBase64: string
+}
+
+export async function inpaintImage(options: InpaintOptions): Promise<string> {
+  const { sourceNodeId, sourceImageUrl, maskBase64, userInput, onProgress } = options
+  if (!maskBase64) throw new Error('请绘制蒙版区域')
+
+  onProgress?.('正在润色提示词...')
+  const prompt = await polishEditPrompt('inpaint', userInput || '根据周围环境自然填充')
+
+  onProgress?.('正在生成图片...')
+
+  // 将源图和蒙版转为 inline_data
+  const sourceInline = await resolveImageToInlineData(sourceImageUrl)
+  const maskInline = await resolveImageToInlineData(maskBase64)
+
+  if (!sourceInline) throw new Error('源图片加载失败')
+  if (!maskInline) throw new Error('蒙版加载失败')
+
+  // 构建请求：提示词 + 原图 + 蒙版图
+  const requestParts: any[] = [
+    { text: `${prompt}\n\nIMPORTANT: Only modify the WHITE masked area. Keep all other areas unchanged. The white regions in the mask indicate where to apply the changes.` },
+    { inline_data: { mime_type: sourceInline.mimeType, data: sourceInline.data } },
+    { inline_data: { mime_type: maskInline.mimeType, data: maskInline.data } }
+  ]
+
+  const { size, quality } = getImageParams(sourceNodeId)
+
+  const payload = {
+    contents: [{ role: 'user', parts: requestParts }],
+    generationConfig: {
+      responseModalities: ['IMAGE'],
+      imageConfig: {
+        aspectRatio: size || '1:1',
+        imageSize: quality || '2K'
+      }
+    }
+  }
+
+  const modelCfg = NANO_BANANA_MODEL as any
+  const rsp = await postJson<any>(modelCfg.endpoint, payload, {
+    authMode: modelCfg.authMode,
+    timeoutMs: modelCfg.timeout || 240000
+  })
+
+  const parts = rsp?.candidates?.[0]?.content?.parts || []
+  const inlineData = parts.map((p: any) => p.inlineData || p.inline_data).filter(Boolean)[0]
+
+  if (!inlineData?.data) {
+    throw new Error('生图返回为空')
+  }
+
+  const resultUrl = toDataUrl(inlineData.data, inlineData.mimeType || inlineData.mime_type || 'image/png')
+
+  onProgress?.('正在保存结果...')
+  const nodeId = await createResultNode(resultUrl, sourceNodeId, `重绘: ${userInput || '智能填充'}`, 350, 0)
+
+  return nodeId
+}
+
+/**
+ * 带蒙版的擦除
+ */
+export interface MaskEraseOptions extends EditOptions {
+  maskBase64: string
+}
+
+export async function eraseWithMask(options: MaskEraseOptions): Promise<string> {
+  const { sourceNodeId, sourceImageUrl, maskBase64, onProgress } = options
+  if (!maskBase64) throw new Error('请绘制蒙版区域')
+
+  onProgress?.('正在生成擦除提示词...')
+  const prompt = 'Remove the content in the white masked area. Intelligently fill the area with surrounding context to create a seamless, natural result. Maintain consistent style, lighting and perspective.'
+
+  onProgress?.('正在生成图片...')
+
+  const sourceInline = await resolveImageToInlineData(sourceImageUrl)
+  const maskInline = await resolveImageToInlineData(maskBase64)
+
+  if (!sourceInline) throw new Error('源图片加载失败')
+  if (!maskInline) throw new Error('蒙版加载失败')
+
+  const requestParts: any[] = [
+    { text: prompt },
+    { inline_data: { mime_type: sourceInline.mimeType, data: sourceInline.data } },
+    { inline_data: { mime_type: maskInline.mimeType, data: maskInline.data } }
+  ]
+
+  const { size, quality } = getImageParams(sourceNodeId)
+
+  const payload = {
+    contents: [{ role: 'user', parts: requestParts }],
+    generationConfig: {
+      responseModalities: ['IMAGE'],
+      imageConfig: {
+        aspectRatio: size || '1:1',
+        imageSize: quality || '2K'
+      }
+    }
+  }
+
+  const modelCfg = NANO_BANANA_MODEL as any
+  const rsp = await postJson<any>(modelCfg.endpoint, payload, {
+    authMode: modelCfg.authMode,
+    timeoutMs: modelCfg.timeout || 240000
+  })
+
+  const parts = rsp?.candidates?.[0]?.content?.parts || []
+  const inlineData = parts.map((p: any) => p.inlineData || p.inline_data).filter(Boolean)[0]
+
+  if (!inlineData?.data) {
+    throw new Error('生图返回为空')
+  }
+
+  const resultUrl = toDataUrl(inlineData.data, inlineData.mimeType || inlineData.mime_type || 'image/png')
+
+  onProgress?.('正在保存结果...')
+  const nodeId = await createResultNode(resultUrl, sourceNodeId, '擦除结果', 350, 0)
+
+  return nodeId
+}
+
+/**
+ * 超分辨率 (Upscale)
+ */
+export interface UpscaleOptions extends EditOptions {
+  scale?: 2 | 4
+}
+
+export async function upscaleImage(options: UpscaleOptions): Promise<string> {
+  const { sourceNodeId, sourceImageUrl, scale = 2, onProgress } = options
+
+  onProgress?.('正在准备图片...')
+
+  // 将图片转为 base64
+  const imageBase64 = await ensureBase64(sourceImageUrl)
+
+  onProgress?.('正在调用超分辨率 API...')
+
+  // 使用 Gemini 进行超分辨率
+  // 注：如果有专用的 upscale API 可以替换这里的实现
+  const prompt = `Upscale this image to ${scale}x higher resolution. Enhance details, sharpness, and clarity while maintaining the original style, colors, and composition. Remove any compression artifacts. Output a high-quality, sharp image.`
+
+  const inline = await resolveImageToInlineData(sourceImageUrl)
+  if (!inline) throw new Error('图片加载失败')
+
+  const requestParts: any[] = [
+    { text: prompt },
+    { inline_data: { mime_type: inline.mimeType, data: inline.data } }
+  ]
+
+  const payload = {
+    contents: [{ role: 'user', parts: requestParts }],
+    generationConfig: {
+      responseModalities: ['IMAGE'],
+      imageConfig: {
+        imageSize: scale === 4 ? '4K' : '2K'
+      }
+    }
+  }
+
+  const modelCfg = NANO_BANANA_MODEL as any
+  const rsp = await postJson<any>(modelCfg.endpoint, payload, {
+    authMode: modelCfg.authMode,
+    timeoutMs: modelCfg.timeout || 300000
+  })
+
+  const parts = rsp?.candidates?.[0]?.content?.parts || []
+  const inlineData = parts.map((p: any) => p.inlineData || p.inline_data).filter(Boolean)[0]
+
+  if (!inlineData?.data) {
+    throw new Error('超分辨率返回为空')
+  }
+
+  const resultUrl = toDataUrl(inlineData.data, inlineData.mimeType || inlineData.mime_type || 'image/png')
+
+  onProgress?.('正在保存结果...')
+  const nodeId = await createResultNode(resultUrl, sourceNodeId, `超分${scale}x`, 350, 0)
+
+  return nodeId
+}
+
+/**
+ * 将图片 URL 转为 base64（辅助函数）
+ */
+async function ensureBase64(url: string): Promise<string> {
+  if (url.startsWith('data:')) return url
+
+  const inline = await resolveImageToInlineData(url)
+  if (!inline) throw new Error('图片转换失败')
+
+  return `data:${inline.mimeType};base64,${inline.data}`
 }

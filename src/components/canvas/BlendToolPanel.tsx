@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { X, Upload, Wand2, Plus, AlertCircle, ImageIcon, Sparkles, Loader2 } from 'lucide-react'
+import { X, Upload, Wand2, Plus, AlertCircle, ImageIcon, Sparkles, Loader2, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useGraphStore } from '@/graph/store'
 import type { GraphNode } from '@/graph/types'
@@ -195,7 +195,9 @@ const blendWithGemini = async (
   imageA: string,
   imageB: string,
   prompt: string,
-  onProgress: (msg: string) => void
+  onProgress: (msg: string) => void,
+  aspectRatio: string = '3:4',
+  resolution: string = '2K'
 ): Promise<string> => {
   onProgress('正在调用 Gemini AI...')
 
@@ -229,8 +231,8 @@ DO NOT output any text explanation. Generate ONLY the blended image.`
       generationConfig: {
         responseModalities: ['IMAGE'],
         imageConfig: {
-          aspectRatio: '3:4',
-          imageSize: '2K'
+          aspectRatio,
+          imageSize: resolution
         }
       }
     },
@@ -260,7 +262,9 @@ const blendWithKling = async (
   imageA: string,
   imageB: string,
   prompt: string,
-  onProgress: (msg: string) => void
+  onProgress: (msg: string) => void,
+  aspectRatio: string = '3:4',
+  resolution: string = '2K'
 ): Promise<string> => {
   onProgress('正在调用 Kling AI...')
 
@@ -282,8 +286,8 @@ QUALITY: masterpiece, 8k resolution, professional photography, perfect compositi
       model_name: 'kling-image-o1',
       prompt: fullPrompt,
       n: 1,
-      aspect_ratio: '3:4',
-      resolution: '2k',
+      aspect_ratio: aspectRatio,
+      resolution: resolution.toLowerCase(),
       image_list: [
         { image: imgA },
         { image: imgB }
@@ -366,6 +370,16 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
   const [imageAnalysis, setImageAnalysis] = useState<{ descA: string; descB: string } | null>(null)
   const [progressMsg, setProgressMsg] = useState('')
 
+  // 比例和分辨率选择
+  const [aspectRatio, setAspectRatio] = useState<'1:1' | '3:4' | '4:3' | '9:16' | '16:9'>('3:4')
+  const [resolution, setResolution] = useState<'1K' | '2K' | '4K'>('2K')
+
+  // 批量模式
+  const [batchMode, setBatchMode] = useState(false)
+  const [batchImages, setBatchImages] = useState<string[]>([])
+  const [batchResults, setBatchResults] = useState<string[]>([])
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null)
+
   // 重试和取消机制
   const [retryCount, setRetryCount] = useState(0)
   const [retryMessage, setRetryMessage] = useState<string | null>(null)
@@ -396,6 +410,10 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
     setProgressMsg('')
     setRetryCount(0)
     setRetryMessage(null)
+    setBatchMode(false)
+    setBatchImages([])
+    setBatchResults([])
+    setBatchProgress(null)
     // 取消正在进行的请求
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -446,14 +464,26 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
       return
     }
 
-    if (selectingFor === 'A') {
-      setImageA(url)
-      setSelectingFor('B')
+    if (batchMode) {
+      // 批量模式：如果还没选基准图B，先添加到批量列表
+      if (!imageB) {
+        if (!batchImages.includes(url)) {
+          setBatchImages([...batchImages, url])
+        }
+      } else {
+        // 已有基准图，忽略
+      }
     } else {
-      setImageB(url)
+      // 单图模式
+      if (selectingFor === 'A') {
+        setImageA(url)
+        setSelectingFor('B')
+      } else {
+        setImageB(url)
+      }
     }
     setError(null)
-  }, [canvasImages, selectingFor])
+  }, [canvasImages, selectingFor, batchMode, batchImages, imageB])
 
   const handleSelectHistoryAsset = useCallback((assetId: string) => {
     const asset = historyAssets.find((a) => a.id === assetId)
@@ -462,14 +492,22 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
       return
     }
 
-    if (selectingFor === 'A') {
-      setImageA(asset.src)
-      setSelectingFor('B')
+    if (batchMode) {
+      if (!imageB) {
+        if (!batchImages.includes(asset.src)) {
+          setBatchImages([...batchImages, asset.src])
+        }
+      }
     } else {
-      setImageB(asset.src)
+      if (selectingFor === 'A') {
+        setImageA(asset.src)
+        setSelectingFor('B')
+      } else {
+        setImageB(asset.src)
+      }
     }
     setError(null)
-  }, [historyAssets, selectingFor])
+  }, [historyAssets, selectingFor, batchMode, batchImages, imageB])
 
   // 本地融合
   const blendLocal = useCallback(async (imgA: string, imgB: string, alphaVal: number): Promise<string> => {
@@ -526,9 +564,21 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
 
   // 执行融合（带重试机制）
   const handleBlend = useCallback(async () => {
-    if (!imageA || !imageB) {
-      setError('请选择两张图像')
-      return
+    // 批量模式验证
+    if (batchMode) {
+      if (batchImages.length === 0) {
+        setError('请选择要融合的图片')
+        return
+      }
+      if (!imageB) {
+        setError('请选择基准图 B')
+        return
+      }
+    } else {
+      if (!imageA || !imageB) {
+        setError('请选择两张图像')
+        return
+      }
     }
 
     // AI 模式需要用户输入需求
@@ -548,6 +598,66 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
     setRetryCount(0)
     setRetryMessage(null)
 
+    // 批量模式处理
+    if (batchMode && batchImages.length > 0) {
+      const results: string[] = []
+      setBatchResults([])
+
+      for (let i = 0; i < batchImages.length; i++) {
+        if (abortControllerRef.current?.signal.aborted) {
+          setError('已取消')
+          break
+        }
+
+        setBatchProgress({ current: i + 1, total: batchImages.length })
+        setProgressMsg(`正在融合第 ${i + 1}/${batchImages.length} 张...`)
+
+        try {
+          const currentImageA = batchImages[i]
+          let result: string
+
+          if (method === 'laplacian' || method === 'enhanced') {
+            result = await blendLocal(currentImageA, imageB!, alpha)
+          } else {
+            // AI 融合
+            const analysis = await analyzeImages(currentImageA, imageB!)
+            const optimized = await optimizePromptWithAI(userPrompt, analysis, method)
+
+            if (method === 'gemini') {
+              result = await blendWithGemini(currentImageA, imageB!, optimized, setProgressMsg, aspectRatio, resolution)
+            } else {
+              result = await blendWithKling(currentImageA, imageB!, optimized, setProgressMsg, aspectRatio, resolution)
+            }
+          }
+
+          results.push(result)
+          setBatchResults([...results])
+
+          // 保存到素材库
+          assetsStore.addAsset({
+            type: 'image',
+            src: result,
+            title: `批量融合 ${i + 1}/${batchImages.length}`,
+            model: method === 'gemini' ? 'gemini-blend' : method === 'kling' ? 'kling-blend' : 'local-blend'
+          })
+        } catch (err: any) {
+          console.warn(`[BlendPanel] 批量融合第 ${i + 1} 张失败:`, err?.message)
+          // 继续处理下一张
+        }
+      }
+
+      setBatchProgress(null)
+      setIsProcessing(false)
+
+      if (results.length > 0) {
+        window.$message?.success?.(`批量融合完成，成功 ${results.length}/${batchImages.length} 张`)
+      } else {
+        setError('批量融合全部失败')
+      }
+      return
+    }
+
+    // 单图模式（原有逻辑）
     // 定义生成函数（可重试）
     const generateFn = async (attempt: number): Promise<string> => {
       // 检查是否已取消
@@ -557,7 +667,7 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
 
       if (method === 'laplacian' || method === 'enhanced') {
         setProgressMsg('本地融合中...')
-        return await blendLocal(imageA, imageB, alpha)
+        return await blendLocal(imageA!, imageB!, alpha)
       }
 
       // AI 融合模式
@@ -565,7 +675,7 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
       let analysis = imageAnalysis
       if (!analysis) {
         setProgressMsg('AI 正在分析两张图片...')
-        analysis = await analyzeImages(imageA, imageB)
+        analysis = await analyzeImages(imageA!, imageB!)
         setImageAnalysis(analysis)
         console.log('[BlendPanel] 图片分析结果:', analysis)
       }
@@ -591,9 +701,9 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
 
       // Step 3: 调用生图 AI
       if (method === 'gemini') {
-        return await blendWithGemini(imageA, imageB, optimized, setProgressMsg)
+        return await blendWithGemini(imageA!, imageB!, optimized, setProgressMsg, aspectRatio, resolution)
       } else {
-        return await blendWithKling(imageA, imageB, optimized, setProgressMsg)
+        return await blendWithKling(imageA!, imageB!, optimized, setProgressMsg, aspectRatio, resolution)
       }
     }
 
@@ -671,7 +781,7 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
     setRetryMessage(null)
     setRetryCount(0)
     setIsProcessing(false)
-  }, [imageA, imageB, method, alpha, userPrompt, blendLocal, imageAnalysis, optimizedPrompt, assetsStore])
+  }, [imageA, imageB, method, alpha, userPrompt, blendLocal, imageAnalysis, optimizedPrompt, assetsStore, aspectRatio, resolution, batchMode, batchImages])
 
   const handleAddToCanvas = useCallback(() => {
     if (!blendResult) return
@@ -682,9 +792,11 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
 
   if (!open) return null
 
-  const hasResult = !!blendResult
+  const hasResult = !!blendResult || batchResults.length > 0
   const isAIMethod = method === 'gemini' || method === 'kling'
-  const canBlend = !!imageA && !!imageB && !isProcessing && (!isAIMethod || userPrompt.trim())
+  const canBlend = batchMode
+    ? batchImages.length > 0 && !!imageB && !isProcessing && (!isAIMethod || userPrompt.trim())
+    : !!imageA && !!imageB && !isProcessing && (!isAIMethod || userPrompt.trim())
 
   return (
     <div className="fixed bottom-4 right-4 z-40 w-[440px] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-2xl">
@@ -724,7 +836,20 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
             <Loader2 className="h-4 w-4 text-[var(--accent-color)] animate-spin flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-xs text-[var(--accent-color)] truncate">{retryMessage || progressMsg}</p>
-              {retryCount > 1 && (
+              {batchProgress && (
+                <div className="mt-1">
+                  <div className="h-1 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[var(--accent-color)] transition-all"
+                      style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
+                    {batchProgress.current}/{batchProgress.total}
+                  </p>
+                </div>
+              )}
+              {!batchProgress && retryCount > 1 && (
                 <p className="text-[10px] text-[var(--text-secondary)]">尝试 {retryCount}/{MAX_RETRIES}</p>
               )}
             </div>
@@ -742,66 +867,151 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
         {!hasResult ? (
           <div className="space-y-4">
             {/* 已选图像预览 */}
-            <div className="grid grid-cols-2 gap-3">
-              <div
-                onClick={() => setSelectingFor('A')}
-                className={cn(
-                  'aspect-video rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer overflow-hidden',
-                  selectingFor === 'A' ? 'border-[var(--accent-color)]' : 'border-[var(--border-color)]',
-                  imageA ? 'border-solid' : ''
-                )}
-              >
-                {imageA ? (
-                  <div className="relative w-full h-full">
-                    <img src={imageA} alt="A" className="w-full h-full object-cover" />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setImageA(null); setSelectingFor('A') }}
-                      className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                    <div className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1 rounded">A</div>
-                  </div>
-                ) : (
-                  <div className="text-center p-2">
-                    <ImageIcon className="h-6 w-6 mx-auto text-[var(--text-secondary)] mb-1" />
-                    <span className="text-xs text-[var(--text-secondary)]">图像 A</span>
-                  </div>
-                )}
-              </div>
+            {!batchMode ? (
+              // 单图模式：A/B 图像选择
+              <div className="grid grid-cols-2 gap-3">
+                <div
+                  onClick={() => setSelectingFor('A')}
+                  className={cn(
+                    'aspect-video rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer overflow-hidden',
+                    selectingFor === 'A' ? 'border-[var(--accent-color)]' : 'border-[var(--border-color)]',
+                    imageA ? 'border-solid' : ''
+                  )}
+                >
+                  {imageA ? (
+                    <div className="relative w-full h-full">
+                      <img src={imageA} alt="A" className="w-full h-full object-cover" />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setImageA(null); setSelectingFor('A') }}
+                        className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <div className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1 rounded">A</div>
+                    </div>
+                  ) : (
+                    <div className="text-center p-2">
+                      <ImageIcon className="h-6 w-6 mx-auto text-[var(--text-secondary)] mb-1" />
+                      <span className="text-xs text-[var(--text-secondary)]">图像 A</span>
+                    </div>
+                  )}
+                </div>
 
-              <div
-                onClick={() => setSelectingFor('B')}
-                className={cn(
-                  'aspect-video rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer overflow-hidden',
-                  selectingFor === 'B' ? 'border-[var(--accent-color)]' : 'border-[var(--border-color)]',
-                  imageB ? 'border-solid' : ''
-                )}
-              >
-                {imageB ? (
-                  <div className="relative w-full h-full">
-                    <img src={imageB} alt="B" className="w-full h-full object-cover" />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setImageB(null); setSelectingFor('B') }}
-                      className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                    <div className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1 rounded">B</div>
-                  </div>
-                ) : (
-                  <div className="text-center p-2">
-                    <ImageIcon className="h-6 w-6 mx-auto text-[var(--text-secondary)] mb-1" />
-                    <span className="text-xs text-[var(--text-secondary)]">图像 B</span>
-                  </div>
-                )}
+                <div
+                  onClick={() => setSelectingFor('B')}
+                  className={cn(
+                    'aspect-video rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer overflow-hidden',
+                    selectingFor === 'B' ? 'border-[var(--accent-color)]' : 'border-[var(--border-color)]',
+                    imageB ? 'border-solid' : ''
+                  )}
+                >
+                  {imageB ? (
+                    <div className="relative w-full h-full">
+                      <img src={imageB} alt="B" className="w-full h-full object-cover" />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setImageB(null); setSelectingFor('B') }}
+                        className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <div className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1 rounded">B</div>
+                    </div>
+                  ) : (
+                    <div className="text-center p-2">
+                      <ImageIcon className="h-6 w-6 mx-auto text-[var(--text-secondary)] mb-1" />
+                      <span className="text-xs text-[var(--text-secondary)]">图像 B</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              // 批量模式：仅显示基准图 B
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-[var(--text-primary)]">基准图 B</label>
+                <div
+                  onClick={() => setSelectingFor('B')}
+                  className={cn(
+                    'aspect-video rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer overflow-hidden',
+                    'border-[var(--accent-color)]',
+                    imageB ? 'border-solid' : ''
+                  )}
+                >
+                  {imageB ? (
+                    <div className="relative w-full h-full">
+                      <img src={imageB} alt="B" className="w-full h-full object-cover" />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setImageB(null) }}
+                        className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <div className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1 rounded">基准图</div>
+                    </div>
+                  ) : (
+                    <div className="text-center p-2">
+                      <ImageIcon className="h-6 w-6 mx-auto text-[var(--text-secondary)] mb-1" />
+                      <span className="text-xs text-[var(--text-secondary)]">点击下方图片选择基准图</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* 选择提示 */}
             <div className="text-center text-xs text-[var(--accent-color)]">
-              正在选择: 图像 {selectingFor}
+              {batchMode
+                ? `已选择 ${batchImages.length} 张图片，选择基准图 B`
+                : `正在选择: 图像 ${selectingFor}`}
             </div>
+
+            {/* 批量模式切换 */}
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-xs font-semibold text-[var(--text-primary)]">
+                <Layers className="h-4 w-4" />
+                批量融合模式
+              </label>
+              <button
+                onClick={() => {
+                  setBatchMode(!batchMode)
+                  setBatchImages([])
+                  setImageA(null)
+                  setSelectingFor('A')
+                }}
+                className={cn(
+                  'relative w-10 h-5 rounded-full transition',
+                  batchMode ? 'bg-[var(--accent-color)]' : 'bg-[var(--bg-tertiary)]'
+                )}
+              >
+                <div
+                  className={cn(
+                    'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                    batchMode ? 'translate-x-5' : 'translate-x-0.5'
+                  )}
+                />
+              </button>
+            </div>
+
+            {/* 批量模式：已选图片预览 */}
+            {batchMode && batchImages.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-[var(--text-primary)]">
+                  待融合图片 ({batchImages.length})
+                </label>
+                <div className="flex gap-2 flex-wrap max-h-[80px] overflow-auto">
+                  {batchImages.map((img, idx) => (
+                    <div key={idx} className="relative w-12 h-12 rounded overflow-hidden border border-[var(--border-color)]">
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setBatchImages(batchImages.filter((_, i) => i !== idx))}
+                        className="absolute top-0 right-0 bg-black/60 text-white p-0.5 rounded-bl"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 选择来源 Tabs */}
             <div className="flex gap-2">
@@ -882,7 +1092,7 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
             </div>
 
             {/* 融合设置 */}
-            {imageA && imageB && (
+            {((batchMode && batchImages.length > 0 && imageB) || (!batchMode && imageA && imageB)) && (
               <>
                 <div>
                   <label className="block text-xs font-semibold text-[var(--text-primary)] mb-2">融合方法</label>
@@ -932,6 +1142,38 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
                     <p className="text-xs text-[var(--text-secondary)]">
                       AI 会分析你的需求并生成专业的融合提示词
                     </p>
+                  </div>
+                )}
+
+                {/* AI 融合比例和分辨率选择 */}
+                {isAIMethod && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text-primary)] mb-2">比例</label>
+                      <select
+                        value={aspectRatio}
+                        onChange={(e) => setAspectRatio(e.target.value as any)}
+                        className="w-full px-3 py-2 rounded bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm border border-[var(--border-color)]"
+                      >
+                        <option value="1:1">1:1 正方形</option>
+                        <option value="3:4">3:4 竖版</option>
+                        <option value="4:3">4:3 横版</option>
+                        <option value="9:16">9:16 手机竖屏</option>
+                        <option value="16:9">16:9 宽屏</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--text-primary)] mb-2">分辨率</label>
+                      <select
+                        value={resolution}
+                        onChange={(e) => setResolution(e.target.value as any)}
+                        className="w-full px-3 py-2 rounded bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm border border-[var(--border-color)]"
+                      >
+                        <option value="1K">1K 标清</option>
+                        <option value="2K">2K 高清</option>
+                        <option value="4K">4K 超清</option>
+                      </select>
+                    </div>
                   </div>
                 )}
 
@@ -988,10 +1230,35 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
           </div>
         ) : (
           <div className="space-y-4">
-            {/* 结果预览 */}
-            <div className="rounded-lg overflow-hidden border border-[var(--border-color)]">
-              <img src={blendResult} alt="融合结果" className="w-full" />
-            </div>
+            {/* 单图结果预览 */}
+            {blendResult && (
+              <div className="rounded-lg overflow-hidden border border-[var(--border-color)]">
+                <img src={blendResult} alt="融合结果" className="w-full" />
+              </div>
+            )}
+
+            {/* 批量结果预览 */}
+            {batchResults.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-[var(--text-primary)]">
+                  批量融合结果 ({batchResults.length} 张)
+                </label>
+                <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-auto">
+                  {batchResults.map((result, idx) => (
+                    <div
+                      key={idx}
+                      className="relative aspect-square rounded overflow-hidden border border-[var(--border-color)] cursor-pointer hover:border-[var(--accent-color)]"
+                      onClick={() => onAddToCanvas?.(result, `batch-blend-${idx + 1}.png`)}
+                    >
+                      <img src={result} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5">
+                        点击添加
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 图片分析结果 */}
             {imageAnalysis && (
@@ -1026,16 +1293,34 @@ export default function BlendToolPanel({ open, onClose, onAddToCanvas }: Props) 
 
             {/* 操作按钮 */}
             <div className="space-y-2">
-              <button
-                onClick={handleAddToCanvas}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--accent-color)] text-white font-semibold hover:opacity-90 transition flex items-center justify-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                添加到画布
-              </button>
+              {blendResult && (
+                <button
+                  onClick={handleAddToCanvas}
+                  className="w-full px-4 py-3 rounded-lg bg-[var(--accent-color)] text-white font-semibold hover:opacity-90 transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  添加到画布
+                </button>
+              )}
+
+              {batchResults.length > 0 && (
+                <button
+                  onClick={() => {
+                    batchResults.forEach((result, idx) => {
+                      onAddToCanvas?.(result, `batch-blend-${idx + 1}.png`)
+                    })
+                    resetState()
+                    onClose()
+                  }}
+                  className="w-full px-4 py-3 rounded-lg bg-[var(--accent-color)] text-white font-semibold hover:opacity-90 transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  全部添加到画布
+                </button>
+              )}
 
               <button
-                onClick={() => { setBlendResult(null); setError(null) }}
+                onClick={() => { setBlendResult(null); setBatchResults([]); setError(null) }}
                 className="w-full px-4 py-2 rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] font-semibold hover:bg-[var(--bg-tertiary)] transition"
               >
                 重新调整

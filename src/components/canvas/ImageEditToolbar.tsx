@@ -12,10 +12,13 @@ import {
   Expand,
   Scissors,
   Eraser,
-  Loader2
+  Loader2,
+  PaintBucket,
+  Maximize2
 } from 'lucide-react'
 import ImageEditModal from './ImageEditModal'
 import GridCropModal, { type CropAreaPx } from './GridCropModal'
+import MaskEditorModal from './MaskEditorModal'
 import {
   changePose,
   changeAngle,
@@ -24,6 +27,9 @@ import {
   eraseFromImage,
   cropFourGrid,
   cropNineGrid,
+  inpaintImage,
+  eraseWithMask,
+  upscaleImage,
   type EditOptions
 } from '@/lib/imageEdit/generator'
 
@@ -35,13 +41,14 @@ interface Props {
   onHoverChange?: (hovering: boolean) => void
 }
 
-type EditAction = 'pose' | 'angle' | 'expand' | 'cutout' | 'erase' | 'grid4' | 'grid9'
+type EditAction = 'pose' | 'angle' | 'expand' | 'cutout' | 'erase' | 'grid4' | 'grid9' | 'inpaint' | 'upscale'
 
 interface ToolButton {
   key: EditAction
   icon: React.ComponentType<{ className?: string }>
   label: string
   needsInput: boolean
+  needsMask?: boolean
   placeholder?: string
 }
 
@@ -52,7 +59,9 @@ const TOOLS: ToolButton[] = [
   { key: 'grid9', icon: Grid3x3, label: '九宫格', needsInput: false },
   { key: 'expand', icon: Expand, label: '扩图', needsInput: false },
   { key: 'cutout', icon: Scissors, label: '抠图', needsInput: true, placeholder: '输入要抠出的对象（如：人物、猫、杯子）' },
-  { key: 'erase', icon: Eraser, label: '擦除', needsInput: true, placeholder: '输入要擦除的对象（如：背景中的人、水印）' },
+  { key: 'inpaint', icon: PaintBucket, label: '重绘', needsInput: false, needsMask: true },
+  { key: 'erase', icon: Eraser, label: '擦除', needsInput: false, needsMask: true },
+  { key: 'upscale', icon: Maximize2, label: '超分', needsInput: false },
 ]
 
 export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBusyChange, onHoverChange }: Props) {
@@ -60,6 +69,7 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
   const [currentAction, setCurrentAction] = useState<EditAction | null>(null)
   const [gridCropOpen, setGridCropOpen] = useState(false)
   const [gridCropSize, setGridCropSize] = useState<2 | 3>(3)
+  const [maskEditorOpen, setMaskEditorOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState('')
 
@@ -67,6 +77,10 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
     if (tool.needsInput) {
       setCurrentAction(tool.key)
       setModalOpen(true)
+    } else if (tool.needsMask) {
+      // 需要蒙版的工具：打开蒙版编辑器
+      setCurrentAction(tool.key)
+      setMaskEditorOpen(true)
     } else {
       // 四/九宫格：先弹窗选择裁剪区域（自由比例，可任意拉伸）
       if (tool.key === 'grid4' || tool.key === 'grid9') {
@@ -75,18 +89,19 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
         setGridCropOpen(true)
         return
       }
-      // 直接执行（扩图）
+      // 直接执行（扩图、超分）
       executeAction(tool.key, '')
     }
   }, [])
 
-  const executeAction = useCallback(async (action: EditAction, userInput: string, cropArea?: CropAreaPx) => {
+  const executeAction = useCallback(async (action: EditAction, userInput: string, cropArea?: CropAreaPx, maskBase64?: string) => {
     setLoading(true)
     setProgress('准备中...')
     setModalOpen(false)
     setGridCropOpen(false)
+    setMaskEditorOpen(false)
     onBusyChange?.(true)
-    
+
     try {
       const options: EditOptions = {
         sourceNodeId: nodeId,
@@ -113,8 +128,21 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
           window.$message?.success?.('抠图完成')
           break
         case 'erase':
-          await eraseFromImage(options)
+          if (maskBase64) {
+            await eraseWithMask({ ...options, maskBase64 })
+          } else {
+            await eraseFromImage(options)
+          }
           window.$message?.success?.('擦除完成')
+          break
+        case 'inpaint':
+          if (!maskBase64) throw new Error('请绘制蒙版区域')
+          await inpaintImage({ ...options, maskBase64, userInput })
+          window.$message?.success?.('重绘完成')
+          break
+        case 'upscale':
+          await upscaleImage({ ...options, scale: 2 })
+          window.$message?.success?.('超分完成')
           break
         case 'grid4':
           await cropFourGrid({ ...(options as any), cropArea })
@@ -155,6 +183,16 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
 
   const handleGridCropClose = useCallback(() => {
     setGridCropOpen(false)
+    setCurrentAction(null)
+  }, [])
+
+  const handleMaskEditorConfirm = useCallback((maskBase64: string, prompt?: string) => {
+    if (!currentAction) return
+    executeAction(currentAction, prompt || '', undefined, maskBase64)
+  }, [currentAction, executeAction])
+
+  const handleMaskEditorClose = useCallback(() => {
+    setMaskEditorOpen(false)
     setCurrentAction(null)
   }, [])
 
@@ -219,6 +257,17 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
           gridSize={gridCropSize}
           onClose={handleGridCropClose}
           onConfirm={handleGridCropConfirm}
+        />
+      )}
+
+      {/* 蒙版编辑弹窗 */}
+      {maskEditorOpen && currentAction && (currentAction === 'inpaint' || currentAction === 'erase') && (
+        <MaskEditorModal
+          open={maskEditorOpen}
+          imageUrl={imageUrl}
+          mode={currentAction as 'inpaint' | 'erase'}
+          onClose={handleMaskEditorClose}
+          onConfirm={handleMaskEditorConfirm}
         />
       )}
     </>
