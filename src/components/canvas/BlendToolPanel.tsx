@@ -65,16 +65,27 @@ const analyzeImages = async (imageA: string, imageB: string): Promise<{ descA: s
   const base64A = extractBase64(await ensureBase64(imageA))
   const base64B = extractBase64(await ensureBase64(imageB))
 
-  const analyzePrompt = `Analyze this image precisely for AI image fusion. Output in English, structured format:
+  const analyzePrompt = `Analyze this image for AI image fusion. Be precise and detailed. Output in English:
 
-**Subject**: Main subject (person/animal/object), pose, expression, clothing
-**Background**: Environment type, key background elements
-**Style**: Art style (photorealistic/illustration/anime/painting)
-**Lighting**: Light direction, intensity, shadows
-**Colors**: Dominant color palette, mood
-**Composition**: Framing, perspective, focal point
+**CHARACTERS/SUBJECTS**:
+- Main subject identity (person name if recognizable, or detailed description)
+- Facial features: face shape, skin tone, eye color, hairstyle
+- Expression and emotion
+- Clothing details (color, style, texture)
+- Body pose and gesture
 
-Be concise but specific. Max 80 words total.`
+**SCENE/BACKGROUND**:
+- Location type (indoor/outdoor, specific setting)
+- Key background elements and their positions
+- Atmosphere and mood
+
+**TECHNICAL**:
+- Art style (photorealistic/illustration/anime/3D render)
+- Lighting direction and quality (soft/hard, warm/cool)
+- Color palette and dominant colors
+- Camera angle and framing
+
+Be extremely specific about identifiable features. Max 100 words.`
 
   const [resultA, resultB] = await Promise.all([
     chatCompletions({
@@ -112,28 +123,44 @@ const optimizePromptWithAI = async (
   imageAnalysis: { descA: string; descB: string },
   method: 'gemini' | 'kling'
 ): Promise<string> => {
-  const systemPrompt = `You are an expert AI image fusion prompt engineer. Generate precise, production-ready prompts for image blending.
+  const systemPrompt = `You are an expert AI image fusion specialist. Your job is to DEEPLY UNDERSTAND the user's intent and generate a precise fusion prompt.
 
-## Output Rules:
-1. English ONLY - no Chinese characters
-2. Use structured format with clear sections
-3. Be extremely specific about HOW elements should blend
-4. Include technical parameters: style, lighting, composition
-5. Length: 150-200 words, dense with useful information
-6. NO explanations, ONLY the prompt
+## CRITICAL RULES:
 
-## Prompt Structure Template:
-[FUSION CONCEPT]: One sentence describing the blending approach
-[SUBJECT HANDLING]: How to treat subjects from both images (which to keep, how to merge)
-[BACKGROUND TREATMENT]: How backgrounds should blend or which to use
-[STYLE UNIFICATION]: Target art style, how to harmonize different styles
-[LIGHTING & COLOR]: How to unify lighting direction, color grading approach
-[COMPOSITION]: Final framing, focal point, visual flow
-[QUALITY TAGS]: Technical quality descriptors
+### 1. UNDERSTAND USER INTENT FIRST
+- Parse what the user ACTUALLY wants (not what you assume)
+- If user says "combine faces" → they want facial features merged
+- If user says "put person in scene" → they want subject placement, NOT facial merge
+- If user says "same style" → they want style transfer
+- If user says "双重曝光/double exposure" → specific artistic effect
+
+### 2. CHARACTER CONSISTENCY IS PARAMOUNT
+When the user wants to preserve a character:
+- KEEP exact facial features: face shape, eye shape, nose, lips, skin tone
+- KEEP exact hairstyle: color, length, texture
+- KEEP exact clothing if visible
+- DO NOT blend faces unless explicitly requested
+- Use phrases like "maintain exact likeness", "preserve facial identity"
+
+### 3. SCENE CONSISTENCY
+When combining scenes:
+- Unify lighting direction (choose one source)
+- Match color temperature across elements
+- Ensure perspective consistency
+- Natural shadow integration
+
+### 4. OUTPUT FORMAT
+Generate a SINGLE cohesive prompt (no section labels) that includes:
+- Clear subject description with identifying features
+- Scene/background specification
+- Style and quality requirements
+- Specific fusion instructions
 
 ${method === 'gemini' ?
-  'For Gemini: Emphasize natural blending, photorealistic transitions, preserve fine details. Use terms like: seamless merge, coherent lighting, natural integration.' :
-  'For Kling: Emphasize artistic quality, cinematic look, dramatic effects. Use terms like: masterpiece quality, 8k resolution, professional photography, artstation quality.'}`
+  'For Gemini: Use natural language, emphasize photorealism and seamless integration. Include: "highly detailed, natural lighting, seamless blend"' :
+  'For Kling: Emphasize cinematic quality. Include: "masterpiece, 8k, professional photography, perfect composition"'}
+
+Length: 100-150 words. Output ONLY the prompt, no explanations.`
 
   const userContent = `## Image A Analysis:
 ${imageAnalysis.descA}
@@ -141,13 +168,19 @@ ${imageAnalysis.descA}
 ## Image B Analysis:
 ${imageAnalysis.descB}
 
-## User Fusion Request:
-${userRequirement}
+## User's Fusion Request (UNDERSTAND THIS CAREFULLY):
+"${userRequirement}"
 
-Generate the optimized fusion prompt now:`
+Think step by step:
+1. What does the user REALLY want to achieve?
+2. Which elements should be preserved exactly as they are?
+3. Which elements should be blended or replaced?
+4. What is the desired final outcome?
+
+Generate the fusion prompt:`
 
   const result = await chatCompletions({
-    model: 'gpt-4o-mini',
+    model: 'gpt-4o',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userContent }
@@ -169,15 +202,18 @@ const blendWithGemini = async (
   const base64A = extractBase64(await ensureBase64(imageA))
   const base64B = extractBase64(await ensureBase64(imageB))
 
-  const fullPrompt = `请直接生成图片，不要输出任何解释文字。画面描述：
+  const fullPrompt = `Generate ONE fusion image based on these two reference images. Output ONLY the image.
+
+FUSION REQUIREMENTS:
 ${prompt}
 
-IMPORTANT INSTRUCTIONS:
-- Seamlessly blend these two images into ONE cohesive image
-- Ensure color harmony and lighting consistency
-- Create natural transitions between elements
-- Maintain high quality details
-- Output ONLY the blended image, no text`
+CRITICAL RULES:
+1. CHARACTER CONSISTENCY: If preserving a person, maintain EXACT facial features - face shape, eyes, nose, lips, skin tone, hairstyle
+2. SCENE HARMONY: Unify lighting direction and color temperature across all elements
+3. NATURAL INTEGRATION: Create seamless transitions, no visible seams or artifacts
+4. HIGH QUALITY: Maintain sharp details, proper exposure, professional finish
+
+DO NOT output any text explanation. Generate ONLY the blended image.`
 
   const response = await postJson<any>(
     '/v1beta/models/gemini-3-pro-image-preview:generateContent',
@@ -234,8 +270,10 @@ const blendWithKling = async (
 
   const fullPrompt = `${prompt}
 
-Blend these two reference images seamlessly into one cohesive artwork.
-Requirements: color harmony, lighting consistency, natural transitions, high quality details.`
+FUSION TASK: Blend these two reference images into ONE cohesive masterpiece.
+CRITICAL - CHARACTER CONSISTENCY: If a person is present, preserve EXACT facial features (face shape, eyes, nose, lips, skin tone), hairstyle, and clothing.
+CRITICAL - SCENE HARMONY: Unify lighting direction, color temperature, and atmosphere.
+QUALITY: masterpiece, 8k resolution, professional photography, perfect composition, highly detailed.`
 
   // 使用 kling-omni-image 端点，支持多张参考图
   const response = await postJson<any>(
