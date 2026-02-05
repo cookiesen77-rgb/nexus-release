@@ -7,7 +7,7 @@
  * 2. 只在 blur 时同步到 store
  * 3. 完全避免订阅 store
  */
-import React, { memo, useState, useCallback, useRef } from 'react'
+import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Copy, Trash2, ImageIcon, Video, Expand, Loader2 } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
@@ -52,6 +52,16 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartRef = useRef({ x: 0, y: 0, width: 0, height: 0 })
 
+  // 同步外部数据变化（例如从 store 更新）
+  useEffect(() => {
+    if (nodeData?.width && nodeData.width !== nodeWidth) {
+      setNodeWidth(nodeData.width)
+    }
+    if (nodeData?.height && nodeData.height !== nodeHeight) {
+      setNodeHeight(nodeData.height)
+    }
+  }, [nodeData?.width, nodeData?.height])
+
   // 更新内容到 store（只在 blur 时）
   const handleBlur = useCallback(() => {
     // 使用 setTimeout 延迟执行，避免阻塞 UI
@@ -72,25 +82,28 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
       height: nodeHeight
     }
 
+    let currentWidth = nodeWidth
+    let currentHeight = nodeHeight
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = moveEvent.clientX - resizeStartRef.current.x
       const deltaY = moveEvent.clientY - resizeStartRef.current.y
-      
-      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, resizeStartRef.current.width + deltaX))
-      const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, resizeStartRef.current.height + deltaY))
-      
-      setNodeWidth(newWidth)
-      setNodeHeight(newHeight)
+
+      currentWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, resizeStartRef.current.width + deltaX))
+      currentHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, resizeStartRef.current.height + deltaY))
+
+      setNodeWidth(currentWidth)
+      setNodeHeight(currentHeight)
     }
 
     const handleMouseUp = () => {
       setIsResizing(false)
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
-      
-      // 保存尺寸到 store
-      useGraphStore.getState().updateNode(id, { 
-        data: { width: nodeWidth, height: nodeHeight } 
+
+      // 保存尺寸到 store（使用最新值）
+      useGraphStore.getState().updateNode(id, {
+        data: { width: currentWidth, height: currentHeight }
       })
     }
 

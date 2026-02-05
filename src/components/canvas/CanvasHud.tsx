@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useGraphStore } from '@/graph/store'
 import type { Viewport } from '@/graph/types'
 import { getNodeAccent, getNodeSize } from '@/graph/nodeSizing'
-import { Locate, Minus, Plus } from 'lucide-react'
+import { Locate, Minus, Plus, LayoutGrid } from 'lucide-react'
 
 const clampZoom = (z: number) => Math.max(0.1, Math.min(2, z))
 
@@ -83,6 +83,96 @@ export default function CanvasHud({ containerRef }: { containerRef: React.RefObj
     const ny = margin - bounds.y0 * z
     setViewport({ x: nx, y: ny, zoom: z })
   }
+
+  // 一键整理节点布局
+  const arrangeNodes = useCallback(() => {
+    if (nodes.length === 0) return
+
+    const store = useGraphStore.getState()
+    const edges = store.edges
+
+    // 建立节点的入度和出度映射
+    const inDegree = new Map<string, number>()
+    const outEdges = new Map<string, string[]>()
+
+    for (const node of nodes) {
+      inDegree.set(node.id, 0)
+      outEdges.set(node.id, [])
+    }
+
+    for (const edge of edges) {
+      const targetDegree = inDegree.get(edge.target) || 0
+      inDegree.set(edge.target, targetDegree + 1)
+
+      const sources = outEdges.get(edge.source) || []
+      sources.push(edge.target)
+      outEdges.set(edge.source, sources)
+    }
+
+    // 拓扑排序 + 分层
+    const levels: string[][] = []
+    const assigned = new Set<string>()
+
+    // 第一层：入度为0的节点
+    let currentLevel = nodes.filter(n => (inDegree.get(n.id) || 0) === 0).map(n => n.id)
+    if (currentLevel.length === 0) {
+      // 如果没有入度为0的节点，从第一个节点开始
+      currentLevel = [nodes[0].id]
+    }
+
+    while (currentLevel.length > 0) {
+      levels.push(currentLevel)
+      currentLevel.forEach(id => assigned.add(id))
+
+      const nextLevel: string[] = []
+      for (const nodeId of currentLevel) {
+        const targets = outEdges.get(nodeId) || []
+        for (const targetId of targets) {
+          if (!assigned.has(targetId) && !nextLevel.includes(targetId)) {
+            nextLevel.push(targetId)
+          }
+        }
+      }
+      currentLevel = nextLevel
+    }
+
+    // 添加未分配的节点到最后一层
+    const unassigned = nodes.filter(n => !assigned.has(n.id)).map(n => n.id)
+    if (unassigned.length > 0) {
+      levels.push(unassigned)
+    }
+
+    // 布局参数
+    const startX = 100
+    const startY = 100
+    const horizontalGap = 350
+    const verticalGap = 200
+
+    // 计算每层的位置
+    const updates: Array<{ id: string; x: number; y: number }> = []
+
+    for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
+      const level = levels[levelIndex]
+      const levelX = startX + levelIndex * horizontalGap
+
+      for (let nodeIndex = 0; nodeIndex < level.length; nodeIndex++) {
+        const nodeId = level[nodeIndex]
+        const levelY = startY + nodeIndex * verticalGap
+
+        updates.push({ id: nodeId, x: levelX, y: levelY })
+      }
+    }
+
+    // 批量更新节点位置
+    for (const { id, x, y } of updates) {
+      store.updateNode(id, { x, y })
+    }
+
+    window.$message?.success?.('节点已整理完成')
+
+    // 自动适应视图
+    setTimeout(() => fitView(), 100)
+  }, [nodes, fitView])
 
   // MiniMap
   const miniOuter = { w: 180, h: 120, outerPad: 8 }
@@ -166,6 +256,16 @@ export default function CanvasHud({ containerRef }: { containerRef: React.RefObj
           type="button"
         >
           <Locate className="h-4 w-4 text-[var(--text-secondary)]" />
+        </button>
+
+        <button
+          className="flex h-8 w-8 items-center justify-center rounded-[10px] hover:bg-[var(--bg-tertiary)] disabled:opacity-40"
+          onClick={arrangeNodes}
+          disabled={nodes.length === 0}
+          title="一键整理节点"
+          type="button"
+        >
+          <LayoutGrid className="h-4 w-4 text-[var(--text-secondary)]" />
         </button>
 
         <div className="flex items-center gap-1.5 rounded-[10px] border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1.5">

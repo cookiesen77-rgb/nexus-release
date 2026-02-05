@@ -62,63 +62,70 @@ export default function CanvasContextMenu({
   const setSelected = useGraphStore((s) => s.setSelected)
   const withBatch = useGraphStore((s) => s.withBatchUpdates)
 
-  // 处理文件选择
+  // 处理文件选择（支持多选）
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log('[CanvasContextMenu] handleFileSelect 被调用')
-    const file = e.target.files?.[0]
+    const files = e.target.files
     const type = pendingFileTypeRef.current
     const world = pendingWorldRef.current
-    console.log('[CanvasContextMenu] file:', file, 'type:', type, 'world:', world)
-    
-    if (!file || !type || !world) {
+    console.log('[CanvasContextMenu] files:', files?.length, 'type:', type, 'world:', world)
+
+    if (!files || files.length === 0 || !type || !world) {
       pendingFileTypeRef.current = null
       pendingWorldRef.current = null
       e.target.value = ''
       return
     }
-    
+
     const { w, h } = getNodeSize(type)
-    const pos = { x: world.x - w * 0.5, y: world.y - h * 0.5 }
-    
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string
-      if (!dataUrl) return
-      
-      const store = useGraphStore.getState()
-      const newNodeId = store.addNode(type, pos, {
-        label: file.name || (type === 'image' ? '图片' : type === 'video' ? '视频' : '音频'),
-        url: dataUrl,
-        sourceUrl: '',
-        fileName: file.name,
-        fileType: file.type,
-        createdAt: Date.now()
-      })
-      
-      store.setSelected(newNodeId)
-      
-      // 保存到 IndexedDB
-      const projectId = store.projectId || 'default'
-      try {
-        const mediaId = await saveMedia({
-          nodeId: newNodeId,
-          projectId,
-          type: type as 'image' | 'video' | 'audio',
-          data: dataUrl,
+    const store = useGraphStore.getState()
+    const projectId = store.projectId || 'default'
+
+    // 处理所有选中的文件
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const pos = { x: world.x - w * 0.5 + i * 30, y: world.y - h * 0.5 + i * 30 }
+
+      const reader = new FileReader()
+      reader.onload = async (event) => {
+        const dataUrl = event.target?.result as string
+        if (!dataUrl) return
+
+        const newNodeId = store.addNode(type, pos, {
+          label: file.name || (type === 'image' ? '图片' : type === 'video' ? '视频' : '音频'),
+          url: dataUrl,
+          sourceUrl: '',
+          fileName: file.name,
+          fileType: file.type,
+          createdAt: Date.now()
         })
-        if (mediaId) {
-          store.patchNodeDataSilent(newNodeId, { mediaId })
+
+        // 保存到 IndexedDB
+        try {
+          const mediaId = await saveMedia({
+            nodeId: newNodeId,
+            projectId,
+            type: type as 'image' | 'video' | 'audio',
+            data: dataUrl,
+          })
+          if (mediaId) {
+            store.patchNodeDataSilent(newNodeId, { mediaId })
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
       }
+      reader.readAsDataURL(file)
     }
-    reader.readAsDataURL(file)
-    
+
+    if (files.length > 0) {
+      window.$message?.success?.(`已上传 ${files.length} 个文件`)
+    }
+
     pendingFileTypeRef.current = null
     pendingWorldRef.current = null
     e.target.value = ''
-    
+
     // Web 环境下，文件选择完成后关闭菜单
     onOpenChange(false)
   }, [onOpenChange])
@@ -147,76 +154,82 @@ export default function CanvasContextMenu({
       try {
         const { open } = await import('@tauri-apps/plugin-dialog')
         const { readFile } = await import('@tauri-apps/plugin-fs')
-        
+
         const result = await open({
-          multiple: false,
+          multiple: true,  // 支持多选
           filters,
           title: type === 'image' ? '选择图片' : type === 'video' ? '选择视频' : '选择音频'
         })
-        
-        if (result && typeof result === 'string') {
-          const fileData = await readFile(result)
-          const fileName = result.split('/').pop() || result.split('\\').pop() || 'file'
-          const ext = fileName.split('.').pop()?.toLowerCase() || ''
-          
-          let mimeType = ''
-          if (type === 'image') {
-            const mimeMap: Record<string, string> = { 
-              png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', 
-              gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml' 
-            }
-            mimeType = mimeMap[ext] || 'image/png'
-          } else if (type === 'video') {
-            const mimeMap: Record<string, string> = { 
-              mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', 
-              avi: 'video/x-msvideo', mkv: 'video/x-matroska' 
-            }
-            mimeType = mimeMap[ext] || 'video/mp4'
-          } else if (type === 'audio') {
-            const mimeMap: Record<string, string> = { 
-              mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', 
-              flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4' 
-            }
-            mimeType = mimeMap[ext] || 'audio/mpeg'
-          }
-          
-          const blob = new Blob([fileData], { type: mimeType })
-          const dataUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
-          })
-          
-          const { w, h } = getNodeSize(type)
-          const pos = { x: world.x - w * 0.5, y: world.y - h * 0.5 }
-          
+
+        const files = Array.isArray(result) ? result : (result ? [result] : [])
+
+        if (files.length > 0) {
           const store = useGraphStore.getState()
-          const newNodeId = store.addNode(type, pos, {
-            label: fileName,
-            url: dataUrl,
-            sourceUrl: '',
-            fileName,
-            fileType: mimeType,
-            createdAt: Date.now()
-          })
-          
-          store.setSelected(newNodeId)
-          
-          // 保存到 IndexedDB
           const projectId = store.projectId || 'default'
-          try {
-            const mediaId = await saveMedia({
-              nodeId: newNodeId,
-              projectId,
-              type: type as 'image' | 'video' | 'audio',
-              data: dataUrl,
-            })
-            if (mediaId) {
-              store.patchNodeDataSilent(newNodeId, { mediaId })
+
+          for (let i = 0; i < files.length; i++) {
+            const filePath = files[i]
+            const fileData = await readFile(filePath)
+            const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || 'file'
+            const ext = fileName.split('.').pop()?.toLowerCase() || ''
+
+            let mimeType = ''
+            if (type === 'image') {
+              const mimeMap: Record<string, string> = {
+                png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+                gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml'
+              }
+              mimeType = mimeMap[ext] || 'image/png'
+            } else if (type === 'video') {
+              const mimeMap: Record<string, string> = {
+                mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+                avi: 'video/x-msvideo', mkv: 'video/x-matroska'
+              }
+              mimeType = mimeMap[ext] || 'video/mp4'
+            } else if (type === 'audio') {
+              const mimeMap: Record<string, string> = {
+                mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
+                flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4'
+              }
+              mimeType = mimeMap[ext] || 'audio/mpeg'
             }
-          } catch {
-            // ignore
+
+            const blob = new Blob([fileData], { type: mimeType })
+            const dataUrl = await new Promise<string>((resolve) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(reader.result as string)
+              reader.readAsDataURL(blob)
+            })
+
+            const { w, h } = getNodeSize(type)
+            const pos = { x: world.x - w * 0.5 + i * 30, y: world.y - h * 0.5 + i * 30 }
+
+            const newNodeId = store.addNode(type, pos, {
+              label: fileName,
+              url: dataUrl,
+              sourceUrl: '',
+              fileName,
+              fileType: mimeType,
+              createdAt: Date.now()
+            })
+
+            // 保存到 IndexedDB
+            try {
+              const mediaId = await saveMedia({
+                nodeId: newNodeId,
+                projectId,
+                type: type as 'image' | 'video' | 'audio',
+                data: dataUrl,
+              })
+              if (mediaId) {
+                store.patchNodeDataSilent(newNodeId, { mediaId })
+              }
+            } catch {
+              // ignore
+            }
           }
+
+          window.$message?.success?.(`已上传 ${files.length} 个文件`)
         }
       } catch (err) {
         console.error('[CanvasContextMenu] Tauri 文件选择失败:', err)
@@ -276,6 +289,7 @@ export default function CanvasContextMenu({
     <input
       ref={fileInputRef}
       type="file"
+      multiple
       className="hidden"
       onChange={handleFileSelect}
     />
