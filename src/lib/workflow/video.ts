@@ -1657,7 +1657,8 @@ export const generateVideoFromConfigNode = async (
             if (String(sound || '').toLowerCase() !== 'on') {
               throw new Error('使用音色（voice_list）时需要 sound=on：请切换到 "kling-v2-6 · 有音频" 模型')
             }
-            payload.voice_list = voiceIds.map((voice_id) => ({ voice_id }))
+            // API 文档要求 voiceId（驼峰），不是 voice_id
+            payload.voice_list = voiceIds.map((id) => ({ voiceId: id }))
           }
         } else if (voiceIds.length > 0) {
           throw new Error('当前 Kling 模型不支持音色（voice_list），仅 kling-v2-6 支持')
