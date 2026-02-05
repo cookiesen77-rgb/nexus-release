@@ -2063,6 +2063,12 @@ export const generateVideoFromConfigNode = async (
     
     console.log('[generateVideo] API 响应:', JSON.stringify(task, null, 2))
 
+    // 检测 MiniMax/Hailuo 等 API 的业务层错误（HTTP 200 但 status: "error"）
+    if (task?.status === 'error' || (task?.base_resp && task.base_resp.status_code !== 0)) {
+      const errMsg = task?.base_resp?.status_msg || task?.message || task?.error || '未知错误'
+      throw new Error(`${modelCfg.label || modelKey} 生成失败: ${errMsg}`)
+    }
+
     // 尝试从不同格式提取视频 URL
     let extractedVideoUrl = ''
 
