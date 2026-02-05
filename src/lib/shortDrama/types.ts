@@ -122,6 +122,36 @@ export interface ShortDramaScene {
   refs?: ShortDramaMediaSlot[]
 }
 
+/**
+ * 资产类型：武器、道具、重要物品
+ */
+export type ShortDramaAssetCategory = 'weapon' | 'prop' | 'vehicle' | 'accessory' | 'item' | 'other'
+
+/**
+ * 短剧资产（角色使用的武器、道具、重要物品等）
+ */
+export interface ShortDramaAsset {
+  id: string
+  name: string
+  description: string
+  category: ShortDramaAssetCategory
+
+  /**
+   * 关联的角色ID列表（哪些角色会使用此资产）
+   */
+  ownerCharacterIds?: string[]
+
+  /**
+   * 资产参考图
+   */
+  ref: ShortDramaMediaSlot
+
+  /**
+   * 附加参考图
+   */
+  refs?: ShortDramaMediaSlot[]
+}
+
 export interface ShortDramaShotFrame {
   role: ShortDramaFrameRole
   prompt: string
@@ -134,6 +164,7 @@ export interface ShortDramaShot {
 
   sceneId?: string
   characterIds: string[]
+  assetIds?: string[]
 
   /**
    * Optional beat/intent summary (emotion/action/dialogue)
@@ -179,6 +210,7 @@ export interface ShortDramaDraftV2 {
 
   characters: ShortDramaCharacter[]
   scenes: ShortDramaScene[]
+  assets: ShortDramaAsset[]
   shots: ShortDramaShot[]
 
   plan?: ShortDramaGenerationPlan

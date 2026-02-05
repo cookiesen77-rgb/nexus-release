@@ -10,7 +10,7 @@ import { getShortDramaTaskQueue } from '@/lib/shortDrama/taskQueue'
 import { buildEffectiveStyle, getShortDramaStylePresetById, SHORT_DRAMA_STYLE_PRESETS } from '@/lib/shortDrama/stylePresets'
 import { generateShortDramaImage, generateShortDramaVideo } from '@/lib/shortDrama/generateMedia'
 import { appendVariantToSlot, removeVariantFromSlot, setSlotSelectionLocked, setSlotSelectedVariant, updateSlotById, updateVariantInSlot } from '@/lib/shortDrama/draftOps'
-import { saveShortDramaDraftV2 } from '@/lib/shortDrama/draftStorage'
+import { saveShortDramaDraftV2, createEmptyAsset } from '@/lib/shortDrama/draftStorage'
 import { getMedia, saveMedia } from '@/lib/mediaStorage'
 import { resolveCachedMediaUrl } from '@/lib/workflow/cache'
 import { useGraphStore } from '@/graph/store'
@@ -18,9 +18,10 @@ import { useAssetsStore } from '@/store/assets'
 import MediaPreviewModal from '@/components/canvas/MediaPreviewModal'
 import ShortDramaMediaPickerModal, { type ShortDramaPickKind, type ShortDramaPickedMedia } from '@/components/shortDrama/ShortDramaMediaPickerModal'
 import { ShortDramaSlotVersions, ShortDramaVariantThumb } from '@/components/shortDrama/ShortDramaSlotVersions'
+import ShortDramaBlendPanel from '@/components/shortDrama/ShortDramaBlendPanel'
 import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
 import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1 } from '@/lib/shortDrama/uiPrefs'
-import { FileText, Loader2, Upload, Video as VideoIcon, Wand2 } from 'lucide-react'
+import { FileText, Loader2, Upload, Video as VideoIcon, Wand2, Sword, Layers } from 'lucide-react'
 
 interface Props {
   projectId: string
@@ -185,6 +186,8 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewType, setPreviewType] = useState<'image' | 'video'>('image')
   const [previewBusy, setPreviewBusy] = useState(false)
+
+  const [blendPanelOpen, setBlendPanelOpen] = useState(false)
 
   type PickerTarget = { slotId: string; label?: string }
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -1397,7 +1400,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
 
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-center justify-between">
-            <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">角色 / 场景</div>
+            <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">角色 / 场景 / 资产</div>
+            <Button size="sm" variant="ghost" className="gap-1" onClick={() => setBlendPanelOpen(true)}>
+              <Layers className="h-4 w-4" />
+              融图
+            </Button>
           </div>
           <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1 space-y-4">
             <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
@@ -1513,6 +1520,71 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                           上板
                         </Button>
                       </div>
+                    </div>
+                  ) : null}
+                  <div className="mt-2">
+                    <ShortDramaSlotVersions
+                      slot={slot}
+                      onAdopt={(vid) => setDraft((prev) => setSlotSelectedVariant(prev, slot.id, vid))}
+                      onRemove={(vid) => setDraft((prev) => removeVariantFromSlot(prev, slot.id, vid))}
+                      onPreview={(v) => void openPreview(v)}
+                      disabled={busy}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+            {/* 资产 section */}
+            <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
+          <div className="text-sm font-semibold text-[var(--text-primary)]">资产（{draft.assets?.length || 0}）</div>
+          <div className="mt-3 space-y-3">
+            {(!draft.assets || draft.assets.length === 0) ? <div className="text-sm text-[var(--text-secondary)]">尚未分析出资产（武器/道具/重要物品）。</div> : null}
+            {(draft.assets || []).map((a) => {
+              const slot = a.ref
+              const selected = getSelectedVariant(slot)
+              const busy = !!busySlotIds[slot.id]
+              const categoryLabels: Record<string, string> = {
+                weapon: '武器',
+                prop: '道具',
+                vehicle: '载具',
+                accessory: '配饰',
+                item: '物品',
+                other: '其他'
+              }
+              return (
+                <div key={a.id} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sword className="h-4 w-4 text-orange-500" />
+                      <div className="text-xs font-semibold text-[var(--text-primary)]">{a.name}</div>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400">{categoryLabels[a.category] || a.category}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <input
+                          type="checkbox"
+                          checked={!!slot.selectionLockedByUser}
+                          onChange={(e) => setDraft((prev) => setSlotSelectionLocked(prev, slot.id, e.target.checked))}
+                        />
+                        锁定采用
+                      </label>
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => openPickerForSlot(slot, `${a.name} · 资产参考`, 'history')}>
+                        从历史导入
+                      </Button>
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => openPickerForSlot(slot, `${a.name} · 资产参考`, 'canvas')}>
+                        从画布导入
+                      </Button>
+                    </div>
+                  </div>
+                  {a.description ? <div className="mt-1 text-xs text-[var(--text-secondary)] line-clamp-2">{a.description}</div> : null}
+                  {selected ? (
+                    <div className="mt-2">
+                      <button type="button" onClick={() => void openPreview(selected)} className="block w-full">
+                        <ShortDramaVariantThumb variant={selected} className="h-20 w-full" />
+                      </button>
                     </div>
                   ) : null}
                   <div className="mt-2">
@@ -1782,6 +1854,23 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       />
 
       <MediaPreviewModal open={previewOpen} url={previewUrl} type={previewType} onClose={() => setPreviewOpen(false)} />
+
+      <ShortDramaBlendPanel
+        open={blendPanelOpen}
+        onClose={() => setBlendPanelOpen(false)}
+        draft={draft}
+        onAddImage={(imageData, title) => {
+          // 添加到素材库
+          useAssetsStore.getState().addAsset({
+            type: 'image',
+            src: imageData,
+            title: title || `融合图片-${Date.now()}`,
+            model: 'blend'
+          })
+          window.$message?.success?.('融合图片已添加到素材库，可从历史导入到任意位置')
+          setBlendPanelOpen(false)
+        }}
+      />
     </div>
   )
 }

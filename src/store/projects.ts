@@ -88,6 +88,7 @@ export type ProjectsState = {
   create: (name?: string) => string
   rename: (id: string, name: string) => void
   updateDescription: (id: string, description: string) => void
+  setThumbnail: (id: string, thumbnail: string) => void
   duplicate: (id: string) => Promise<string | null>
   remove: (id: string) => Promise<void>
   touch: (id: string) => void
@@ -118,6 +119,12 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
   updateDescription: (id, description) => {
     const projects = get().projects.map((p) => (p.id === id ? { ...p, description: description.trim() || undefined, updatedAt: Date.now() } : p))
+    writeProjects(projects)
+    set({ projects })
+  },
+
+  setThumbnail: (id, thumbnail) => {
+    const projects = get().projects.map((p) => (p.id === id ? { ...p, thumbnail: thumbnail || undefined, updatedAt: Date.now() } : p))
     writeProjects(projects)
     set({ projects })
   },

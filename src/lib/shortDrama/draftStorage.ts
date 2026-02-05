@@ -7,6 +7,8 @@ import type {
   ShortDramaShot,
   ShortDramaShotFrame,
   ShortDramaStyle,
+  ShortDramaAsset,
+  ShortDramaAssetCategory,
 } from '@/lib/shortDrama/types'
 
 const DRAFT_KEY_PREFIX_V2 = 'nexus-short-drama-studio:draft:v2'
@@ -39,6 +41,20 @@ export const createEmptyMediaSlot = (kind: ShortDramaMediaKind, label?: string):
 
 export const createEmptyImageSlot = (label?: string) => createEmptyMediaSlot('image', label)
 export const createEmptyVideoSlot = (label?: string) => createEmptyMediaSlot('video', label)
+
+export const createEmptyAsset = (
+  name: string,
+  description: string = '',
+  category: ShortDramaAssetCategory = 'item'
+): ShortDramaAsset => ({
+  id: makeId(),
+  name,
+  description,
+  category,
+  ownerCharacterIds: [],
+  ref: createEmptyImageSlot('资产参考图'),
+  refs: [],
+})
 
 export const createDefaultStyle = (): ShortDramaStyle => ({
   presetId: DEFAULT_STYLE_PRESET_ID,
@@ -88,6 +104,7 @@ export const createDefaultDraftV2 = (projectId: string): ShortDramaDraftV2 => ({
   },
   characters: [],
   scenes: [],
+  assets: [],
   shots: [],
   plan: undefined,
 })

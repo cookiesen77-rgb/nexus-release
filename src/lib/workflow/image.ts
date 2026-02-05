@@ -7,6 +7,7 @@ import { saveMedia, isLargeData, isBase64Data } from '@/lib/mediaStorage'
 import { requestQueue, type QueueTask } from '@/lib/workflow/requestQueue'
 import { useAssetsStore } from '@/store/assets'
 import { useSettingsStore } from '@/store/settings'
+import { useProjectsStore } from '@/store/projects'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 
 // 检测是否在 Tauri 环境中
@@ -716,6 +717,12 @@ export const generateImageFromConfigNode = async (
           title: prompt?.slice(0, 50) || '画布生成',
           model: modelKey
         })
+        // 自动设置项目缩略图（如果尚未设置）
+        const projectId = latestStore.projectId
+        const project = useProjectsStore.getState().projects.find(p => p.id === projectId)
+        if (project && !project.thumbnail && imageUrl) {
+          useProjectsStore.getState().setThumbnail(projectId, imageUrl)
+        }
       } catch {
         // ignore
       }
@@ -831,6 +838,12 @@ export const generateImageFromConfigNode = async (
         title: prompt?.slice(0, 50) || '画布生成',
         model: modelKey
       })
+      // 自动设置项目缩略图（如果尚未设置）
+      const projectId = latestStore.projectId
+      const project = useProjectsStore.getState().projects.find(p => p.id === projectId)
+      if (project && !project.thumbnail && displayUrl) {
+        useProjectsStore.getState().setThumbnail(projectId, displayUrl)
+      }
     } catch (e) {
       console.warn('[generateImage] 添加到历史素材失败:', e)
     }
