@@ -1,6 +1,8 @@
 /**
  * Image Edit Toolbar | 图片编辑悬浮工具栏
  * 显示在图片节点上方，提供快速编辑功能
+ * - 移除超分功能
+ * - 擦除和重绘支持用户选择模型和分辨率
  */
 
 import React, { memo, useState, useCallback } from 'react'
@@ -13,8 +15,7 @@ import {
   Scissors,
   Eraser,
   Loader2,
-  PaintBucket,
-  Maximize2
+  PaintBucket
 } from 'lucide-react'
 import ImageEditModal from './ImageEditModal'
 import GridCropModal, { type CropAreaPx } from './GridCropModal'
@@ -24,12 +25,10 @@ import {
   changeAngle,
   expandImage,
   cutoutImage,
-  eraseFromImage,
   cropFourGrid,
   cropNineGrid,
   inpaintImage,
   eraseWithMask,
-  upscaleImage,
   type EditOptions
 } from '@/lib/imageEdit/generator'
 
@@ -41,7 +40,7 @@ interface Props {
   onHoverChange?: (hovering: boolean) => void
 }
 
-type EditAction = 'pose' | 'angle' | 'expand' | 'cutout' | 'erase' | 'grid4' | 'grid9' | 'inpaint' | 'upscale'
+type EditAction = 'pose' | 'angle' | 'expand' | 'cutout' | 'erase' | 'grid4' | 'grid9' | 'inpaint'
 
 interface ToolButton {
   key: EditAction
@@ -61,7 +60,6 @@ const TOOLS: ToolButton[] = [
   { key: 'cutout', icon: Scissors, label: '抠图', needsInput: true, placeholder: '输入要抠出的对象（如：人物、猫、杯子）' },
   { key: 'inpaint', icon: PaintBucket, label: '重绘', needsInput: false, needsMask: true },
   { key: 'erase', icon: Eraser, label: '擦除', needsInput: false, needsMask: true },
-  { key: 'upscale', icon: Maximize2, label: '超分', needsInput: false },
 ]
 
 export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBusyChange, onHoverChange }: Props) {
@@ -78,23 +76,27 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
       setCurrentAction(tool.key)
       setModalOpen(true)
     } else if (tool.needsMask) {
-      // 需要蒙版的工具：打开蒙版编辑器
       setCurrentAction(tool.key)
       setMaskEditorOpen(true)
     } else {
-      // 四/九宫格：先弹窗选择裁剪区域（自由比例，可任意拉伸）
       if (tool.key === 'grid4' || tool.key === 'grid9') {
         setCurrentAction(tool.key)
         setGridCropSize(tool.key === 'grid4' ? 2 : 3)
         setGridCropOpen(true)
         return
       }
-      // 直接执行（扩图、超分）
       executeAction(tool.key, '')
     }
   }, [])
 
-  const executeAction = useCallback(async (action: EditAction, userInput: string, cropArea?: CropAreaPx, maskBase64?: string) => {
+  const executeAction = useCallback(async (
+    action: EditAction,
+    userInput: string,
+    cropArea?: CropAreaPx,
+    maskBase64?: string,
+    model?: string,
+    resolution?: string
+  ) => {
     setLoading(true)
     setProgress('准备中...')
     setModalOpen(false)
@@ -129,20 +131,16 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
           break
         case 'erase':
           if (maskBase64) {
-            await eraseWithMask({ ...options, maskBase64 })
+            await eraseWithMask({ ...options, maskBase64, model, resolution })
           } else {
-            await eraseFromImage(options)
+            throw new Error('请绘制要擦除的区域')
           }
           window.$message?.success?.('擦除完成')
           break
         case 'inpaint':
           if (!maskBase64) throw new Error('请绘制蒙版区域')
-          await inpaintImage({ ...options, maskBase64, userInput })
+          await inpaintImage({ ...options, maskBase64, userInput, model, resolution })
           window.$message?.success?.('重绘完成')
-          break
-        case 'upscale':
-          await upscaleImage({ ...options, scale: 2 })
-          window.$message?.success?.('超分完成')
           break
         case 'grid4':
           await cropFourGrid({ ...(options as any), cropArea })
@@ -186,9 +184,9 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
     setCurrentAction(null)
   }, [])
 
-  const handleMaskEditorConfirm = useCallback((maskBase64: string, prompt?: string) => {
+  const handleMaskEditorConfirm = useCallback((maskBase64: string, prompt?: string, model?: string, resolution?: string) => {
     if (!currentAction) return
-    executeAction(currentAction, prompt || '', undefined, maskBase64)
+    executeAction(currentAction, prompt || '', undefined, maskBase64, model, resolution)
   }, [currentAction, executeAction])
 
   const handleMaskEditorClose = useCallback(() => {
@@ -196,14 +194,13 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
     setCurrentAction(null)
   }, [])
 
-  // loading 时保持显示，否则根据 visible 决定
   if (!visible && !loading) return null
 
   const currentTool = TOOLS.find(t => t.key === currentAction)
 
   return (
     <>
-      {/* 悬浮工具栏 - 位于节点正上方，居中对齐，不遮挡复制按钮 */}
+      {/* 悬浮工具栏 */}
       <div
         className="absolute -top-[52px] left-0 right-[50px] flex justify-center z-[1001]"
         onMouseDown={(e) => e.stopPropagation()}

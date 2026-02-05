@@ -28,7 +28,7 @@ const MODEL_ALIASES = {
     'aigc-video-hailuo': 'MiniMax-Hailuo-2.3-Fast',
     'hailuo-2.3-fast': 'MiniMax-Hailuo-2.3-Fast',
     'hailuo-2.3': 'MiniMax-Hailuo-2.3',
-    'hailuo-02': 'MiniMax-Hailuo-2.3',
+    'hailuo-02': 'MiniMax-Hailuo-02',
     // Kling（旧 AIGC 走腾讯）迁移到 Kling 官方 /kling/v1 视频端点
     'kling-2.5': 'kling-video',
     'kling-2.1': 'kling-video',
@@ -754,6 +754,28 @@ export const VIDEO_MODELS = [
         ],
         durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }, { label: '15 秒', key: 15 }],
         defaultParams: { ratio: '16:9', duration: 5, size: '1080P', prompt_extend: true }
+    },
+    {
+        label: 'MiniMax-Hailuo-02（海螺经典）',
+        key: 'MiniMax-Hailuo-02',
+        endpoint: toAbsoluteUrl('/minimax/v1/video_generation'),
+        statusEndpoint: (id) => toAbsoluteUrl(`/minimax/v1/query/video_generation?task_id=${id}`),
+        authMode: 'bearer',
+        format: 'minimax-hailuo-video',
+        maxImages: 2,
+        tips: '支持纯文生视频和首尾帧视频。首尾帧视频请使用此模型。',
+        requiresPrompt: false,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16', '1:1'],
+        sizes: [
+            { label: '768P', key: '768P' },
+            { label: '1080P', key: '1080P' }
+        ],
+        durs: [{ label: '6 秒', key: 6 }, { label: '10 秒', key: 10 }],
+        defaultParams: { ratio: '16:9', duration: 6, size: '768P', prompt_optimizer: true }
     },
     {
         label: 'MiniMax-Hailuo-2.3（海螺）',

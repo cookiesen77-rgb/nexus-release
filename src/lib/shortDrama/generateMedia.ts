@@ -1025,7 +1025,10 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
   } else if (modelCfg.format === 'minimax-hailuo-video') {
     // 云雾海螺（MiniMax）端点：POST /minimax/v1/video_generation
     // 查询：GET /minimax/v1/query/video_generation?task_id=...
-    // API 约束：纯文生视频只需 model/prompt/duration；图生视频才需要 first_frame_image/resolution/prompt_optimizer
+    // API 约束：
+    // - 纯文生视频：model=MiniMax-Hailuo-02, 只需 model/prompt/duration
+    // - 图生视频（仅首帧）：model=MiniMax-Hailuo-2.3, 需要 first_frame_image/resolution/prompt_optimizer
+    // - 首尾帧视频：model=MiniMax-Hailuo-02, 需要 first_frame_image/last_frame_image/resolution/prompt_optimizer
     const ensureHttpImage = async (raw: string, label: string) => {
       let v = String(raw || '').trim()
       if (!v) return ''
@@ -1051,9 +1054,22 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
     let firstUrl = firstRaw ? await ensureHttpImage(firstRaw, '首帧') : ''
     let lastUrl = tailRaw ? await ensureHttpImage(tailRaw, '尾帧') : ''
 
+    // 根据是否有尾帧选择模型
+    // - 用户选择 MiniMax-Hailuo-02：保持原选择（支持所有场景）
+    // - 首尾帧视频必须用 MiniMax-Hailuo-02
+    // - 仅首帧用户可选 MiniMax-Hailuo-2.3 或 MiniMax-Hailuo-2.3-Fast
+    const userModel = String(modelCfg.key || '')
+    const isUserHailuo02 = userModel === 'MiniMax-Hailuo-02'
+    const isUserFastModel = userModel === 'MiniMax-Hailuo-2.3-Fast'
+    const effectiveModel = isUserHailuo02
+      ? 'MiniMax-Hailuo-02'
+      : (lastUrl
+        ? 'MiniMax-Hailuo-02'
+        : (firstUrl ? (isUserFastModel ? 'MiniMax-Hailuo-2.3-Fast' : 'MiniMax-Hailuo-2.3') : 'MiniMax-Hailuo-02'))
+
     // 基础参数（纯文生视频）
     payload = {
-      model: modelCfg.key,
+      model: effectiveModel,
       prompt: prompt || '',
       duration: durValue,
     }
