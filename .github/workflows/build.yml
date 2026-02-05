@@ -56,7 +56,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nexus-${{ matrix.platform }}${{ matrix.args && '-arm64' || '' }}
+          name: nexus-${{ matrix.platform }}-${{ matrix.rust_targets || 'default' }}
           path: |
             src-tauri/target/*/release/bundle/dmg/*.dmg
             src-tauri/target/*/release/bundle/macos/*.app
