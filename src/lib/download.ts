@@ -46,13 +46,35 @@ function extractLocalPath(assetUrl: string): string | null {
 
 /**
  * 规范化网关相对路径为绝对 URL（Tauri plugin-http 需要绝对地址）
+ * 同时确保 URL 中的非 ASCII 字符被正确编码
  */
 function normalizeGatewayUrl(url: string): string {
   const u = String(url || '').trim()
   if (!u) return u
-  if (/^https?:\/\//i.test(u)) return u
   if (u.startsWith('asset://') || u.startsWith('data:') || u.startsWith('blob:')) return u
-  const prefixes = ['/v1/', '/v1beta', '/kling', '/tencent-vod', '/video']
+
+  // 对 HTTP URL 进行编码处理，确保非 ASCII 字符被正确编码
+  if (/^https?:\/\//i.test(u)) {
+    try {
+      // 解析 URL 并重新编码
+      const parsed = new URL(u)
+      // 重新编码 pathname 和 search，保留已编码的字符
+      parsed.pathname = parsed.pathname.split('/').map(segment => {
+        try {
+          // 先解码再编码，避免双重编码
+          return encodeURIComponent(decodeURIComponent(segment))
+        } catch {
+          return encodeURIComponent(segment)
+        }
+      }).join('/')
+      return parsed.toString()
+    } catch {
+      // URL 解析失败，尝试简单编码
+      return encodeURI(u)
+    }
+  }
+
+  const prefixes = ['/v1/', '/v1beta', '/kling', '/tencent-vod', '/video', '/minimax']
   if (u.startsWith('/')) {
     for (const p of prefixes) {
       if (u.startsWith(p)) return `https://nexusapi.cn${u}`
