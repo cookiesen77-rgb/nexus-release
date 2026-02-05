@@ -605,12 +605,20 @@ const ensurePublicHttpImageUrl = async (raw: string, label: string): Promise<str
  * 将图片调整为指定尺寸（用于 Sora OpenAI 格式）
  * Sora API 要求图片尺寸必须与请求的 size 参数完全匹配
  * @param blob 原始图片 Blob
- * @param targetSize 目标尺寸，格式为 "WIDTHxHEIGHT"（如 "720x1280"）
+ * @param targetSize 目标尺寸，格式为 "WIDTHxHEIGHT"（如 "720x1280"）或 "small"/"large"
  * @returns 调整后的 Blob
  */
 const resizeImageBlob = async (blob: Blob, targetSize: string): Promise<Blob> => {
+  // 将 small/large 映射到对应的像素尺寸（默认竖版 9:16）
+  let normalizedSize = targetSize
+  if (targetSize === 'small') {
+    normalizedSize = '720x1280'
+  } else if (targetSize === 'large') {
+    normalizedSize = '1080x1920'
+  }
+
   // 解析目标尺寸
-  const match = targetSize.match(/^(\d+)x(\d+)$/)
+  const match = normalizedSize.match(/^(\d+)x(\d+)$/)
   if (!match) {
     console.warn('[resizeImageBlob] 无效的尺寸格式:', targetSize)
     return blob

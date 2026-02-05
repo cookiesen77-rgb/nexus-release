@@ -314,10 +314,10 @@ export const VIDEO_RATIO_LIST = [
 ]
 
 // Video generation models | 视频生成模型
-// 价格说明：显示价格 = 原价 × 0.61 (RMB)
 export const VIDEO_MODELS = [
+    // ======== Veo 3.1 视频统一格式（固定8秒） ========
     {
-        label: 'Veo 3.1 Fast ¥0.06',
+        label: 'Veo 3.1 Fast',
         key: 'veo3.1-fast',
         endpoint: '/v1/videos',
         statusEndpoint: (id) => `/v1/videos/${id}`,
@@ -335,7 +335,7 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '16:9', duration: 8 }
     },
     {
-        label: 'Veo 3.1 Fast Components ¥0.10',
+        label: 'Veo 3.1 Fast Components',
         key: 'veo3.1-fast-components',
         endpoint: '/v1/videos',
         statusEndpoint: (id) => `/v1/videos/${id}`,
@@ -353,7 +353,7 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '16:9', duration: 8 }
     },
     {
-        label: 'Veo 3.1 Components ¥0.27',
+        label: 'Veo 3.1 Components',
         key: 'veo3.1-components',
         endpoint: '/v1/videos',
         statusEndpoint: (id) => `/v1/videos/${id}`,
@@ -371,7 +371,7 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '16:9', duration: 8 }
     },
     {
-        label: 'Veo 3.1 ¥0.55',
+        label: 'Veo 3.1',
         key: 'veo3.1',
         endpoint: '/v1/videos',
         statusEndpoint: (id) => `/v1/videos/${id}`,
@@ -389,7 +389,7 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '16:9', duration: 8 }
     },
     {
-        label: 'Veo 3.1 Pro ¥1.99',
+        label: 'Veo 3.1 Pro',
         key: 'veo3.1-pro',
         endpoint: '/v1/videos',
         statusEndpoint: (id) => `/v1/videos/${id}`,
@@ -407,7 +407,7 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '16:9', duration: 8 }
     },
     {
-        label: 'Veo 3.1 Pro 4K ¥2.99',
+        label: 'Veo 3.1 Pro 4K',
         key: 'veo3.1-pro-4k',
         endpoint: '/v1/videos',
         statusEndpoint: (id) => `/v1/videos/${id}`,
@@ -422,6 +422,97 @@ export const VIDEO_MODELS = [
         maxRefImages: 0,
         ratios: ['16:9', '9:16'],
         durs: [{ label: '8 秒', key: 8 }],
+        defaultParams: { ratio: '16:9', duration: 8 }
+    },
+    // ======== Veo 3.1 OpenAI视频格式（可选4/6/8秒） ========
+    {
+        label: 'Veo 3.1（OpenAI格式）',
+        key: 'veo_3_1',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'veo-openai',
+        maxImages: 2,
+        tips: '支持首尾帧；可选 4/6/8 秒时长',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16'],
+        durs: [{ label: '4 秒', key: 4 }, { label: '6 秒', key: 6 }, { label: '8 秒', key: 8 }],
+        defaultParams: { ratio: '16:9', duration: 8 }
+    },
+    {
+        label: 'Veo 3.1 Fast（OpenAI格式）',
+        key: 'veo_3_1-fast',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'veo-openai',
+        maxImages: 2,
+        tips: '支持首尾帧；可选 4/6/8 秒时长',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16'],
+        durs: [{ label: '4 秒', key: 4 }, { label: '6 秒', key: 6 }, { label: '8 秒', key: 8 }],
+        defaultParams: { ratio: '16:9', duration: 8 }
+    },
+    {
+        label: 'Veo 3.1 Fast 4K（OpenAI格式）',
+        key: 'veo_3_1-fast-4K',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'veo-openai',
+        maxImages: 2,
+        tips: '支持首尾帧；可选 4/6/8 秒时长；4K分辨率',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16'],
+        durs: [{ label: '4 秒', key: 4 }, { label: '6 秒', key: 6 }, { label: '8 秒', key: 8 }],
+        defaultParams: { ratio: '16:9', duration: 8 }
+    },
+    {
+        label: 'Veo 3.1 4K（OpenAI格式）',
+        key: 'veo_3_1-4K',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'veo-openai',
+        maxImages: 2,
+        tips: '支持首尾帧；可选 4/6/8 秒时长；4K分辨率',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16'],
+        durs: [{ label: '4 秒', key: 4 }, { label: '6 秒', key: 6 }, { label: '8 秒', key: 8 }],
+        defaultParams: { ratio: '16:9', duration: 8 }
+    },
+    {
+        label: 'Veo 3.1 Fast Components 4K（OpenAI格式）',
+        key: 'veo_3_1-fast-components-4K',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'veo-openai',
+        maxImages: 2,
+        tips: '支持首尾帧；可选 4/6/8 秒时长；4K分辨率',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16'],
+        durs: [{ label: '4 秒', key: 4 }, { label: '6 秒', key: 6 }, { label: '8 秒', key: 8 }],
         defaultParams: { ratio: '16:9', duration: 8 }
     },
     {
@@ -927,31 +1018,32 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '16:9', duration: 10, watermark: false }
     },
     {
-        label: 'Sora 2 All ¥0.07',
+        label: 'Sora 2 All',
         key: 'sora-2-all',
-        endpoint: '/video/create',
-        statusEndpoint: '/v1/video/query',
+        // OpenAI 官方视频格式：POST /v1/videos 创建，GET /v1/videos/{id} 查询
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
         authMode: 'bearer',
-        format: 'sora-unified',
+        format: 'sora-openai',
         // Sora 参考图数量上游会限制，默认先按 2 张（首/尾）做安全上限
         maxImages: 2,
-        tips: '提示词必填；可选首帧/尾帧（最多 2 张）。',
+        tips: '提示词必填；可选首帧/尾帧（最多 2 张）。OpenAI 官方视频格式。',
         requiresPrompt: true,
         supportsFirstFrame: true,
         supportsLastFrame: true,
         supportsReferenceImages: false,
         maxRefImages: 0,
-        // Sora 需要额外参数 size（small/large）| required by Apifox sora-2 docs
+        // OpenAI 视频格式 size 使用像素尺寸
         sizes: [
-            { label: 'small（约 720p）', key: 'small' },
-            { label: 'large（约 1080p）', key: 'large' }
+            { label: '720x1280 (竖版)', key: '720x1280' },
+            { label: '1280x720 (横版)', key: '1280x720' }
         ],
         ratios: ['16:9', '9:16'],
-        durs: [{ label: '10 秒', key: 10 }, { label: '15 秒', key: 15 }, { label: '25 秒', key: 25 }],
-        defaultParams: { ratio: '9:16', duration: 15, size: 'large', watermark: false, private: false }
+        durs: [{ label: '10 秒', key: 10 }, { label: '15 秒', key: 15 }],
+        defaultParams: { ratio: '9:16', duration: 10, size: '720x1280', watermark: false }
     },
     {
-        label: 'Sora 2 (OpenAI官方格式) ¥0.37/4s',
+        label: 'Sora 2（OpenAI官方格式）',
         key: 'sora-2',
         // OpenAI 官方视频格式：POST /v1/videos 创建，GET /v1/videos/{id} 查询
         endpoint: '/v1/videos',
@@ -971,9 +1063,9 @@ export const VIDEO_MODELS = [
         ],
         ratios: ['16:9', '9:16'],
         durs: [
-            { label: '4 秒 ¥0.37', key: 4 },
-            { label: '8 秒 ¥0.73', key: 8 },
-            { label: '12 秒 ¥1.10', key: 12 }
+            { label: '4 秒', key: 4 },
+            { label: '8 秒', key: 8 },
+            { label: '12 秒', key: 12 }
         ],
         defaultParams: { ratio: '9:16', duration: 4, size: '720x1280' }
     },
