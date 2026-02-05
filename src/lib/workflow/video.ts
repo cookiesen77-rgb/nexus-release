@@ -1788,6 +1788,7 @@ export const generateVideoFromConfigNode = async (
     } else if (modelCfg.format === 'minimax-hailuo-video') {
       // 云雾海螺（MiniMax）端点：POST /minimax/v1/video_generation
       // 查询：GET /minimax/v1/query/video_generation?task_id=...
+      // 注意：纯文生视频只需 model/prompt/duration；图生视频才需要 resolution/prompt_optimizer
       const ensureHttpImage = async (raw: string, label: string) => {
         return await ensurePublicHttpImageUrl(raw, label)
       }
@@ -1800,16 +1801,20 @@ export const generateVideoFromConfigNode = async (
       if (firstUrl) firstUrl = await ensureHttpImage(firstUrl, '首帧')
       if (lastUrl) lastUrl = await ensureHttpImage(lastUrl, '尾帧')
 
+      // 基础参数（纯文生视频）
       payload = {
         model: modelCfg.key,
         prompt: prompt || '',
         duration: durValue,
-        resolution: sizeValue,
       }
-      if (firstUrl) payload.first_frame_image = firstUrl
+      // 图生视频 / 首尾帧视频：添加图片和额外参数
+      if (firstUrl) {
+        payload.first_frame_image = firstUrl
+        payload.resolution = sizeValue
+        const po = modelCfg.defaultParams?.prompt_optimizer
+        if (typeof po === 'boolean') payload.prompt_optimizer = po
+      }
       if (lastUrl) payload.last_frame_image = lastUrl
-      const po = modelCfg.defaultParams?.prompt_optimizer
-      if (typeof po === 'boolean') payload.prompt_optimizer = po
     } else if (modelCfg.format === 'kling-omni-video') {
       // Kling Omni-Video：POST /kling/v1/videos/omni-video
       // 查询按用户确认：GET /kling/v1/videos/omni-video/{id}
