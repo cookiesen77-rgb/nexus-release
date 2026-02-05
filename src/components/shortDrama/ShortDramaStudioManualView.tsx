@@ -35,7 +35,9 @@ interface Props {
 
 const SUPPORTED_VIDEO_FORMATS = new Set<string>([
   'sora-unified',
+  'sora-openai',
   'veo-unified',
+  'veo-openai',
   'kling-video',
   'kling-multi-image2video',
   'kling-omni-video',
@@ -361,6 +363,14 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
     if (resolved && String(resolved?.format || '').includes('video')) return resolved
     return (VIDEO_MODELS as any[]).find((m) => String(m?.key || '') === key) || null
   }, [draft.models.videoModelKey])
+
+  const videoModelSupportsFirstFrame = useMemo(() => {
+    return videoModelCfg?.supportsFirstFrame !== false
+  }, [videoModelCfg])
+
+  const videoModelSupportsLastFrame = useMemo(() => {
+    return videoModelCfg?.supportsLastFrame === true
+  }, [videoModelCfg])
 
   const patchDraft = useCallback((patch: Partial<ShortDramaDraftV2>) => {
     setDraft((prev) => ({ ...prev, ...patch, updatedAt: Date.now() }))
@@ -913,14 +923,22 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       const startInput = await resolveVariantInput(startV || undefined)
       const endInput = await resolveVariantInput(endV || undefined)
 
-      if (!startInput) {
+      const modelCfg: any = VIDEO_MODELS.find((m) => m.key === draft.models.videoModelKey)
+      const supportsFirstFrame = modelCfg?.supportsFirstFrame !== false
+      const supportsLastFrame = modelCfg?.supportsLastFrame === true
+      const supportsSound = !!(modelCfg?.supportsSound || modelCfg?.defaultParams?.sound === 'on')
+
+      if (!supportsFirstFrame && startInput) {
+        window.$message?.warning?.('⚠️ 当前模型不支持首帧输入，首帧将被忽略，按纯文生视频执行')
+      } else if (!startInput && supportsFirstFrame) {
         window.$message?.warning?.('未检测到首帧，将按纯文生视频执行（若模型支持）')
       }
 
-      // API 约束警告：音频与尾帧不兼容
-      const modelCfg = VIDEO_MODELS.find((m) => m.key === draft.models.videoModelKey)
-      const supportsSound = !!(modelCfg?.supportsSound || modelCfg?.defaultParams?.sound === 'on')
-      if (supportsSound && endInput) {
+      if (!supportsLastFrame && endInput) {
+        window.$message?.warning?.('⚠️ 当前模型不支持尾帧输入，尾帧将被忽略')
+      }
+
+      if (supportsSound && endInput && supportsLastFrame) {
         window.$message?.warning?.('⚠️ 检测到尾帧：Kling 音频与尾帧不兼容，本次生成将禁用音频')
       }
 
@@ -938,7 +956,9 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       setSlotBusy(slotId, true)
       setDraft((prev) => appendVariantToSlot(prev, slotId, running))
       try {
-        const images = [startInput, endInput].filter(Boolean)
+        const effectiveStartInput = supportsFirstFrame ? startInput : ''
+        const effectiveEndInput = supportsLastFrame ? endInput : ''
+        const images = [effectiveStartInput, effectiveEndInput].filter(Boolean)
         const task = queue.enqueue('video', slotId, async () => {
           return await generateShortDramaVideo({
             modelKey: draft.models.videoModelKey,
@@ -947,7 +967,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             duration: draft.models.videoDuration,
             size: draft.models.videoSize,
             images,
-            lastFrame: endInput || '',
+            lastFrame: effectiveEndInput || '',
           })
         })
         const result = await task.promise
@@ -1361,7 +1381,19 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                   </option>
                 ))}
               </select>
-              <div className="text-xs text-[var(--text-secondary)]">当前仅支持：Sora（unified）、Veo（unified）、Grok（unified）、Kling（video）。</div>
+              <div className="space-y-1">
+                <div className="text-xs text-[var(--text-secondary)]">
+                  首帧支持：{videoModelSupportsFirstFrame ? '✓ 支持' : '✗ 不支持（仅文生视频）'}
+                  {' · '}
+                  尾帧支持：{videoModelSupportsLastFrame ? '✓ 支持' : '✗ 不支持'}
+                </div>
+                {!videoModelSupportsFirstFrame && (
+                  <div className="text-xs text-amber-600">⚠️ 当前模型不支持首帧输入，将按纯文生视频执行</div>
+                )}
+                {videoModelSupportsFirstFrame && !videoModelSupportsLastFrame && (
+                  <div className="text-xs text-amber-600">⚠️ 当前模型不支持尾帧输入，尾帧将被忽略</div>
+                )}
+              </div>
             </div>
 
             {Array.isArray(videoModelCfg?.ratios) && videoModelCfg.ratios.length > 0 && (
@@ -2052,7 +2084,12 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-[var(--text-primary)]">首帧版本</div>
+                      <div className="flex flex-col">
+                        <div className="text-xs font-semibold text-[var(--text-primary)]">首帧版本</div>
+                        {!videoModelSupportsFirstFrame && startSelected && (
+                          <div className="text-[10px] text-amber-600">⚠️ 当前模型不支持首帧，生成视频时将忽略</div>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <label className="mr-1 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                           <input
@@ -2130,7 +2167,10 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
                         <div className="text-xs font-semibold text-[var(--text-primary)]">尾帧版本</div>
-                        {endSelected && (VIDEO_MODELS.find((m) => m.key === draft.models.videoModelKey)?.supportsSound || VIDEO_MODELS.find((m) => m.key === draft.models.videoModelKey)?.defaultParams?.sound === 'on') && (
+                        {!videoModelSupportsLastFrame && endSelected && (
+                          <div className="text-[10px] text-amber-600">⚠️ 当前模型不支持尾帧，生成视频时将忽略</div>
+                        )}
+                        {videoModelSupportsLastFrame && endSelected && (VIDEO_MODELS.find((m) => m.key === draft.models.videoModelKey)?.supportsSound || VIDEO_MODELS.find((m) => m.key === draft.models.videoModelKey)?.defaultParams?.sound === 'on') && (
                           <div className="text-[10px] text-amber-600">⚠️ 已选尾帧，生成视频时音频将被禁用</div>
                         )}
                       </div>
