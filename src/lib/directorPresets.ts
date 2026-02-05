@@ -15,6 +15,64 @@ export interface DirectorPreset {
   supportsReferenceImage: boolean
   referenceImageGuide?: string   // 参考图引导
   outputType: 'single' | 'grid'  // 输出类型
+  autoGenerate?: boolean         // 是否自动出图（用户可配置）
+  isCustom?: boolean             // 是否为用户自定义预设
+}
+
+// 用户自定义预设存储 key
+const USER_PRESETS_KEY = 'nexus-director-user-presets'
+
+/**
+ * 获取用户自定义预设
+ */
+export function getUserPresets(): DirectorPreset[] {
+  try {
+    const saved = localStorage.getItem(USER_PRESETS_KEY)
+    if (saved) {
+      const presets = JSON.parse(saved)
+      return Array.isArray(presets) ? presets.map(p => ({ ...p, isCustom: true })) : []
+    }
+  } catch (e) {
+    console.warn('[getUserPresets] 读取用户预设失败:', e)
+  }
+  return []
+}
+
+/**
+ * 保存用户自定义预设
+ */
+export function saveUserPreset(preset: DirectorPreset): void {
+  const presets = getUserPresets()
+  const existingIndex = presets.findIndex(p => p.id === preset.id)
+  if (existingIndex >= 0) {
+    presets[existingIndex] = { ...preset, isCustom: true }
+  } else {
+    presets.push({ ...preset, isCustom: true })
+  }
+  try {
+    localStorage.setItem(USER_PRESETS_KEY, JSON.stringify(presets))
+  } catch (e) {
+    console.error('[saveUserPreset] 保存用户预设失败:', e)
+  }
+}
+
+/**
+ * 删除用户自定义预设
+ */
+export function deleteUserPreset(presetId: string): void {
+  const presets = getUserPresets().filter(p => p.id !== presetId)
+  try {
+    localStorage.setItem(USER_PRESETS_KEY, JSON.stringify(presets))
+  } catch (e) {
+    console.error('[deleteUserPreset] 删除用户预设失败:', e)
+  }
+}
+
+/**
+ * 获取所有预设（系统预设 + 用户预设）
+ */
+export function getAllPresets(): DirectorPreset[] {
+  return [...getUserPresets(), ...DIRECTOR_PRESETS]
 }
 
 /**
@@ -1680,6 +1738,11 @@ Dull metals, dead gemstones, fingerprints, dust, poor focus, amateur lighting, c
  * 根据预设 ID 获取预设配置
  */
 export function getPresetById(id: string): DirectorPreset | undefined {
+  // 先查找用户自定义预设
+  const userPresets = getUserPresets()
+  const userPreset = userPresets.find(p => p.id === id)
+  if (userPreset) return userPreset
+  // 再查找系统预设
   return DIRECTOR_PRESETS.find(p => p.id === id)
 }
 

@@ -27,7 +27,10 @@ import {
   Copy,
   Check,
   Layers,
-  History
+  History,
+  Save,
+  Edit2,
+  Star
 } from 'lucide-react'
 import {
   DIRECTOR_PRESETS,
@@ -35,7 +38,11 @@ import {
   getPresetById,
   buildFinalPrompt,
   POLISH_SYSTEM_PROMPT,
-  getAspectRatioOptions
+  getAspectRatioOptions,
+  getAllPresets,
+  getUserPresets,
+  saveUserPreset,
+  deleteUserPreset
 } from '@/lib/directorPresets'
 import { IMAGE_MODELS, DEFAULT_IMAGE_MODEL, DEFAULT_CHAT_MODEL, SEEDREAM_SIZE_OPTIONS, SEEDREAM_4K_SIZE_OPTIONS } from '@/config/models'
 import { useAssetsStore } from '@/store/assets'
@@ -182,6 +189,13 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
   // 预设模式
   const [selectedPreset, setSelectedPreset] = useState<string>('none')
   const [showPresetDropdown, setShowPresetDropdown] = useState(false)
+  const [allPresets, setAllPresets] = useState<DirectorPreset[]>(() => getAllPresets())
+
+  // 自定义预设编辑
+  const [showSavePresetModal, setShowSavePresetModal] = useState(false)
+  const [editingPresetName, setEditingPresetName] = useState('')
+  const [editingPresetDesc, setEditingPresetDesc] = useState('')
+  const [editingPresetAutoGen, setEditingPresetAutoGen] = useState(true)
 
   // 多参考图支持
   const [referenceImages, setReferenceImages] = useState<string[]>([])
@@ -246,6 +260,51 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
   // 当前预设配置
   const currentPreset = getPresetById(selectedPreset) || DIRECTOR_PRESETS[0]
 
+  // 刷新预设列表
+  const refreshPresets = useCallback(() => {
+    setAllPresets(getAllPresets())
+  }, [])
+
+  // 保存当前设置为自定义预设
+  const handleSavePreset = useCallback(() => {
+    if (!editingPresetName.trim()) return
+
+    const newPreset: DirectorPreset = {
+      id: `custom_${Date.now()}`,
+      name: editingPresetName.trim(),
+      description: editingPresetDesc.trim() || '我的自定义预设',
+      aspectRatio,
+      resolution,
+      systemPrompt: currentPreset.systemPrompt || POLISH_SYSTEM_PROMPT,
+      promptTemplate: userPrompt.trim(), // 用当前输入的提示词作为模板
+      userPromptPlaceholder: '输入描述...',
+      supportsReferenceImage: true,
+      outputType: 'single',
+      autoGenerate: editingPresetAutoGen,
+      isCustom: true
+    }
+
+    saveUserPreset(newPreset)
+    refreshPresets()
+    setShowSavePresetModal(false)
+    setEditingPresetName('')
+    setEditingPresetDesc('')
+    setSelectedPreset(newPreset.id)
+    window.$message?.success?.('预设保存成功')
+  }, [editingPresetName, editingPresetDesc, aspectRatio, resolution, currentPreset, userPrompt, editingPresetAutoGen, refreshPresets])
+
+  // 删除用户预设
+  const handleDeletePreset = useCallback((presetId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('确定删除此预设？')) return
+    deleteUserPreset(presetId)
+    refreshPresets()
+    if (selectedPreset === presetId) {
+      setSelectedPreset('none')
+    }
+    window.$message?.success?.('预设已删除')
+  }, [selectedPreset, refreshPresets])
+
   // 获取画布中的图片节点（打开选择器时刷新）
   const canvasImages = useMemo(() => {
     if (!showImagePicker) return []
@@ -275,6 +334,16 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
       setPolishedPromptEn('')
       setGeneratedImageUrl(null)
       setShots([])
+
+      // 如果是自定义预设，填充保存的提示词模板
+      if (currentPreset.isCustom && currentPreset.promptTemplate) {
+        setUserPrompt(currentPreset.promptTemplate)
+      }
+
+      // 如果预设有自动出图设置，应用它
+      if (currentPreset.autoGenerate !== undefined) {
+        setAutoGenerateImages(currentPreset.autoGenerate)
+      }
     }
   }, [selectedPreset])
 
@@ -1140,6 +1209,72 @@ Output STRICT JSON only (no markdown, no code fences):
               {showPresetDropdown && (
                 <div className="absolute left-0 top-full z-50 mt-1 w-[320px] rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
                   <div className="max-h-[400px] overflow-auto p-2">
+                    {/* 保存为预设按钮 */}
+                    <button
+                      onClick={() => {
+                        setShowSavePresetModal(true)
+                        setShowPresetDropdown(false)
+                      }}
+                      className="w-full rounded-lg p-3 text-left transition-colors hover:bg-[var(--bg-primary)] text-[var(--accent-color)] border border-dashed border-[var(--accent-color)] mb-2"
+                    >
+                      <div className="flex items-center gap-2 font-medium text-sm">
+                        <Save className="h-4 w-4" />
+                        保存当前设置为预设
+                      </div>
+                      <div className="text-xs text-[var(--text-secondary)] mt-0.5">可保存提示词模板，下次直接使用</div>
+                    </button>
+
+                    {/* 用户自定义预设 */}
+                    {allPresets.filter(p => p.isCustom).length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-[10px] font-bold uppercase text-[var(--text-secondary)] flex items-center gap-1">
+                          <Star className="h-3 w-3" />
+                          我的预设
+                        </div>
+                        {allPresets.filter(p => p.isCustom).map((preset) => (
+                          <div
+                            key={preset.id}
+                            onClick={() => {
+                              setSelectedPreset(preset.id)
+                              setShowPresetDropdown(false)
+                              // 如果预设有自动出图设置，使用它
+                              if (preset.autoGenerate !== undefined) {
+                                setAutoGenerateImages(preset.autoGenerate)
+                              }
+                            }}
+                            className={cn(
+                              'w-full rounded-lg p-3 text-left transition-colors cursor-pointer group relative',
+                              selectedPreset === preset.id
+                                ? 'bg-[rgb(var(--accent-rgb)/0.2)] text-[var(--accent-color)]'
+                                : 'hover:bg-[var(--bg-primary)] text-[var(--text-primary)]'
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium text-sm">{preset.name}</div>
+                              <button
+                                onClick={(e) => handleDeletePreset(preset.id, e)}
+                                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/20 text-red-500 transition-all"
+                                title="删除预设"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <div className="text-xs text-[var(--text-secondary)] mt-0.5 flex items-center gap-2">
+                              {preset.description}
+                              {preset.autoGenerate && (
+                                <span className="px-1.5 py-0.5 rounded bg-[var(--accent-color)]/20 text-[var(--accent-color)] text-[10px]">自动出图</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        <div className="border-b border-[var(--border-color)] my-2" />
+                      </>
+                    )}
+
+                    {/* 系统预设 */}
+                    <div className="px-2 py-1.5 text-[10px] font-bold uppercase text-[var(--text-secondary)]">
+                      系统预设
+                    </div>
                     {DIRECTOR_PRESETS.map((preset) => (
                       <button
                         key={preset.id}
@@ -1726,6 +1861,93 @@ Output STRICT JSON only (no markdown, no code fences):
           </Button>
         </div>
       </div>
+
+      {/* 保存预设模态框 */}
+      {showSavePresetModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={(e) => e.target === e.currentTarget && setShowSavePresetModal(false)}
+        >
+          <div
+            className="w-[400px] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border-color)] px-5 py-4">
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">保存为预设</h3>
+              <button
+                onClick={() => setShowSavePresetModal(false)}
+                className="rounded-full p-1 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-primary)] hover:text-[var(--text-primary)]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-[var(--text-primary)]">预设名称 *</label>
+                <input
+                  type="text"
+                  value={editingPresetName}
+                  onChange={(e) => setEditingPresetName(e.target.value)}
+                  className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:border-[var(--accent-color)] focus:outline-none"
+                  placeholder="例如：产品主图模板"
+                  maxLength={30}
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-[var(--text-primary)]">描述（可选）</label>
+                <input
+                  type="text"
+                  value={editingPresetDesc}
+                  onChange={(e) => setEditingPresetDesc(e.target.value)}
+                  className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:border-[var(--accent-color)] focus:outline-none"
+                  placeholder="简短描述这个预设的用途"
+                  maxLength={50}
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-3">
+                <div>
+                  <div className="text-sm font-medium text-[var(--text-primary)]">自动出图</div>
+                  <div className="text-xs text-[var(--text-secondary)]">使用此预设时自动润色并生成图片</div>
+                </div>
+                <button
+                  onClick={() => setEditingPresetAutoGen(!editingPresetAutoGen)}
+                  className={cn(
+                    'rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors',
+                    editingPresetAutoGen
+                      ? 'border-[rgb(var(--accent-rgb)/0.3)] bg-[rgb(var(--accent-rgb)/0.2)] text-[var(--accent-color)]'
+                      : 'border-[var(--border-color)] bg-transparent text-[var(--text-secondary)]'
+                  )}
+                >
+                  {editingPresetAutoGen ? 'ON' : 'OFF'}
+                </button>
+              </div>
+
+              <div className="rounded-lg bg-[var(--bg-primary)] p-3 text-xs text-[var(--text-secondary)]">
+                <div className="font-medium text-[var(--text-primary)] mb-1">将保存以下设置：</div>
+                <ul className="space-y-0.5 list-disc list-inside">
+                  <li>画幅: {aspectRatio}</li>
+                  <li>分辨率: {resolution}</li>
+                  <li>当前描述作为提示词模板</li>
+                  <li>图片模型: {imageModel}</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-[var(--border-color)] p-4">
+              <Button variant="ghost" onClick={() => setShowSavePresetModal(false)}>
+                取消
+              </Button>
+              <Button onClick={handleSavePreset} disabled={!editingPresetName.trim()}>
+                <Save className="mr-1 h-4 w-4" />
+                保存预设
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
