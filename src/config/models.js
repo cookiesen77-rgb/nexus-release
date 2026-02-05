@@ -9,14 +9,13 @@ const NEXUS_ORIGIN = new URL(DEFAULT_API_BASE_URL).origin
 const toAbsoluteUrl = (path) => `${NEXUS_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`
 
 // Backward-compatible aliases (old saved projects / old UI keys) | 兼容旧项目里保存的模型 key
-// 说明：本项目最终会把 modelConfig.key 作为请求体的 model 值发送；这里仅做“旧 key → 新 key”兼容。
+// 说明：本项目最终会把 modelConfig.key 作为请求体的 model 值发送；这里仅做"旧 key → 新 key"兼容。
 const MODEL_ALIASES = {
     // Images
     'gpt-image-1.5': 'gpt-image-1.5-all',
-    // Videos
-    'veo3.1-fast': 'veo3.1-4k',
-    'veo3.1-pro': 'veo3.1-pro-4k',
-    // Veo 旧 key（已下线）兼容迁移
+    // Videos - Veo 旧 key 兼容迁移
+    'veo3.1-4k': 'veo3.1',
+    'veo_3_1-components': 'veo3.1-components',
     'veo_3_1-fast-components-4K': 'veo3.1-fast-components',
     'sora-2-pro': 'sora-2-all',
     // Tencent AIGC Video（已移除）兼容旧 key：迁移到新模型或默认视频模型，避免旧工程打开后变成图片模型
@@ -318,58 +317,93 @@ export const VIDEO_RATIO_LIST = [
 // 价格说明：显示价格 = 原价 × 0.61 (RMB)
 export const VIDEO_MODELS = [
     {
-        label: 'Veo 3.1 Fast Components ¥0.10',
-        key: 'veo3.1-fast-components',
+        label: 'Veo 3.1 Fast ¥0.06',
+        key: 'veo3.1-fast',
         endpoint: '/v1/videos',
         statusEndpoint: (id) => `/v1/videos/${id}`,
         authMode: 'bearer',
         format: 'veo-openai',
-        maxImages: 1,
-        tips: '提示词必填；可选首帧图片；支持 4/6/8 秒时长',
-        requiresPrompt: true,
-        supportsFirstFrame: true,
-        supportsLastFrame: false,
-        supportsReferenceImages: false,
-        maxRefImages: 0,
-        ratios: ['16:9', '9:16'],
-        durs: [{ label: '4 秒', key: 4 }, { label: '6 秒', key: 6 }, { label: '8 秒', key: 8 }],
-        defaultParams: { ratio: '16:9', duration: 8 }
-    },
-    {
-        label: 'Veo 3.1 Components ¥0.27',
-        key: 'veo_3_1-components',
-        endpoint: '/v1/videos',
-        statusEndpoint: (id) => `/v1/videos/${id}`,
-        authMode: 'bearer',
-        format: 'veo-openai',
-        maxImages: 1,
-        tips: '提示词必填；可选首帧图片；支持 4/6/8 秒时长',
-        requiresPrompt: true,
-        supportsFirstFrame: true,
-        supportsLastFrame: false,
-        supportsReferenceImages: false,
-        maxRefImages: 0,
-        ratios: ['16:9', '9:16'],
-        durs: [{ label: '4 秒', key: 4 }, { label: '6 秒', key: 6 }, { label: '8 秒', key: 8 }],
-        defaultParams: { ratio: '16:9', duration: 8 }
-    },
-    {
-        label: 'Veo 3.1 4K ¥0.85',
-        key: 'veo3.1-4k',
-        endpoint: '/v1/videos',
-        statusEndpoint: (id) => `/v1/videos/${id}`,
-        authMode: 'bearer',
-        format: 'veo-openai',
-        // Veo 首尾帧：通常 2 张（首/尾）；更多图片会触发上游校验或被忽略
         maxImages: 2,
-        tips: '提示词必填；可选首帧/尾帧（最多 2 张）；支持 4/6/8 秒时长',
+        tips: '支持首尾帧；固定 8 秒时长',
         requiresPrompt: true,
         supportsFirstFrame: true,
         supportsLastFrame: true,
         supportsReferenceImages: false,
         maxRefImages: 0,
         ratios: ['16:9', '9:16'],
-        durs: [{ label: '4 秒', key: 4 }, { label: '6 秒', key: 6 }, { label: '8 秒', key: 8 }],
+        durs: [{ label: '8 秒', key: 8 }],
+        defaultParams: { ratio: '16:9', duration: 8 }
+    },
+    {
+        label: 'Veo 3.1 Fast Components ¥0.10',
+        key: 'veo3.1-fast-components',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'veo-openai',
+        maxImages: 2,
+        tips: '支持首尾帧；固定 8 秒时长',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16'],
+        durs: [{ label: '8 秒', key: 8 }],
+        defaultParams: { ratio: '16:9', duration: 8 }
+    },
+    {
+        label: 'Veo 3.1 Components ¥0.27',
+        key: 'veo3.1-components',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'veo-openai',
+        maxImages: 2,
+        tips: '支持首尾帧；固定 8 秒时长',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16'],
+        durs: [{ label: '8 秒', key: 8 }],
+        defaultParams: { ratio: '16:9', duration: 8 }
+    },
+    {
+        label: 'Veo 3.1 ¥0.55',
+        key: 'veo3.1',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'veo-openai',
+        maxImages: 2,
+        tips: '支持首尾帧；固定 8 秒时长',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16'],
+        durs: [{ label: '8 秒', key: 8 }],
+        defaultParams: { ratio: '16:9', duration: 8 }
+    },
+    {
+        label: 'Veo 3.1 Pro ¥1.99',
+        key: 'veo3.1-pro',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'veo-openai',
+        maxImages: 2,
+        tips: '支持首尾帧；固定 8 秒时长',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        ratios: ['16:9', '9:16'],
+        durs: [{ label: '8 秒', key: 8 }],
         defaultParams: { ratio: '16:9', duration: 8 }
     },
     {
@@ -380,14 +414,14 @@ export const VIDEO_MODELS = [
         authMode: 'bearer',
         format: 'veo-openai',
         maxImages: 2,
-        tips: '提示词必填；可选首帧/尾帧（最多 2 张）；支持 4/6/8 秒时长',
+        tips: '支持首尾帧；固定 8 秒时长',
         requiresPrompt: true,
         supportsFirstFrame: true,
         supportsLastFrame: true,
         supportsReferenceImages: false,
         maxRefImages: 0,
         ratios: ['16:9', '9:16'],
-        durs: [{ label: '4 秒', key: 4 }, { label: '6 秒', key: 6 }, { label: '8 秒', key: 8 }],
+        durs: [{ label: '8 秒', key: 8 }],
         defaultParams: { ratio: '16:9', duration: 8 }
     },
     {
