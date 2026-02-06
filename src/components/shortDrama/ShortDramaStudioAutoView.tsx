@@ -264,6 +264,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     try {
       for (const c of draft.characters) inspectSlot(c.sheet, !!busySlotIds[c.sheet.id])
       for (const s of draft.scenes) inspectSlot(s.ref, !!busySlotIds[s.ref.id])
+      for (const a of (draft.assets || [])) inspectSlot(a.ref, !!busySlotIds[a.ref.id])
       for (const sh of draft.shots) {
         inspectSlot(sh.frames.start.slot, !!busySlotIds[sh.frames.start.slot.id])
         inspectSlot(sh.frames.end.slot, !!busySlotIds[sh.frames.end.slot.id])
@@ -278,7 +279,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     const waitMs = Math.max(200, Math.min(10_000, nextDue - Date.now() + 50))
     const t = window.setTimeout(() => setStaleTick((x) => x + 1), waitMs)
     return () => window.clearTimeout(t)
-  }, [busySlotIds, draft.characters, draft.scenes, draft.shots, markSlotStaleRunning, staleTick])
+  }, [busySlotIds, draft.characters, draft.scenes, draft.assets, draft.shots, markSlotStaleRunning, staleTick])
 
   const getSelectedVariant = useCallback((slot: ShortDramaMediaSlot) => {
     const id = slot.selectedVariantId
