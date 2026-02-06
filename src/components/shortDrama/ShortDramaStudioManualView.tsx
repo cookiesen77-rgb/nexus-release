@@ -23,7 +23,9 @@ import ShortDramaMediaPickerModal, { type ShortDramaPickKind, type ShortDramaPic
 import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
 import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1 } from '@/lib/shortDrama/uiPrefs'
 import { cn } from '@/lib/utils'
-import { Check, Eye, Image as ImageIcon, Loader2, Plus, Trash2, Upload, Video as VideoIcon } from 'lucide-react'
+import { Check, Eye, Image as ImageIcon, Layers, Loader2, Plus, Sword, Trash2, Upload, Video as VideoIcon } from 'lucide-react'
+import ShortDramaBlendPanel from '@/components/shortDrama/ShortDramaBlendPanel'
+import { createEmptyAsset } from '@/lib/shortDrama/draftStorage'
 
 interface Props {
   projectId: string
@@ -211,6 +213,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewType, setPreviewType] = useState<'image' | 'video'>('image')
   const [previewBusy, setPreviewBusy] = useState(false)
+
+  const [blendPanelOpen, setBlendPanelOpen] = useState(false)
 
   const [busySlotIds, setBusySlotIds] = useState<Record<string, boolean>>({})
   const busySlotsRef = useRef(busySlotIds)
@@ -516,6 +520,36 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       setDraft((prev) => ({
         ...prev,
         scenes: prev.scenes.map((s) => (s.id === sceneId ? ({ ...s, ...patch } as any) : s)),
+        updatedAt: Date.now(),
+      }))
+    },
+    [setDraft]
+  )
+
+  const addAsset = useCallback(() => {
+    setDraft((prev) => ({
+      ...prev,
+      assets: [...(prev.assets || []), createEmptyAsset(`资产 ${(prev.assets || []).length + 1}`)],
+      updatedAt: Date.now(),
+    }))
+  }, [setDraft])
+
+  const removeAsset = useCallback(
+    (assetId: string) => {
+      setDraft((prev) => ({
+        ...prev,
+        assets: (prev.assets || []).filter((a) => a.id !== assetId),
+        updatedAt: Date.now(),
+      }))
+    },
+    [setDraft]
+  )
+
+  const updateAsset = useCallback(
+    (assetId: string, patch: Partial<NonNullable<ShortDramaDraftV2['assets']>[number]>) => {
+      setDraft((prev) => ({
+        ...prev,
+        assets: (prev.assets || []).map((a) => (a.id === assetId ? ({ ...a, ...patch } as any) : a)),
         updatedAt: Date.now(),
       }))
     },
@@ -1486,7 +1520,11 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
 
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center justify-between">
-              <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">角色 / 场景</div>
+              <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">角色 / 场景 / 资产</div>
+              <Button size="sm" variant="ghost" className="gap-1" onClick={() => setBlendPanelOpen(true)}>
+                <Layers className="h-4 w-4" />
+                融图
+              </Button>
             </div>
             <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
               <div className="space-y-4">
@@ -1947,6 +1985,102 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             })}
           </div>
         </div>
+
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-[var(--text-primary)]">资产库</div>
+            <Button size="sm" onClick={addAsset} className="gap-1">
+              <Plus className="h-4 w-4" />
+              添加资产
+            </Button>
+          </div>
+          <div className="mt-3 space-y-3">
+            {(draft.assets || []).length === 0 ? (
+              <div className="text-sm text-[var(--text-secondary)]">暂无资产。可添加角色使用的武器/道具/载具等重要物品。</div>
+            ) : null}
+            {(draft.assets || []).map((asset) => {
+              const slot = asset.ref
+              const selected = (slot?.variants || []).find((v) => v.id === slot?.selectedVariantId) || null
+              return (
+                <div key={asset.id} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
+                  <div className="flex items-center gap-2">
+                    <Sword className="h-4 w-4 text-[var(--text-secondary)]" />
+                    <input
+                      value={asset.name}
+                      onChange={(e) => updateAsset(asset.id, { name: e.target.value })}
+                      className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm font-medium text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
+                      placeholder="资产名称"
+                    />
+                    <Button size="sm" variant="ghost" className="text-red-500" onClick={() => removeAsset(asset.id)} title="删除资产">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="mt-2">
+                    <textarea
+                      value={asset.description}
+                      onChange={(e) => updateAsset(asset.id, { description: e.target.value })}
+                      className="min-h-[60px] w-full resize-y rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
+                      placeholder="资产描述：外观、材质、特点…"
+                    />
+                  </div>
+                  {slot && (
+                    <div className="mt-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-semibold text-[var(--text-primary)]">参考图</div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            id={`upload-asset-${asset.id}`}
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || [])
+                              if (files.length === 0) return
+                              void (async () => {
+                                for (const f of files) {
+                                  await uploadToImageSlot(slot.id, f)
+                                }
+                              })()
+                              e.currentTarget.value = ''
+                            }}
+                          />
+                          <Button size="sm" variant="secondary" type="button" onClick={() => document.getElementById(`upload-asset-${asset.id}`)?.click()}>
+                            <Upload className="mr-1 h-4 w-4" />
+                            上传
+                          </Button>
+                          <Button size="sm" variant="ghost" type="button" onClick={() => openPickerForSlot(slot, `${asset.name || '资产'} · 参考图`, 'history')}>
+                            从历史导入
+                          </Button>
+                          <Button size="sm" variant="ghost" type="button" onClick={() => openPickerForSlot(slot, `${asset.name || '资产'} · 参考图`, 'canvas')}>
+                            从画布导入
+                          </Button>
+                        </div>
+                      </div>
+                      {selected ? (
+                        <div className="mt-2">
+                          <button type="button" className="w-full" onClick={() => void openPreview(selected)} disabled={previewBusy} title="预览">
+                            <VariantThumb variant={selected} className="h-20 w-full" />
+                          </button>
+                        </div>
+                      ) : null}
+                      <div className="mt-2">
+                        <SlotVersions
+                          slot={slot}
+                          onAdopt={(vid) => adoptVariant(slot.id, vid)}
+                          onRemove={(vid) => removeVariant(slot.id, vid)}
+                          onPreview={(v) => void openPreview(v)}
+                          onSendToCanvas={(s, v) => void sendVariantToCanvas(s, v)}
+                          disabled={!!busySlotsRef.current[slot.id]}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
               </div>
             </div>
           </div>
@@ -2348,6 +2482,22 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       />
 
       <MediaPreviewModal open={previewOpen} url={previewUrl} type={previewType} onClose={() => setPreviewOpen(false)} />
+
+      <ShortDramaBlendPanel
+        open={blendPanelOpen}
+        onClose={() => setBlendPanelOpen(false)}
+        draft={draft}
+        onAddImage={(imageData, title) => {
+          useAssetsStore.getState().addAsset({
+            type: 'image',
+            src: imageData,
+            title: title || `融合图片-${Date.now()}`,
+            model: 'blend'
+          })
+          window.$message?.success?.('融合图片已添加到素材库，可从历史导入到任意位置')
+          setBlendPanelOpen(false)
+        }}
+      />
     </>
   )
 }

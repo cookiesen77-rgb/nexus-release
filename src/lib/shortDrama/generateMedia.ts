@@ -560,6 +560,8 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
   let endpointOverride: string = modelCfg.endpoint
   let statusEndpointOverride: any = modelCfg.statusEndpoint
 
+  let useFormData = false
+
   if (modelCfg.format === 'veo-unified') {
     payload = { model: modelCfg.key, prompt }
     if (images.length > 0) payload.images = images.slice(0, Number(modelCfg.maxImages || 3))
@@ -569,6 +571,50 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
     if (typeof ep === 'boolean') payload.enhance_prompt = ep
     const up = modelCfg.defaultParams?.enableUpsample
     if (typeof up === 'boolean') payload.enable_upsample = up
+  } else if (modelCfg.format === 'veo-openai') {
+    // Veo 3.x OpenAI 格式：multipart/form-data
+    // 端点：POST /v1/videos, 查询：GET /v1/videos/{id}
+    // 参数：model, prompt, duration_seconds (4/6/8), size (16x9/9x16), input_reference
+    useFormData = true
+    const fd = new FormData()
+    fd.append('model', modelCfg.key)
+    fd.append('prompt', prompt || '')
+    const secondsValue = Number.isFinite(duration) && duration > 0 ? String(duration) : String(modelCfg.defaultParams?.duration || 8)
+    fd.append('duration_seconds', secondsValue)
+    const sizeValue = ratio === '9:16' ? '9x16' : '16x9'
+    fd.append('size', sizeValue)
+
+    // 首帧图片
+    const firstRaw = String(images[0] || '').trim()
+    if (firstRaw) {
+      let imgDataUrl = firstRaw
+      if (isAssetUrl(firstRaw)) imgDataUrl = await resolveAssetToDataUrl(firstRaw)
+      else if (isHttpUrl(firstRaw)) {
+        const res = await fetch(firstRaw)
+        if (!res.ok) throw new Error('下载首帧图片失败')
+        const blob = await res.blob()
+        imgDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onerror = () => reject(new Error('读取失败'))
+          reader.onload = () => resolve(String(reader.result || ''))
+          reader.readAsDataURL(blob)
+        })
+      }
+      if (imgDataUrl.startsWith('data:')) {
+        const compressed = await compressImageBase64(imgDataUrl, 900 * 1024)
+        const match = compressed.match(/^data:([^;]+);base64,(.+)$/)
+        if (match) {
+          const mimeType = match[1]
+          const byteString = atob(match[2])
+          const byteNumbers = new Array(byteString.length)
+          for (let i = 0; i < byteString.length; i++) byteNumbers[i] = byteString.charCodeAt(i)
+          const blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType })
+          fd.append('input_reference', blob, 'input.png')
+        }
+      }
+    }
+    payload = fd
+    console.log('[generateShortDramaVideo] veo-openai FormData payload prepared')
   } else if (modelCfg.format === 'sora-unified') {
     const orientation = ratio === '9:16' ? 'portrait' : 'landscape'
     const dur = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg.defaultParams?.duration || 15)
@@ -1221,7 +1267,11 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
         console.warn(`[shortDramaVideo] 上游过载/抖动，准备第 ${attempt + 1} 次重试...`, { waitMs, model: modelCfg.key })
         await new Promise((r) => setTimeout(r, waitMs))
       }
-      task = await postJson<any>(endpointOverride, payload, { authMode: modelCfg.authMode, timeoutMs: 240000 })
+      if (useFormData) {
+        task = await postFormData<any>(endpointOverride, payload as FormData, { authMode: modelCfg.authMode, timeoutMs: 240000 })
+      } else {
+        task = await postJson<any>(endpointOverride, payload, { authMode: modelCfg.authMode, timeoutMs: 240000 })
+      }
       break
     } catch (e: any) {
       lastCreateErr = e
