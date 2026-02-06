@@ -29,6 +29,11 @@ export const updateSlotById = (
       ref: upd(s.ref),
       refs: Array.isArray(s.refs) ? s.refs.map(upd) : s.refs,
     })),
+    assets: (draft.assets || []).map((a) => ({
+      ...a,
+      ref: upd(a.ref),
+      refs: Array.isArray(a.refs) ? a.refs.map(upd) : a.refs,
+    })),
     shots: draft.shots.map((sh) => ({
       ...sh,
       frames: {
