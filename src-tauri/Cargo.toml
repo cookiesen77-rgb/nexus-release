@@ -1,6 +1,6 @@
 [package]
 name = "nexus"
-version = "1.51.2"
+version = "1.51.3"
 description = "Nexus desktop app"
 authors = ["Nexus"]
 license = ""
