@@ -456,6 +456,10 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
   }
   next.scenes = mergedScenes
 
+  // Build lookup maps BEFORE using them
+  const charIdByName = new Map(next.characters.map((c) => [String(c.name || '').trim(), c.id]))
+  const sceneIdByName = new Map(next.scenes.map((s) => [String(s.name || '').trim(), s.id]))
+
   // Merge assets by name
   const validCategories = new Set<ShortDramaAssetCategory>(['weapon', 'prop', 'vehicle', 'accessory', 'item', 'other'])
   const existingAssetsByName = new Map<string, (typeof next.assets)[number]>()
@@ -492,8 +496,6 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
   next.assets = mergedAssets
 
   const assetIdByName = new Map(next.assets.map((a) => [String(a.name || '').trim(), a.id]))
-  const charIdByName = new Map(next.characters.map((c) => [String(c.name || '').trim(), c.id]))
-  const sceneIdByName = new Map(next.scenes.map((s) => [String(s.name || '').trim(), s.id]))
 
   // Merge shots by index (non-destructive for existing media slots)
   const existingShots = Array.isArray(next.shots) ? next.shots.slice() : []

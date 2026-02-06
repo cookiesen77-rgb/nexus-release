@@ -38,7 +38,9 @@ const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTER
 
 const SUPPORTED_VIDEO_FORMATS = new Set<string>([
   'sora-unified',
+  'sora-openai',
   'veo-unified',
+  'veo-openai',
   'kling-video',
   'kling-multi-image2video',
   'kling-omni-video',

@@ -11,8 +11,8 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import ShortDramaStudioAutoView from '@/components/shortDrama/ShortDramaStudioAutoView'
 import ShortDramaStudioManualView from '@/components/shortDrama/ShortDramaStudioManualView'
-import { createDefaultDraftV2, loadShortDramaDraftV2, saveShortDramaDraftV2 } from '@/lib/shortDrama/draftStorage'
-import { createDefaultShortDramaPrefs, loadShortDramaPrefs, saveShortDramaPrefs } from '@/lib/shortDrama/uiPrefs'
+import { loadShortDramaDraftV2, saveShortDramaDraftV2 } from '@/lib/shortDrama/draftStorage'
+import { loadShortDramaPrefs, saveShortDramaPrefs } from '@/lib/shortDrama/uiPrefs'
 import { syncAssetHistoryFromCanvasNodes } from '@/lib/assets/syncFromCanvas'
 import { useGraphStore } from '@/graph/store'
 import type { ShortDramaDraftV2 } from '@/lib/shortDrama/types'
@@ -37,14 +37,17 @@ export default function ShortDramaStudioShell({
 }: Props) {
   const pid = String(projectId || '').trim() || 'default'
 
-  const [draft, setDraft] = useState<ShortDramaDraftV2>(() => createDefaultDraftV2(pid))
-  const [prefs, setPrefs] = useState<ShortDramaStudioPrefsV1>(() => createDefaultShortDramaPrefs())
+  // 直接从 localStorage 加载作为初始值，避免先渲染空草稿再覆盖
+  const [draft, setDraft] = useState<ShortDramaDraftV2>(() => loadShortDramaDraftV2(pid))
+  const [prefs, setPrefs] = useState<ShortDramaStudioPrefsV1>(() => loadShortDramaPrefs(pid))
 
   const draftRef = useRef(draft)
   const prefsRef = useRef(prefs)
   draftRef.current = draft
   prefsRef.current = prefs
   const hasWarnedPersistFailRef = useRef(false)
+  // 标记是否完成初始加载，防止在加载完成前保存空数据
+  const initialLoadDoneRef = useRef(true)
 
   /**
    * setState 的更新可能在路由切换/卸载前还未 commit，
@@ -101,16 +104,29 @@ export default function ShortDramaStudioShell({
     }
   }, [pid])
 
-  // Load draft & prefs on mount / project change
+  // Load draft & prefs on project change (initial load is handled by useState initializer)
+  const prevPidRef = useRef(pid)
   useEffect(() => {
-    setDraftSafe(loadShortDramaDraftV2(pid))
-    setPrefsSafe(loadShortDramaPrefs(pid))
+    // 仅在 projectId 变化时重新加载（首次挂载已通过 useState 初始化）
+    if (prevPidRef.current !== pid) {
+      prevPidRef.current = pid
+      initialLoadDoneRef.current = false
+      const loadedDraft = loadShortDramaDraftV2(pid)
+      const loadedPrefs = loadShortDramaPrefs(pid)
+      setDraftSafe(loadedDraft)
+      setPrefsSafe(loadedPrefs)
+      // 确保 ref 也同步更新
+      draftRef.current = loadedDraft
+      prefsRef.current = loadedPrefs
+      initialLoadDoneRef.current = true
+    }
     // 把画布中已有素材补进历史（单向补齐，不会破坏历史）
     syncAssetHistoryFromCanvasNodes({ includeDataUrl: true, includeAssetUrl: true })
-  }, [pid])
+  }, [pid, setDraftSafe, setPrefsSafe])
 
-  // Persist draft (debounced)
+  // Persist draft (debounced) - 只在初始加载完成后才保存
   useEffect(() => {
+    if (!initialLoadDoneRef.current) return
     const t = window.setTimeout(() => {
       flushNow()
     }, 250)

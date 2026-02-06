@@ -1365,14 +1365,14 @@ export const generateVideoFromConfigNode = async (
     } else if (modelCfg.format === 'veo-openai') {
       // Veo 3.1 系列（云雾API OpenAI视频格式）：multipart/form-data
       // 文档：https://yunwu.apifox.cn/api-370109881
-      // 参数：model, prompt, seconds (4/6/8), size (16x9/9x16), input_reference
+      // 参数：model, prompt, duration_seconds (4/6/8), size (16x9/9x16), input_reference
       const fd = new FormData()
       fd.append('model', modelCfg.key)
       fd.append('prompt', prompt)
 
-      // seconds参数：4/6/8秒，字符串格式
+      // duration_seconds参数：4/6/8秒，字符串格式
       const secondsValue = Number.isFinite(duration) && duration > 0 ? String(duration) : '8'
-      fd.append('seconds', secondsValue)
+      fd.append('duration_seconds', secondsValue)
 
       // size参数：使用x分隔符（16x9或9x16），不是冒号
       const sizeValue = ratio === '9:16' ? '9x16' : '16x9'
