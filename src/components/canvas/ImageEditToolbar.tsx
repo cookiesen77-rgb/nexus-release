@@ -194,46 +194,53 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
     setCurrentAction(null)
   }, [])
 
-  if (!visible && !loading) return null
+  // Keep rendering when any modal is open (modalOpen, gridCropOpen, maskEditorOpen)
+  const hasOpenModal = modalOpen || gridCropOpen || maskEditorOpen
+  if (!visible && !loading && !hasOpenModal) return null
 
   const currentTool = TOOLS.find(t => t.key === currentAction)
 
+  // Hide toolbar when full-screen modal (mask editor, grid crop) is open
+  const showToolbar = (visible || loading) && !maskEditorOpen && !gridCropOpen
+
   return (
     <>
-      {/* 悬浮工具栏 */}
-      <div
-        className="absolute -top-[52px] left-0 right-[50px] flex justify-center z-[1001]"
-        onMouseDown={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-        onMouseEnter={() => onHoverChange?.(true)}
-        onMouseLeave={() => onHoverChange?.(false)}
-      >
-        <div className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg">
-          {loading ? (
-            <div className="flex items-center gap-2 px-3 text-sm text-gray-600 dark:text-gray-300">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>{progress || '处理中...'}</span>
-            </div>
-          ) : (
-            TOOLS.map((tool) => {
-              const Icon = tool.icon
-              return (
-                <button
-                  key={tool.key}
-                  onClick={() => handleToolClick(tool)}
-                  className="group flex items-center gap-0 hover:gap-1.5 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
-                  title={tool.label}
-                >
-                  <Icon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                  <span className="text-sm text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[70px] transition-all duration-200 whitespace-nowrap">
-                    {tool.label}
-                  </span>
-                </button>
-              )
-            })
-          )}
+      {/* 悬浮工具栏 - 全屏弹窗打开时隐藏 */}
+      {showToolbar && (
+        <div
+          className="absolute -top-[52px] left-0 right-[50px] flex justify-center z-[1001]"
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseEnter={() => onHoverChange?.(true)}
+          onMouseLeave={() => onHoverChange?.(false)}
+        >
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg">
+            {loading ? (
+              <div className="flex items-center gap-2 px-3 text-sm text-gray-600 dark:text-gray-300">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>{progress || '处理中...'}</span>
+              </div>
+            ) : (
+              TOOLS.map((tool) => {
+                const Icon = tool.icon
+                return (
+                  <button
+                    key={tool.key}
+                    onClick={() => handleToolClick(tool)}
+                    className="group flex items-center gap-0 hover:gap-1.5 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
+                    title={tool.label}
+                  >
+                    <Icon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                    <span className="text-sm text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[70px] transition-all duration-200 whitespace-nowrap">
+                      {tool.label}
+                    </span>
+                  </button>
+                )
+              })
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 输入弹窗 */}
       {modalOpen && currentTool && (
