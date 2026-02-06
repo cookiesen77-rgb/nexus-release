@@ -543,6 +543,65 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     [draft]
   )
 
+  const buildAssetPrompt = useCallback(
+    (assetId: string) => {
+      const a = (draft.assets || []).find((x) => x.id === assetId)
+      if (!a) return ''
+      const style = buildEffectiveStyle(draft.style)
+      const preset = getShortDramaStylePresetById(draft.style.presetId)
+      const categoryLabels: Record<string, string> = {
+        weapon: '武器',
+        prop: '道具',
+        vehicle: '载具',
+        accessory: '配饰',
+        item: '物品',
+        other: '其他'
+      }
+      const ownerNames = (a.ownerCharacterIds || [])
+        .map((id) => draft.characters.find((c) => c.id === id)?.name)
+        .filter(Boolean)
+        .join('、')
+      return [
+        draft.title ? `短剧标题：${draft.title}` : '',
+        draft.logline ? `短剧梗概：\n${draft.logline}` : '',
+        `风格预设：${preset.name}\n${preset.description}`,
+        style.styleText ? `统一画风/镜头语言（必须严格遵守）：\n${style.styleText}` : '',
+        style.negativeText ? `全局负面约束（严格避免）：\n${style.negativeText}` : '',
+        `资产类型：${categoryLabels[a.category] || a.category}`,
+        `资产名称：${String(a.name || '').trim()}`,
+        a.description ? `资产描述（必须保持一致性）：\n${String(a.description || '').trim()}` : '',
+        ownerNames ? `所属角色：${ownerNames}` : '',
+        '请生成该资产的参考图（单独展示该物品，不要出现人物），干净背景，构图清晰，不要文字标签、不要水印。',
+      ]
+        .map((x) => String(x || '').trim())
+        .filter(Boolean)
+        .join('\n\n')
+        .trim()
+    },
+    [draft]
+  )
+
+  const collectRefImagesForAsset = useCallback(
+    async (assetId: string) => {
+      const a = (draft.assets || []).find((x) => x.id === assetId)
+      if (!a) return []
+      const inputs: string[] = []
+      // 收集资产自身的参考图
+      for (const slot of a.refs || []) {
+        const v = getSelectedVariant(slot)
+        const input = await resolveVariantInput(v || undefined)
+        if (input) inputs.push(input)
+      }
+      // 如果资产有所属角色，也收集角色的参考图作为风格参考
+      for (const charId of a.ownerCharacterIds || []) {
+        const charRefs = await collectRefImagesForCharacter(charId)
+        inputs.push(...charRefs)
+      }
+      return Array.from(new Set(inputs)).filter(Boolean)
+    },
+    [draft.assets, getSelectedVariant, resolveVariantInput, collectRefImagesForCharacter]
+  )
+
   const buildFramePrompt = useCallback(
     (shotId: string, role: 'start' | 'end') => {
       const shot = draft.shots.find((s) => s.id === shotId)
@@ -868,11 +927,25 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       await runGenerateSlotImage(slotId, prompt, [], 'auto')
     })
 
-    await Promise.all([...charTasks, ...sceneTasks])
+    // 3) Asset refs
+    const assetTasks = (draft.assets || []).map(async (a) => {
+      const slotId = a.ref.id
+      markSlotStaleRunning(slotId)
+      const selected = getSelectedVariant(a.ref)
+      if (selected?.status === 'success') return
+      const prompt = buildAssetPrompt(a.id)
+      const refImages = await collectRefImagesForAsset(a.id)
+      await runGenerateSlotImage(slotId, prompt, refImages, 'auto')
+    })
+
+    await Promise.all([...charTasks, ...sceneTasks, ...assetTasks])
   }, [
+    buildAssetPrompt,
     buildCharacterSheetPrompt,
     buildScenePrompt,
+    collectRefImagesForAsset,
     collectRefImagesForCharacter,
+    draft.assets,
     draft.characters,
     draft.scenes,
     getSelectedVariant,
@@ -889,7 +962,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       setPrepBusy(true)
       try {
         await runBatchGenerateCoreRefs()
-        window.$message?.success?.('角色/场景参考图已生成（用于一致性）')
+        window.$message?.success?.('角色/场景/资产参考图已生成（用于一致性）')
       } catch {
         // errors are already surfaced in variants
       } finally {
@@ -1354,7 +1427,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                     </Button>
                   </div>
 
-                  {prepBusy ? <div className="mt-2 text-xs text-[var(--text-secondary)]">一致性素材生成中：角色设定图 / 场景参考图…</div> : null}
+                  {prepBusy ? <div className="mt-2 text-xs text-[var(--text-secondary)]">一致性素材生成中：角色设定图 / 场景参考图 / 资产参考图…</div> : null}
                   {analysisError ? (
                     <div className="mt-2 max-h-[120px] overflow-auto whitespace-pre-wrap break-words text-xs text-red-500">{analysisError}</div>
                   ) : null}
@@ -1604,6 +1677,20 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                       <Button size="sm" variant="ghost" disabled={busy} onClick={() => openPickerForSlot(slot, `${a.name} · 资产参考`, 'canvas')}>
                         从画布导入
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() =>
+                          void (async () => {
+                            const refs = await collectRefImagesForAsset(a.id)
+                            await runGenerateSlotImage(slot.id, buildAssetPrompt(a.id), refs, 'auto')
+                          })()
+                        }
+                      >
+                        {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileText className="mr-1 h-4 w-4" />}
+                        生成参考图
+                      </Button>
                     </div>
                   </div>
                   {a.description ? <div className="mt-1 text-xs text-[var(--text-secondary)] line-clamp-2">{a.description}</div> : null}
@@ -1612,6 +1699,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                       <button type="button" onClick={() => void openPreview(selected)} className="block w-full">
                         <ShortDramaVariantThumb variant={selected} className="h-20 w-full" />
                       </button>
+                      <div className="mt-2 flex items-center justify-end">
+                        <Button size="sm" variant="ghost" disabled={selected.status !== 'success'} onClick={() => void sendVariantToCanvas(selected, `${a.name} · 资产参考`)}>
+                          上板
+                        </Button>
+                      </div>
                     </div>
                   ) : null}
                   <div className="mt-2">
