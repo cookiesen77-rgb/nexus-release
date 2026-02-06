@@ -12,6 +12,7 @@ import { postJson } from '@/lib/workflow/request'
 import { chatCompletions } from '@/lib/nexusApi'
 import { useAssetsStore } from '@/store/assets'
 import { useGraphStore } from '@/graph/store'
+import { getMedia } from '@/lib/mediaStorage'
 import type { ShortDramaDraftV2, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
 
 interface Props {
@@ -187,17 +188,61 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
     return selected?.displayUrl || selected?.sourceUrl || null
   }, [])
 
+  // 异步解析 mediaId → URL 的映射表（覆盖 displayUrl/sourceUrl 都为空但有 mediaId 的场景）
+  const [mediaIdUrlMap, setMediaIdUrlMap] = useState<Record<string, string>>({})
+  useEffect(() => {
+    let cancelled = false
+    const collectSlots = (slots: any[]): any[] => {
+      const out: any[] = []
+      for (const s of slots) {
+        if (!s?.variants?.length) continue
+        const v = s.selectedVariantId ? s.variants.find((x: any) => x.id === s.selectedVariantId) : s.variants[0]
+        if (v?.mediaId && !v.displayUrl && !v.sourceUrl) out.push(v)
+      }
+      return out
+    }
+    const allSlots: any[] = []
+    draft.characters?.forEach(c => { allSlots.push(c.sheet); (c.refs || []).forEach(r => allSlots.push(r)) })
+    draft.scenes?.forEach(s => { allSlots.push(s.ref); (s.refs || []).forEach(r => allSlots.push(r)) })
+    draft.assets?.forEach(a => allSlots.push(a.ref))
+    draft.shots?.forEach(s => { allSlots.push(s.frames?.start?.slot); allSlots.push(s.frames?.end?.slot) })
+    const pending = collectSlots(allSlots.filter(Boolean))
+    if (pending.length === 0) return
+    ;(async () => {
+      const map: Record<string, string> = {}
+      for (const v of pending) {
+        if (cancelled) return
+        try {
+          const rec = await getMedia(v.mediaId)
+          if (rec?.data) map[v.mediaId] = String(rec.data)
+        } catch { /* ignore */ }
+      }
+      if (!cancelled) setMediaIdUrlMap(prev => ({ ...prev, ...map }))
+    })()
+    return () => { cancelled = true }
+  }, [draft])
+
+  // 带 mediaId 回退的 URL 解析
+  const resolveVariantUrl = useCallback((slot: any): string | null => {
+    const direct = getSelectedVariantUrl(slot)
+    if (direct) return direct
+    if (!slot?.variants?.length) return null
+    const v = slot.selectedVariantId ? slot.variants.find((x: any) => x.id === slot.selectedVariantId) : slot.variants[0]
+    if (v?.mediaId && mediaIdUrlMap[v.mediaId]) return mediaIdUrlMap[v.mediaId]
+    return null
+  }, [getSelectedVariantUrl, mediaIdUrlMap])
+
   const availableImages = useMemo((): ImageSource[] => {
     const images: ImageSource[] = []
 
     // 角色图片
     draft.characters?.forEach(char => {
-      const sheetUrl = getSelectedVariantUrl(char.sheet)
+      const sheetUrl = resolveVariantUrl(char.sheet)
       if (sheetUrl) {
         images.push({ id: `char-sheet-${char.id}`, url: sheetUrl, title: `${char.name} - 设定图`, category: 'character', icon: <User className="h-3 w-3" /> })
       }
       char.refs?.forEach((ref, i) => {
-        const refUrl = getSelectedVariantUrl(ref)
+        const refUrl = resolveVariantUrl(ref)
         if (refUrl) {
           images.push({ id: `char-ref-${char.id}-${i}`, url: refUrl, title: `${char.name} - 参考${i + 1}`, category: 'character', icon: <User className="h-3 w-3" /> })
         }
@@ -206,12 +251,12 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
 
     // 场景图片
     draft.scenes?.forEach(scene => {
-      const refUrl = getSelectedVariantUrl(scene.ref)
+      const refUrl = resolveVariantUrl(scene.ref)
       if (refUrl) {
         images.push({ id: `scene-${scene.id}`, url: refUrl, title: scene.name, category: 'scene', icon: <MapPin className="h-3 w-3" /> })
       }
       scene.refs?.forEach((ref, i) => {
-        const extraUrl = getSelectedVariantUrl(ref)
+        const extraUrl = resolveVariantUrl(ref)
         if (extraUrl) {
           images.push({ id: `scene-ref-${scene.id}-${i}`, url: extraUrl, title: `${scene.name} - 参考${i + 1}`, category: 'scene', icon: <MapPin className="h-3 w-3" /> })
         }
@@ -220,7 +265,7 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
 
     // 资产图片
     draft.assets?.forEach(asset => {
-      const refUrl = getSelectedVariantUrl(asset.ref)
+      const refUrl = resolveVariantUrl(asset.ref)
       if (refUrl) {
         images.push({ id: `asset-${asset.id}`, url: refUrl, title: asset.name, category: 'asset', icon: <Sword className="h-3 w-3" /> })
       }
@@ -228,11 +273,11 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
 
     // 镜头首尾帧
     draft.shots?.forEach((shot, i) => {
-      const startUrl = getSelectedVariantUrl(shot.frames?.start?.slot)
+      const startUrl = resolveVariantUrl(shot.frames?.start?.slot)
       if (startUrl) {
         images.push({ id: `shot-start-${shot.id}`, url: startUrl, title: `${shot.title || `镜头${i + 1}`} - 首帧`, category: 'shot', icon: <Package className="h-3 w-3" /> })
       }
-      const endUrl = getSelectedVariantUrl(shot.frames?.end?.slot)
+      const endUrl = resolveVariantUrl(shot.frames?.end?.slot)
       if (endUrl) {
         images.push({ id: `shot-end-${shot.id}`, url: endUrl, title: `${shot.title || `镜头${i + 1}`} - 尾帧`, category: 'shot', icon: <Package className="h-3 w-3" /> })
       }
@@ -260,7 +305,7 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
     })
 
     return images
-  }, [draft, getSelectedVariantUrl, canvasNodes, historyAssets])
+  }, [draft, resolveVariantUrl, canvasNodes, historyAssets])
 
   const groupedImages = useMemo(() => {
     return {

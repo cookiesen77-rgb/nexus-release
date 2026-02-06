@@ -6,6 +6,7 @@
  */
 
 import React, { memo, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Move,
   RotateCcw,
@@ -242,37 +243,40 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
         </div>
       )}
 
-      {/* 输入弹窗 */}
-      {modalOpen && currentTool && (
+      {/* 输入弹窗 - portal 到 body 避免 transform 影响 fixed 定位 */}
+      {modalOpen && currentTool && createPortal(
         <ImageEditModal
           open={modalOpen}
           title={currentTool.label}
           placeholder={currentTool.placeholder || ''}
           onConfirm={handleModalConfirm}
           onClose={handleModalClose}
-        />
+        />,
+        document.body
       )}
 
       {/* 四/九宫格裁剪弹窗 */}
-      {gridCropOpen && currentAction && (currentAction === 'grid4' || currentAction === 'grid9') && (
+      {gridCropOpen && currentAction && (currentAction === 'grid4' || currentAction === 'grid9') && createPortal(
         <GridCropModal
           open={gridCropOpen}
           imageUrl={imageUrl}
           gridSize={gridCropSize}
           onClose={handleGridCropClose}
           onConfirm={handleGridCropConfirm}
-        />
+        />,
+        document.body
       )}
 
       {/* 蒙版编辑弹窗 */}
-      {maskEditorOpen && currentAction && (currentAction === 'inpaint' || currentAction === 'erase') && (
+      {maskEditorOpen && currentAction && (currentAction === 'inpaint' || currentAction === 'erase') && createPortal(
         <MaskEditorModal
           open={maskEditorOpen}
           imageUrl={imageUrl}
           mode={currentAction as 'inpaint' | 'erase'}
           onClose={handleMaskEditorClose}
           onConfirm={handleMaskEditorConfirm}
-        />
+        />,
+        document.body
       )}
     </>
   )
