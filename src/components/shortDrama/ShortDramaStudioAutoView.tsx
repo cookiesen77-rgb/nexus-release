@@ -569,9 +569,16 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         style.negativeText ? `全局负面约束（严格避免）：\n${style.negativeText}` : '',
         `资产类型：${categoryLabels[a.category] || a.category}`,
         `资产名称：${String(a.name || '').trim()}`,
-        a.description ? `资产描述（必须保持一致性）：\n${String(a.description || '').trim()}` : '',
+        a.description ? `资产描述（必须与剧本保持一致）：\n${String(a.description || '').trim()}` : '',
         ownerNames ? `所属角色：${ownerNames}` : '',
-        '请生成该资产的参考图（单独展示该物品，不要出现人物），干净背景，构图清晰，不要文字标签、不要水印。',
+        [
+          '请生成该资产的参考图：',
+          '1. 必须使用【透明背景】（PNG格式，alpha通道透明）',
+          '2. 单独展示该物品，居中构图，不要出现人物或其他杂物',
+          '3. 物品细节必须与剧本描述完全一致',
+          '4. 光影自然，便于后续融合到其他场景',
+          '5. 不要文字标签、不要水印、不要边框',
+        ].join('\n'),
       ]
         .map((x) => String(x || '').trim())
         .filter(Boolean)

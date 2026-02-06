@@ -2,13 +2,16 @@
  * Short Drama Blend Panel | 短剧融图面板
  * 支持主图1张 + 副图最多13张（Gemini限制）
  * 可从短剧工作台已生成的图片中选择
+ * 支持：本地上传、画布导入、历史素材导入
  */
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
-import { X, Wand2, AlertCircle, Loader2, User, Package, MapPin, Sword, Sparkles, Upload, Plus, Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { X, Wand2, AlertCircle, Loader2, User, Package, MapPin, Sword, Sparkles, Upload, Plus, Check, ChevronDown, ChevronUp, Palette, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { postJson } from '@/lib/workflow/request'
 import { chatCompletions } from '@/lib/nexusApi'
+import { useAssetsStore } from '@/store/assets'
+import { useGraphStore } from '@/graph/store'
 import type { ShortDramaDraftV2, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
 
 interface Props {
@@ -149,9 +152,11 @@ interface ImageSource {
   id: string
   url: string
   title: string
-  category: 'character' | 'scene' | 'asset' | 'shot'
+  category: 'character' | 'scene' | 'asset' | 'shot' | 'canvas' | 'history'
   icon: React.ReactNode
 }
+
+const isHttp = (v: string) => /^https?:\/\//i.test(v)
 
 export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage }: Props) {
   const [mainImage, setMainImage] = useState<string | null>(null)
@@ -169,6 +174,11 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // 获取画布素材
+  const canvasNodes = useGraphStore((s) => (s as any).nodes || [])
+  // 获取历史素材
+  const historyAssets = useAssetsStore((s) => s.assets)
+
   const getSelectedVariantUrl = useCallback((slot: any): string | null => {
     if (!slot?.variants?.length) return null
     const selected = slot.selectedVariantId
@@ -180,6 +190,7 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
   const availableImages = useMemo((): ImageSource[] => {
     const images: ImageSource[] = []
 
+    // 角色图片
     draft.characters?.forEach(char => {
       const sheetUrl = getSelectedVariantUrl(char.sheet)
       if (sheetUrl) {
@@ -193,6 +204,7 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
       })
     })
 
+    // 场景图片
     draft.scenes?.forEach(scene => {
       const refUrl = getSelectedVariantUrl(scene.ref)
       if (refUrl) {
@@ -206,6 +218,7 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
       })
     })
 
+    // 资产图片
     draft.assets?.forEach(asset => {
       const refUrl = getSelectedVariantUrl(asset.ref)
       if (refUrl) {
@@ -213,6 +226,7 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
       }
     })
 
+    // 镜头首尾帧
     draft.shots?.forEach((shot, i) => {
       const startUrl = getSelectedVariantUrl(shot.frames?.start?.slot)
       if (startUrl) {
@@ -224,8 +238,29 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
       }
     })
 
+    // 画布素材
+    const canvasImageNodes = Array.isArray(canvasNodes) ? canvasNodes.filter((n: any) => n?.type === 'image') : []
+    canvasImageNodes.forEach((n: any) => {
+      const d: any = n?.data || {}
+      const url = String(d?.url || '').trim()
+      if (url) {
+        const label = String(d?.label || n?.id || '').trim() || '画布图片'
+        images.push({ id: `canvas-${n.id}`, url, title: label, category: 'canvas', icon: <Palette className="h-3 w-3" /> })
+      }
+    })
+
+    // 历史素材
+    const historyImageAssets = (historyAssets || []).filter((a: any) => a?.type === 'image')
+    historyImageAssets.forEach((a: any) => {
+      const src = String(a?.src || '').trim()
+      if (src) {
+        const label = String(a?.title || a?.id || '').trim() || '历史图片'
+        images.push({ id: `history-${a.id}`, url: src, title: label, category: 'history', icon: <Clock className="h-3 w-3" /> })
+      }
+    })
+
     return images
-  }, [draft, getSelectedVariantUrl])
+  }, [draft, getSelectedVariantUrl, canvasNodes, historyAssets])
 
   const groupedImages = useMemo(() => {
     return {
@@ -233,6 +268,8 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
       scene: availableImages.filter(img => img.category === 'scene'),
       asset: availableImages.filter(img => img.category === 'asset'),
       shot: availableImages.filter(img => img.category === 'shot'),
+      canvas: availableImages.filter(img => img.category === 'canvas'),
+      history: availableImages.filter(img => img.category === 'history'),
     }
   }, [availableImages])
 
@@ -346,6 +383,8 @@ export default function ShortDramaBlendPanel({ open, onClose, draft, onAddImage 
     scene: { label: '场景', icon: <MapPin className="h-4 w-4" /> },
     asset: { label: '资产', icon: <Sword className="h-4 w-4" /> },
     shot: { label: '镜头', icon: <Package className="h-4 w-4" /> },
+    canvas: { label: '画布素材', icon: <Palette className="h-4 w-4" /> },
+    history: { label: '历史素材', icon: <Clock className="h-4 w-4" /> },
   }
 
   const canBlend = mainImage && secondaryImages.length > 0 && userPrompt.trim() && !isProcessing
