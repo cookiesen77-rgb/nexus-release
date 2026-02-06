@@ -431,29 +431,31 @@ export async function inpaintImage(options: InpaintOptions): Promise<string> {
 
   let prompt: string
   if (userRequirement) {
-    prompt = `Inpaint the WHITE masked area in this image. Replace it with: ${userRequirement}
+    prompt = `You are given two images: the FIRST is the original photo, the SECOND is a binary mask where WHITE pixels mark the EXACT region to modify. BLACK pixels must remain COMPLETELY UNTOUCHED.
+
+TASK: Replace ONLY the white-masked pixels with: ${userRequirement}
 
 Image context: ${imageAnalysis}
 
-CRITICAL RULES:
-1. ONLY modify the white masked area
-2. Keep ALL other parts of the image EXACTLY unchanged
-3. Seamlessly blend the new content with surrounding areas
-4. Match the original style, lighting, colors, and perspective
-5. Ensure natural transitions at mask boundaries
-6. No visible seams or artifacts`
+ABSOLUTE RULES — violating ANY rule is a failure:
+1. Pixel-precise boundary: modify ONLY pixels that are white in the mask. Every black-mask pixel must be IDENTICAL to the original — zero changes.
+2. Seamless edge blending: new content must match the exact color, lighting, texture, and perspective at the mask boundary with sub-pixel precision.
+3. Style consistency: the replacement must perfectly match the original image's art style, lighting direction, color grading, lens characteristics, and noise/grain pattern.
+4. Spatial coherence: respect perspective lines, vanishing points, depth of field, and shadow directions from the original scene.
+5. No hallucination outside mask: absolutely no modifications, color shifts, or artifacts outside the masked region.`
   } else {
-    prompt = `Intelligently fill the WHITE masked area in this image.
+    prompt = `You are given two images: the FIRST is the original photo, the SECOND is a binary mask where WHITE pixels mark the EXACT region to fill. BLACK pixels must remain COMPLETELY UNTOUCHED.
+
+TASK: Intelligently fill ONLY the white-masked pixels with contextually appropriate content.
 
 Image context: ${imageAnalysis}
 
-CRITICAL RULES:
-1. ONLY modify the white masked area
-2. Keep ALL other parts of the image EXACTLY unchanged
-3. Fill with content that naturally fits the surrounding context
-4. Match the original style, lighting, colors, and perspective
-5. Create seamless transitions at boundaries
-6. The result should look like the masked area was never there`
+ABSOLUTE RULES — violating ANY rule is a failure:
+1. Pixel-precise boundary: modify ONLY pixels that are white in the mask. Every black-mask pixel must be IDENTICAL to the original — zero changes.
+2. Context-aware fill: infer what should naturally exist in the masked area based on surrounding visual context (texture continuation, object completion, background extension).
+3. Seamless edge blending: new content must match the exact color, lighting, texture at the mask boundary with sub-pixel precision.
+4. Style consistency: match the original image's art style, lighting, color grading, and noise pattern exactly.
+5. No hallucination outside mask: absolutely no modifications outside the masked region.`
   }
 
   onProgress?.('正在生成图片...')
@@ -504,21 +506,22 @@ export async function eraseWithMask(options: MaskEraseOptions): Promise<string> 
   // 生成智能擦除提示词
   onProgress?.('正在生成智能提示词...')
 
-  const prompt = `Seamlessly REMOVE and ERASE the content in the WHITE masked area. Fill it naturally with the surrounding background.
+  const prompt = `You are given two images: the FIRST is the original photo, the SECOND is a binary mask where WHITE pixels mark the EXACT region to erase. BLACK pixels must remain COMPLETELY UNTOUCHED.
+
+TASK: REMOVE the content at white-masked pixels and fill with natural background continuation.
 
 Image context: ${imageAnalysis}
 
-CRITICAL RULES FOR SEAMLESS REMOVAL:
-1. COMPLETELY REMOVE everything in the white masked area
-2. Fill the area with NATURAL continuation of the surrounding background/environment
-3. Keep ALL other parts of the image EXACTLY unchanged - do NOT modify anything outside the mask
-4. Match the exact style, lighting, colors, textures, and perspective of surrounding areas
-5. Create INVISIBLE transitions - no visible seams, edges, or artifacts
-6. The result should look like the removed object was NEVER there
-7. Maintain consistent depth of field and focus
-8. Preserve all shadows and reflections from remaining objects
+ABSOLUTE RULES — violating ANY rule is a failure:
+1. Pixel-precise boundary: erase and fill ONLY pixels that are white in the mask. Every black-mask pixel must be IDENTICAL to the original — zero changes.
+2. Complete removal: every trace of the original object in the masked region must be gone — no residual outlines, shadows, or color remnants of the removed object.
+3. Natural background fill: reconstruct the background/surface that would exist behind the removed object, matching surrounding textures, patterns, colors, and perspective with sub-pixel precision.
+4. Shadow & reflection cleanup: if the removed object cast shadows or reflections, those must also be naturally replaced (only within the mask).
+5. Seamless edge blending: the filled area must be indistinguishable from the surrounding image at the mask boundary.
+6. Style preservation: match the exact noise/grain, color grading, depth of field, and lighting of the original.
+7. No hallucination outside mask: absolutely no modifications, color shifts, or artifacts outside the masked region.
 
-The goal is SEAMLESS, UNDETECTABLE removal - as if the masked content never existed.`
+The goal: the result must look as if the erased object NEVER existed in the photograph.`
 
   onProgress?.('正在生成图片...')
 

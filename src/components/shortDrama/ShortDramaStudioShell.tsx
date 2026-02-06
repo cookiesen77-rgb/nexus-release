@@ -43,11 +43,25 @@ export default function ShortDramaStudioShell({
   closeLabel = '关闭',
   onRequestClose,
 }: Props) {
-  const initialPid = String(projectId || '').trim() || 'default'
+  const LAST_PID_KEY = 'nexus-short-drama-last-project-id'
+
+  const initialPid = (() => {
+    try {
+      const saved = localStorage.getItem(LAST_PID_KEY)
+      if (saved && listShortDramaProjects().some(p => p.id === saved)) return saved
+    } catch { /* ignore */ }
+    return String(projectId || '').trim() || 'default'
+  })()
 
   // 当前活动的项目 ID（可以切换）
-  const [currentProjectId, setCurrentProjectId] = useState(initialPid)
+  const [currentProjectId, setCurrentProjectIdRaw] = useState(initialPid)
   const pid = currentProjectId
+
+  // 切换项目时同步到 localStorage
+  const setCurrentProjectId = useCallback((nextId: string) => {
+    setCurrentProjectIdRaw(nextId)
+    try { localStorage.setItem(LAST_PID_KEY, nextId) } catch { /* ignore */ }
+  }, [])
 
   // 项目列表
   const [projects, setProjects] = useState<ShortDramaProjectMeta[]>(() => listShortDramaProjects())

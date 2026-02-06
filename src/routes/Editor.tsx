@@ -16,7 +16,7 @@ const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTER
 
 function extractLocalPathFromAssetUrl(assetUrl: string): string | null {
   const u = String(assetUrl || '').trim()
-  if (!u.startsWith('asset://')) return null
+  if (!u.startsWith('asset://') && !u.startsWith('http://asset.localhost/')) return null
   try {
     const parsed = new URL(u)
     const p = decodeURIComponent(parsed.pathname || '')

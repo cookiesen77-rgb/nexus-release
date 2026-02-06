@@ -131,13 +131,8 @@ export default function UpdateChecker() {
       })
       
       setStatus('ready')
-      
-      // 提示用户重启
-      const { relaunch } = await import('@tauri-apps/plugin-process')
-      const confirmed = window.confirm('更新已下载完成，是否立即重启应用？')
-      if (confirmed) {
-        await relaunch()
-      }
+      setShowBanner(true)
+      // 不自动重启，让用户自行决定何时重启
     } catch (err: any) {
       console.error('[UpdateChecker] 下载更新失败:', err)
       setError(err?.message || '下载更新失败')
@@ -229,6 +224,35 @@ export default function UpdateChecker() {
         <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-[var(--bg-secondary)] px-4 py-3 shadow-lg">
           <CheckCircle className="h-4 w-4 text-green-500" />
           <span className="text-sm text-[var(--text-primary)]">已是最新版本</span>
+        </div>
+      )}
+
+      {/* 更新已就绪，等待用户手动重启 */}
+      {status === 'ready' && (
+        <div className="rounded-lg border border-green-500/30 bg-[var(--bg-secondary)] p-4 shadow-lg">
+          <div className="mb-3 flex items-start justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              <span className="font-medium text-[var(--text-primary)]">更新已就绪</span>
+            </div>
+            <button onClick={() => setShowBanner(false)} className="rounded p-1 hover:bg-[var(--bg-tertiary)]">
+              <X className="h-4 w-4 text-[var(--text-secondary)]" />
+            </button>
+          </div>
+          <div className="mb-3 text-sm text-[var(--text-secondary)]">
+            新版本已下载完成，重启应用后生效。你可以继续当前工作，稍后再重启。
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={async () => {
+              const { relaunch } = await import('@tauri-apps/plugin-process')
+              await relaunch()
+            }}>
+              立即重启
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowBanner(false)}>
+              稍后
+            </Button>
+          </div>
         </div>
       )}
 

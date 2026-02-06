@@ -258,7 +258,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         if (!url) throw new Error('暂无可预览的地址')
 
         if (variant.kind === 'video' && isTauri) {
-          const isAlreadyLocal = url.startsWith('asset://') || url.startsWith('data:') || url.startsWith('blob:')
+          const isAlreadyLocal = url.startsWith('asset://') || url.startsWith('http://asset.localhost/') || url.startsWith('data:') || url.startsWith('blob:')
           if (!isAlreadyLocal) {
             const cached = await resolveCachedMediaUrl(url)
             if (cached?.displayUrl) url = cached.displayUrl

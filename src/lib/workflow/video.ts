@@ -357,7 +357,7 @@ const isBase64Like = (v: string) =>
   !v.startsWith('data:') &&
   !v.startsWith('asset://')
 
-const isAssetUrl = (v: string) => typeof v === 'string' && v.startsWith('asset://')
+const isAssetUrl = (v: string) => typeof v === 'string' && (v.startsWith('asset://') || v.startsWith('http://asset.localhost/'))
 
 const isPrivateNetUrl = (u: string) => {
   const v = String(u || '').trim()

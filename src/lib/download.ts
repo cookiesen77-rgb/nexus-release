@@ -27,21 +27,30 @@ function base64ToUint8Array(base64: string): Uint8Array {
 }
 
 /**
- * 从 asset:// URL 中提取本地文件路径
+ * 从 asset:// 或 http://asset.localhost/ URL 中提取本地文件路径
+ * Tauri 2.x 在 Windows 上会将 asset:// 重写为 http://asset.localhost/
+ *
  * asset://localhost/path/to/file -> /path/to/file
+ * http://asset.localhost/C%3A%5CUsers%5C... -> C:\Users\...
  */
 function extractLocalPath(assetUrl: string): string | null {
-  if (!assetUrl.startsWith('asset://')) return null
+  if (!assetUrl.startsWith('asset://') && !assetUrl.startsWith('http://asset.localhost/')) return null
   try {
     const url = new URL(assetUrl)
-    // asset://localhost/Users/... -> /Users/...
     const p = decodeURIComponent(url.pathname)
-    // Windows: asset://localhost/C:/Users/... -> /C:/Users/...（需要去掉前导斜杠）
-    if (/^\/[A-Za-z]:\//.test(p)) return p.slice(1)
+    // Windows: /C:/Users/... -> C:/Users/...
+    if (/^\/[A-Za-z]:[\\/]/.test(p)) return p.slice(1)
     return p
   } catch {
     return null
   }
+}
+
+/**
+ * 检测是否为 Tauri asset 协议 URL（含 Windows 的 http://asset.localhost/ 形式）
+ */
+function isAssetProtocolUrl(url: string): boolean {
+  return url.startsWith('asset://') || url.startsWith('http://asset.localhost/')
 }
 
 /**
@@ -51,7 +60,7 @@ function extractLocalPath(assetUrl: string): string | null {
 function normalizeGatewayUrl(url: string): string {
   const u = String(url || '').trim()
   if (!u) return u
-  if (u.startsWith('asset://') || u.startsWith('data:') || u.startsWith('blob:')) return u
+  if (u.startsWith('asset://') || u.startsWith('http://asset.localhost/') || u.startsWith('data:') || u.startsWith('blob:')) return u
 
   // 对 HTTP URL 进行编码处理，确保非 ASCII 字符被正确编码
   if (/^https?:\/\//i.test(u)) {
@@ -125,8 +134,8 @@ async function fetchFileData(url: string): Promise<Uint8Array> {
     const response = await fetch(url)
     const arrayBuffer = await response.arrayBuffer()
     return new Uint8Array(arrayBuffer)
-  } else if (url.startsWith('asset://') && isTauri) {
-    // Tauri asset:// URL - 读取本地文件
+  } else if (isAssetProtocolUrl(url) && isTauri) {
+    // Tauri asset:// 或 http://asset.localhost/ URL - 读取本地文件
     const localPath = extractLocalPath(url)
     if (!localPath) {
       throw new Error('Invalid asset URL')
@@ -137,17 +146,26 @@ async function fetchFileData(url: string): Promise<Uint8Array> {
   } else {
     // HTTP URL
     if (isTauri) {
-      const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
       const resolvedUrl = normalizeGatewayUrl(url)
       console.log('[download] Tauri fetch:', resolvedUrl.slice(0, 100))
       const token = getApiKeySafe()
       const headers = shouldAttachBearer(resolvedUrl) && token ? { Authorization: `Bearer ${token}` } : undefined
-      const response = await tauriFetch(resolvedUrl, { method: 'GET', headers } as any)
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+
+      // 优先使用 Tauri plugin-http（绕过 CORS），失败时回退到 WebView fetch
+      try {
+        const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
+        const response = await tauriFetch(resolvedUrl, { method: 'GET', headers } as any)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const arrayBuffer = await response.arrayBuffer()
+        return new Uint8Array(arrayBuffer)
+      } catch (tauriErr: any) {
+        console.warn('[download] Tauri plugin-http 失败, 回退 WebView fetch:', String(tauriErr?.message || '').slice(0, 120))
+        // Windows 常见：代理/证书链问题导致 plugin-http 失败，WebView fetch 通常可以
+        const response = await fetch(resolvedUrl, headers ? { headers } : undefined)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const arrayBuffer = await response.arrayBuffer()
+        return new Uint8Array(arrayBuffer)
       }
-      const arrayBuffer = await response.arrayBuffer()
-      return new Uint8Array(arrayBuffer)
     } else {
       // Web mode: try fetch first, fallback to window.open for CORS issues
       const token = getApiKeySafe()
