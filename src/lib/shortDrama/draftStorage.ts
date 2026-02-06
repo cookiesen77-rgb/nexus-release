@@ -316,3 +316,81 @@ export const saveShortDramaDraftV2 = (projectId: string, draft: ShortDramaDraftV
   }
 }
 
+// 短剧项目元数据
+export type ShortDramaProjectMeta = {
+  id: string
+  title: string
+  updatedAt: number
+  createdAt: number
+  shotCount: number
+  characterCount: number
+}
+
+// 列出所有短剧项目
+export const listShortDramaProjects = (): ShortDramaProjectMeta[] => {
+  const projects: ShortDramaProjectMeta[] = []
+  const prefix = DRAFT_KEY_PREFIX_V2 + ':'
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key || !key.startsWith(prefix)) continue
+
+    const raw = localStorage.getItem(key)
+    if (!raw) continue
+
+    const parsed = safeJsonParse(raw)
+    if (!parsed || parsed.version !== 2) continue
+
+    const id = key.slice(prefix.length)
+    projects.push({
+      id,
+      title: String(parsed.title || '').trim() || '未命名短剧',
+      updatedAt: Number(parsed.updatedAt || parsed.createdAt || 0),
+      createdAt: Number(parsed.createdAt || 0),
+      shotCount: Array.isArray(parsed.shots) ? parsed.shots.length : 0,
+      characterCount: Array.isArray(parsed.characters) ? parsed.characters.length : 0,
+    })
+  }
+
+  // 按更新时间降序排列
+  return projects.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+// 创建新短剧项目
+export const createShortDramaProject = (title?: string): string => {
+  const id = `sd_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+  const draft = createDefaultDraftV2(id)
+  draft.title = String(title || '').trim() || '新短剧'
+  saveShortDramaDraftV2(id, draft)
+  return id
+}
+
+// 删除短剧项目
+export const deleteShortDramaProject = (projectId: string): boolean => {
+  if (!projectId || projectId === 'default') return false
+  const key = getShortDramaDraftStorageKeyV2(projectId)
+  try {
+    localStorage.removeItem(key)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// 复制短剧项目
+export const duplicateShortDramaProject = (projectId: string): string | null => {
+  const source = loadShortDramaDraftV2(projectId)
+  if (!source) return null
+
+  const newId = `sd_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+  const newDraft: ShortDramaDraftV2 = {
+    ...source,
+    projectId: newId,
+    title: `${source.title || '未命名'} 副本`,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  saveShortDramaDraftV2(newId, newDraft)
+  return newId
+}
+

@@ -1138,7 +1138,32 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                         </option>
                       ))}
                     </select>
-                    <div className="text-xs text-[var(--text-secondary)]">当前自动模式仅展示工作台支持的视频模型。</div>
+                    {/* 首尾帧支持提示 */}
+                    <div className="flex items-center gap-2 text-xs">
+                      {(videoModelCfg as any)?.supportsFirstFrame ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-green-500/10 px-2 py-0.5 text-green-600">
+                          ✓ 支持首帧
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded bg-gray-500/10 px-2 py-0.5 text-[var(--text-secondary)]">
+                          ✗ 不支持首帧
+                        </span>
+                      )}
+                      {(videoModelCfg as any)?.supportsLastFrame ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-green-500/10 px-2 py-0.5 text-green-600">
+                          ✓ 支持尾帧
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 text-amber-600">
+                          ✗ 不支持尾帧
+                        </span>
+                      )}
+                    </div>
+                    {!(videoModelCfg as any)?.supportsLastFrame && (
+                      <div className="text-xs text-amber-600">
+                        ⚠️ 当前模型不支持尾帧，尾帧设置将被忽略，仅使用首帧生成视频。
+                      </div>
+                    )}
                   </div>
 
                   {Array.isArray((videoModelCfg as any)?.ratios) && (videoModelCfg as any).ratios.length > 0 ? (
