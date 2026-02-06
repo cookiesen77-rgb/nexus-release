@@ -830,7 +830,9 @@ export default function Canvas() {
       const textPos = { x: cfgPos.x - 400, y: center.y - textH * 0.5 }
       useGraphStore.getState().withBatchUpdates(() => {
         const textId = addNode('text', textPos, { label: '提示词', content: initialPrompt })
-        const cfgId = addNode('imageConfig', cfgPos, { label: '文生图', model: DEFAULT_IMAGE_MODEL, prompt: initialPrompt })
+        const userDefaultImg = useSettingsStore.getState().defaultImageModel
+        const imgModelKey = (userDefaultImg && (IMAGE_MODELS as any[]).some((m: any) => m.key === userDefaultImg)) ? userDefaultImg : DEFAULT_IMAGE_MODEL
+        const cfgId = addNode('imageConfig', cfgPos, { label: '文生图', model: imgModelKey, prompt: initialPrompt })
         addEdge(textId, cfgId, {})
         setSelected(cfgId)
       })
@@ -1800,7 +1802,7 @@ export default function Canvas() {
             })
             const configId = store.addNode('imageConfig', { x: x + 400, y }, {
               label: '草图生图',
-              model: DEFAULT_IMAGE_MODEL
+              model: (() => { const ud = useSettingsStore.getState().defaultImageModel; return (ud && (IMAGE_MODELS as any[]).some((m: any) => m.key === ud)) ? ud : DEFAULT_IMAGE_MODEL })()
             })
             store.addEdge(imageId, configId, { sourceHandle: 'right', targetHandle: 'left' })
             
@@ -1818,7 +1820,8 @@ export default function Canvas() {
               url: data.sketch
             })
             const configId = store.addNode('videoConfig', { x: x + 400, y }, {
-              label: '草图生视频'
+              label: '草图生视频',
+              model: (() => { const ud = useSettingsStore.getState().defaultVideoModel; return (ud && (VIDEO_MODELS as any[]).some((m: any) => m.key === ud)) ? ud : DEFAULT_VIDEO_MODEL })()
             })
             store.addEdge(imageId, configId, { sourceHandle: 'right', targetHandle: 'left' })
           }

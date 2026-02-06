@@ -1813,10 +1813,6 @@ export const generateVideoFromConfigNode = async (
       if (firstUrl) firstUrl = await ensureHttpImage(firstUrl, '首帧')
       if (lastUrl) lastUrl = await ensureHttpImage(lastUrl, '尾帧')
 
-      // 根据是否有尾帧选择模型
-      // - 用户选择 MiniMax-Hailuo-02：保持原选择（支持所有场景）
-      // - 首尾帧视频必须用 MiniMax-Hailuo-02
-      // - 仅首帧用户可选 MiniMax-Hailuo-2.3 或 MiniMax-Hailuo-2.3-Fast
       const userModel = String(modelCfg.key || '')
       const isUserHailuo02 = userModel === 'MiniMax-Hailuo-02'
       const isUserFastModel = userModel === 'MiniMax-Hailuo-2.3-Fast'
@@ -1826,11 +1822,17 @@ export const generateVideoFromConfigNode = async (
           ? 'MiniMax-Hailuo-02'
           : (firstUrl ? (isUserFastModel ? 'MiniMax-Hailuo-2.3-Fast' : 'MiniMax-Hailuo-2.3') : 'MiniMax-Hailuo-02'))
 
+      // 海螺全系列仅支持 6/10 秒；安全兜底到 durs 范围
+      const allowedDurs = (modelCfg.durs || []).map((d: any) => Number(d?.key ?? d))
+      const safeDurValue = allowedDurs.length > 0 && !allowedDurs.includes(durValue)
+        ? (allowedDurs.includes(6) ? 6 : allowedDurs[0] || durValue)
+        : durValue
+
       // 基础参数（纯文生视频）
       payload = {
         model: effectiveModel,
         prompt: prompt || '',
-        duration: durValue,
+        duration: safeDurValue,
       }
       // 图生视频 / 首尾帧视频：添加图片和额外参数
       if (firstUrl) {

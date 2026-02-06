@@ -66,10 +66,12 @@ const NodeHoverActions = memo(function NodeHoverActions({
 
   const handleSpawnImageConfig = useCallback(() => {
     const store = useGraphStore.getState()
-    const baseModelCfg: any = (IMAGE_MODELS as any[]).find((m: any) => m.key === DEFAULT_IMAGE_MODEL) || (IMAGE_MODELS as any[])[0]
-    const id = store.addNode('imageConfig', { x: node.x + 340, y: node.y }, { 
+    const userDefault = useSettingsStore.getState().defaultImageModel
+    const modelKey = (userDefault && (IMAGE_MODELS as any[]).some((m: any) => m.key === userDefault)) ? userDefault : DEFAULT_IMAGE_MODEL
+    const baseModelCfg: any = (IMAGE_MODELS as any[]).find((m: any) => m.key === modelKey) || (IMAGE_MODELS as any[])[0]
+    const id = store.addNode('imageConfig', { x: node.x + 340, y: node.y }, {
       label: '文生图',
-      model: DEFAULT_IMAGE_MODEL,
+      model: modelKey,
       size: baseModelCfg?.defaultParams?.size,
       quality: baseModelCfg?.defaultParams?.quality,
     })
@@ -79,10 +81,12 @@ const NodeHoverActions = memo(function NodeHoverActions({
 
   const handleSpawnVideoConfig = useCallback(() => {
     const store = useGraphStore.getState()
-    const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === DEFAULT_VIDEO_MODEL) || (VIDEO_MODELS as any[])[0]
-    const id = store.addNode('videoConfig', { x: node.x + 340, y: node.y }, { 
+    const userDefault = useSettingsStore.getState().defaultVideoModel
+    const modelKey = (userDefault && (VIDEO_MODELS as any[]).some((m: any) => m.key === userDefault)) ? userDefault : DEFAULT_VIDEO_MODEL
+    const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === modelKey) || (VIDEO_MODELS as any[])[0]
+    const id = store.addNode('videoConfig', { x: node.x + 340, y: node.y }, {
       label: '视频生成',
-      model: DEFAULT_VIDEO_MODEL,
+      model: modelKey,
       ratio: baseModelCfg?.defaultParams?.ratio,
       dur: baseModelCfg?.defaultParams?.duration,
       size: baseModelCfg?.defaultParams?.size,
@@ -201,7 +205,20 @@ const TextNodeContent = memo(function TextNodeContent({ node }: { node: GraphNod
 
   const handleSpawn = useCallback((type: NodeType) => {
     const store = useGraphStore.getState()
-    const id = store.addNode(type, { x: node.x + 340, y: node.y }, { label: type === 'imageConfig' ? '文生图' : '视频生成' })
+    const settings = useSettingsStore.getState()
+    let initData: Record<string, any> = {}
+    if (type === 'imageConfig') {
+      const userDefault = settings.defaultImageModel
+      const modelKey = (userDefault && (IMAGE_MODELS as any[]).some((m: any) => m.key === userDefault)) ? userDefault : DEFAULT_IMAGE_MODEL
+      const cfg: any = (IMAGE_MODELS as any[]).find((m: any) => m.key === modelKey) || (IMAGE_MODELS as any[])[0]
+      initData = { label: '文生图', model: modelKey, size: cfg?.defaultParams?.size, quality: cfg?.defaultParams?.quality }
+    } else if (type === 'videoConfig') {
+      const userDefault = settings.defaultVideoModel
+      const modelKey = (userDefault && (VIDEO_MODELS as any[]).some((m: any) => m.key === userDefault)) ? userDefault : DEFAULT_VIDEO_MODEL
+      const cfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === modelKey) || (VIDEO_MODELS as any[])[0]
+      initData = { label: '视频生成', model: modelKey, ratio: cfg?.defaultParams?.ratio, dur: cfg?.defaultParams?.duration, size: cfg?.defaultParams?.size }
+    }
+    const id = store.addNode(type, { x: node.x + 340, y: node.y }, initData)
     store.addEdge(node.id, id, {})
     store.setSelected(id)
   }, [node.id, node.x, node.y])
@@ -402,10 +419,12 @@ const ImageContent = memo(function ImageContent({ node }: { node: GraphNode }) {
         onPointerDown={e => e.stopPropagation()}
         onClick={() => {
           const store = useGraphStore.getState()
-          const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === DEFAULT_VIDEO_MODEL) || (VIDEO_MODELS as any[])[0]
-          const id = store.addNode('videoConfig', { x: node.x + 340, y: node.y }, { 
+          const userDefault = useSettingsStore.getState().defaultVideoModel
+          const modelKey = (userDefault && (VIDEO_MODELS as any[]).some((m: any) => m.key === userDefault)) ? userDefault : DEFAULT_VIDEO_MODEL
+          const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === modelKey) || (VIDEO_MODELS as any[])[0]
+          const id = store.addNode('videoConfig', { x: node.x + 340, y: node.y }, {
             label: '视频生成',
-            model: DEFAULT_VIDEO_MODEL,
+            model: modelKey,
             ratio: baseModelCfg?.defaultParams?.ratio,
             dur: baseModelCfg?.defaultParams?.duration,
             size: baseModelCfg?.defaultParams?.size,

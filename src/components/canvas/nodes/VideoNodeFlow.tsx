@@ -7,7 +7,7 @@
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, NodeProps } from '@xyflow/react'
-import { Trash2, Copy, Expand, Video, Image, Eye, Download, X, RefreshCw } from 'lucide-react'
+import { Trash2, Copy, Expand, Video, Image, Eye, Download, X, RefreshCw, Loader2 } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
 import { downloadFile } from '@/lib/download'
@@ -43,6 +43,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   const [videoError, setVideoError] = useState('')
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
   const [corsMode, setCorsMode] = useState<'anonymous' | 'none'>('anonymous')
+  const [downloading, setDownloading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const persistAttemptedRef = useRef<string>('')
   const loadErrorFallbackRef = useRef<string>('')
@@ -348,23 +349,24 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
 
   const handleDownload = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (downloading) return
     if (!displayUrl) {
       window.$message?.warning?.('暂无视频可下载')
       return
     }
-    
-    // 优先使用 sourceUrl（原始 HTTPS URL），其次使用 displayUrl
-    const downloadUrl = (nodeData?.sourceUrl && nodeData.sourceUrl.startsWith('http')) 
-      ? nodeData.sourceUrl 
+
+    const downloadUrl = (nodeData?.sourceUrl && nodeData.sourceUrl.startsWith('http'))
+      ? nodeData.sourceUrl
       : displayUrl
-    
-    console.log('[VideoNode] 下载视频, URL类型:', 
-      downloadUrl.startsWith('data:') ? 'data:' : 
-      downloadUrl.startsWith('asset:') ? 'asset:' : 
+
+    console.log('[VideoNode] 下载视频, URL类型:',
+      downloadUrl.startsWith('data:') ? 'data:' :
+      downloadUrl.startsWith('asset:') ? 'asset:' :
       downloadUrl.startsWith('http') ? 'http' : 'unknown',
       'URL长度:', downloadUrl.length
     )
-    
+
+    setDownloading(true)
     try {
       const success = await downloadFile({
         url: downloadUrl,
@@ -376,11 +378,23 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       }
     } catch (err: any) {
       console.error('[VideoNode] 下载失败:', err)
-      // 显示更详细的错误信息
       const errMsg = err?.message || String(err) || '未知错误'
-      window.$message?.error?.(`下载失败: ${errMsg}`)
+      if (errMsg.includes('CORS') || errMsg.includes('Failed to fetch')) {
+        window.$message?.warning?.('跨域限制，正在尝试直接打开...')
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.target = '_blank'
+        link.rel = 'noopener noreferrer'
+        document.body.appendChild(link)
+        link.click()
+        setTimeout(() => document.body.removeChild(link), 100)
+      } else {
+        window.$message?.error?.(`下载失败: ${errMsg}`)
+      }
+    } finally {
+      setDownloading(false)
     }
-  }, [displayUrl, nodeData?.sourceUrl])
+  }, [displayUrl, nodeData?.sourceUrl, downloading])
 
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -619,11 +633,14 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
           {/* 下载 */}
           <button
             onClick={handleDownload}
-            className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max"
+            disabled={downloading}
+            className={`group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max ${downloading ? 'opacity-60 cursor-wait' : ''}`}
           >
-            <Download size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">
-              下载
+            {downloading
+              ? <Loader2 size={16} className="text-gray-600 dark:text-gray-300 animate-spin" />
+              : <Download size={16} className="text-gray-600 dark:text-gray-300" />}
+            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">
+              {downloading ? '下载中...' : '下载'}
             </span>
           </button>
         </div>

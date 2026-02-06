@@ -12,9 +12,14 @@ import { getNodeSize } from '@/graph/nodeSizing'
 import { generateImageFromConfigNode } from '@/lib/workflow/image'
 import { IMAGE_MODELS, SEEDREAM_SIZE_OPTIONS, SEEDREAM_4K_SIZE_OPTIONS } from '@/config/models'
 import { getImageModelCaps } from '@/lib/modelCaps'
+import { useSettingsStore } from '@/store/settings'
 
-// 默认图片模型
-const DEFAULT_IMAGE_MODEL = IMAGE_MODELS[0]?.key || 'gemini-3-pro-image-preview'
+// 默认图片模型（取用户全局设置，回退到配置第一项）
+const getDefaultImageModel = (): string => {
+  const userDefault = useSettingsStore.getState().defaultImageModel
+  if (userDefault && IMAGE_MODELS.some((m: any) => m.key === userDefault)) return userDefault
+  return IMAGE_MODELS[0]?.key || 'gemini-3-pro-image-preview'
+}
 
 // 模型选项
 const MODEL_OPTIONS = IMAGE_MODELS.map((m: any) => ({ key: m.key, label: m.label }))
@@ -25,7 +30,7 @@ const getValidModel = (modelKey: string | undefined): string => {
   if (modelKey && VALID_MODEL_KEYS.has(modelKey)) {
     return modelKey
   }
-  return DEFAULT_IMAGE_MODEL
+  return getDefaultImageModel()
 }
 
 // 获取模型配置

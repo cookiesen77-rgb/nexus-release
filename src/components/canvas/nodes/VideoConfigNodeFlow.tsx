@@ -10,7 +10,15 @@ import { getNodeSize } from '@/graph/nodeSizing'
 import { generateVideoFromConfigNode } from '@/lib/workflow/video'
 import { DEFAULT_VIDEO_MODEL, VIDEO_MODELS } from '@/config/models'
 import * as modelsConfig from '@/config/models'
-import { getVideoModelCaps } from '@/lib/modelCaps'
+import { getVideoModelCaps, coerceVideoImageRole } from '@/lib/modelCaps'
+import { useSettingsStore } from '@/store/settings'
+
+// 获取用户全局默认视频模型（回退到配置默认）
+const getDefaultVideoModel = (): string => {
+  const userDefault = useSettingsStore.getState().defaultVideoModel
+  if (userDefault && VIDEO_MODELS.some((m: any) => m.key === userDefault)) return userDefault
+  return DEFAULT_VIDEO_MODEL
+}
 
 // 模型选项
 const MODEL_OPTIONS = VIDEO_MODELS.map((m: any) => ({ key: m.key, label: m.label }))
@@ -57,7 +65,7 @@ interface VideoConfigNodeData {
 export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data, selected }: NodeProps) {
   const nodeData = data as VideoConfigNodeData
   const [showActions, setShowActions] = useState(false)
-  const [model, setModel] = useState(nodeData?.model || DEFAULT_VIDEO_MODEL)
+  const [model, setModel] = useState(nodeData?.model || getDefaultVideoModel())
   const [ratio, setRatio] = useState(nodeData?.ratio || '16:9')
   const [duration, setDuration] = useState(nodeData?.dur || 5)
   const [size, setSize] = useState(nodeData?.size || '')
@@ -110,9 +118,10 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
     const storedModel = String(current?.model || '').trim()
     if (storedModel) return
 
-    const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === DEFAULT_VIDEO_MODEL) || (VIDEO_MODELS as any[])[0]
-    store.updateNode(id, { data: { 
-      model: DEFAULT_VIDEO_MODEL,
+    const defaultModel = getDefaultVideoModel()
+    const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === defaultModel) || (VIDEO_MODELS as any[])[0]
+    store.updateNode(id, { data: {
+      model: defaultModel,
       ratio: baseModelCfg?.defaultParams?.ratio,
       dur: baseModelCfg?.defaultParams?.duration,
       size: baseModelCfg?.defaultParams?.size,
@@ -121,7 +130,7 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
 
   // 外部数据变化（store→ReactFlow→props）时，同步回本地 UI state
   useEffect(() => {
-    const nextModel = String(nodeData?.model || DEFAULT_VIDEO_MODEL)
+    const nextModel = String(nodeData?.model || getDefaultVideoModel())
     if (nextModel && nextModel !== model) setModel(nextModel)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeData?.model, id])
@@ -342,6 +351,37 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
     }, 300)
   }, [id])
 
+  // 模型切换时重新校验所有 imageRole 边，确保角色与新模型能力匹配
+  const revalidateEdgeRoles = useCallback((newModel: string) => {
+    const caps = getVideoModelCaps(newModel)
+    const store = useGraphStore.getState()
+    const edges = store.edges.filter(e => e.target === id && e.type === 'imageRole')
+    if (edges.length === 0) return
+
+    let hasFirst = false
+    let hasLast = false
+
+    store.withBatchUpdates(() => {
+      for (const edge of edges) {
+        const curRole = String((edge.data as any)?.imageRole || 'first_frame_image').trim()
+        let nextRole = coerceVideoImageRole(curRole, caps)
+
+        if (nextRole === 'first_frame_image') {
+          if (hasFirst) nextRole = caps.supportsLastFrame && !hasLast ? 'last_frame_image' : (caps.supportsReferenceImages ? 'input_reference' : 'first_frame_image')
+          else hasFirst = true
+        }
+        if (nextRole === 'last_frame_image') {
+          if (hasLast) nextRole = caps.supportsReferenceImages ? 'input_reference' : 'first_frame_image'
+          else hasLast = true
+        }
+
+        if (nextRole !== curRole) {
+          store.setEdgeImageRole(edge.id, nextRole)
+        }
+      }
+    })
+  }, [id])
+
   return (
     <div
       className="relative pt-[20px]"
@@ -380,22 +420,21 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
                 const newModel = e.target.value
                 setModel(newModel)
                 const config = getModelConfig(newModel) as any
-                // 更新默认值
                 if (config?.defaultParams?.ratio) setRatio(config.defaultParams.ratio)
                 if (config?.defaultParams?.duration) setDuration(config.defaultParams.duration)
                 if (config?.sizes?.length > 0) {
                   const defaultSize = config.defaultParams?.size || config.sizes[0]?.key
                   setSize(defaultSize)
                 } else {
-                  // 清理旧模型残留的 size（否则会把 720p 带给不需要 size 的模型）
                   setSize('')
                 }
-                debouncedUpdateStore({ 
-                  model: newModel, 
+                debouncedUpdateStore({
+                  model: newModel,
                   ratio: config?.defaultParams?.ratio,
                   dur: config?.defaultParams?.duration,
                   size: config?.sizes?.length > 0 ? (config.defaultParams?.size || config.sizes[0]?.key) : ''
                 })
+                revalidateEdgeRoles(newModel)
               }}
               onMouseDown={(e) => e.stopPropagation()}
               className="nodrag text-sm bg-transparent border border-[var(--border-color)] rounded px-2 py-1 outline-none max-w-[180px]"
