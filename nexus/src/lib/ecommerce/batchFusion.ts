@@ -29,7 +29,8 @@ export async function analyzeMultiRefImages(
   secondaryUrls: string[],
   productContext: string,
 ): Promise<{ mainAnalysis: string; secondaryAnalyses: string[]; fusionStrategy: string }> {
-  const model = useSettingsStore.getState().aiAssistantModel || 'gpt-4o'
+  const configured = useSettingsStore.getState().aiAssistantModel
+  const model = configured || 'gemini-3-pro-preview'
 
   const analyzeOne = (url: string) =>
     chatCompletions({
@@ -63,7 +64,7 @@ export async function buildFusionPrompt(
   secondaryAnalyses: string[],
   userRequest: string,
 ): Promise<string> {
-  const model = useSettingsStore.getState().aiAssistantModel || 'gpt-4o'
+  const model = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview'
   return chatCompletions({
     model,
     messages: [

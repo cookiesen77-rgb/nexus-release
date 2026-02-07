@@ -112,7 +112,7 @@ export async function analyzeEcomImage(imageDataUrl: string, context: string): P
 ${context ? `额外上下文: ${context}` : ''}`
 
   const configured = useSettingsStore.getState().aiAssistantModel
-  const model = configured && VISION_CAPABLE.test(configured) ? configured : 'gpt-4o'
+  const model = configured && VISION_CAPABLE.test(configured) ? configured : 'gemini-3-pro-preview'
 
   return chatCompletions({
     model,

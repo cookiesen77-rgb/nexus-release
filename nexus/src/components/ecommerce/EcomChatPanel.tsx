@@ -6,6 +6,7 @@ import type { EcomDraftV1, EcomSceneType, EcomChatMessage } from '@/lib/ecommerc
 import { buildEcomSystemPrompt, compactChatHistory, buildMultimodalMessage } from '@/lib/ecommerce/ecomChat'
 import { streamChatCompletions } from '@/api'
 import { useSettingsStore } from '@/store/settings'
+import { getMedia } from '@/lib/mediaStorage'
 
 interface Props {
   draft: EcomDraftV1
@@ -76,9 +77,20 @@ export default function EcomChatPanel({ draft, setDraftSafe, activeScene, onOpen
     onOpenMediaPicker?.({
       kinds: ['image'],
       multiple: true,
-      onConfirm: (items) => {
-        const urls = items.map((it: any) => String(it.displayUrl || it.sourceUrl || '')).filter(Boolean)
-        setPendingImages(prev => [...prev, ...urls])
+      onConfirm: async (items) => {
+        const urls: string[] = []
+        for (const it of items) {
+          const url = String((it as any).displayUrl || (it as any).sourceUrl || '').trim()
+          if (url) { urls.push(url); continue }
+          const mid = String((it as any).mediaId || '').trim()
+          if (mid) {
+            try {
+              const rec = await getMedia(mid)
+              if (rec?.data) { urls.push(String(rec.data)); continue }
+            } catch { /* ignore */ }
+          }
+        }
+        if (urls.length > 0) setPendingImages(prev => [...prev, ...urls])
       },
     })
   }, [onOpenMediaPicker])
@@ -102,7 +114,7 @@ export default function EcomChatPanel({ draft, setDraftSafe, activeScene, onOpen
     const assistantMsg: EcomChatMessage = { role: 'assistant', content: '', timestamp: Date.now() }
     setDraftSafe(prev => ({ ...prev, chatHistory: [...prev.chatHistory, assistantMsg] }))
 
-    const aiModel = useSettingsStore.getState().aiAssistantModel || 'gpt-4o'
+    const aiModel = useSettingsStore.getState().aiAssistantModel
     const systemPrompt = buildEcomSystemPrompt(draft, activeScene)
     const history = compactChatHistory([...draft.chatHistory, userMsg])
     const apiMessages = [{ role: 'system' as const, content: systemPrompt }, ...history]
