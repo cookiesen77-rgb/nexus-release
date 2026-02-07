@@ -39,6 +39,25 @@ const toDataUrl = (b64: string, mime = 'image/png') => `data:${mime};base64,${b6
 
 const isHttpUrl = (v: string) => /^https?:\/\//i.test(v)
 
+const compressToThumbnail = (src: string, maxSize = 200, quality = 0.5): Promise<string> =>
+  new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale)
+      const h = Math.round(img.height * scale)
+      const c = document.createElement('canvas')
+      c.width = w; c.height = h
+      const ctx = c.getContext('2d')
+      if (!ctx) { resolve(''); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      resolve(c.toDataURL('image/jpeg', quality))
+    }
+    img.onerror = () => resolve('')
+    img.src = src
+  })
+
 const roundEvenInt = (n: number) => {
   const v = Math.max(1, Math.round(n))
   return v % 2 === 0 ? v : v + 1
@@ -717,11 +736,12 @@ export const generateImageFromConfigNode = async (
           title: prompt?.slice(0, 50) || '画布生成',
           model: modelKey
         })
-        // 自动设置项目缩略图（如果尚未设置）
         const projectId = latestStore.projectId
         const project = useProjectsStore.getState().projects.find(p => p.id === projectId)
         if (project && !project.thumbnail && imageUrl) {
-          useProjectsStore.getState().setThumbnail(projectId, imageUrl)
+          compressToThumbnail(imageUrl).then(thumb => {
+            if (thumb) useProjectsStore.getState().setThumbnail(projectId, thumb)
+          }).catch(() => {})
         }
       } catch {
         // ignore
@@ -842,7 +862,9 @@ export const generateImageFromConfigNode = async (
       const projectId = latestStore.projectId
       const project = useProjectsStore.getState().projects.find(p => p.id === projectId)
       if (project && !project.thumbnail && displayUrl) {
-        useProjectsStore.getState().setThumbnail(projectId, displayUrl)
+        compressToThumbnail(displayUrl).then(thumb => {
+          if (thumb) useProjectsStore.getState().setThumbnail(projectId, thumb)
+        }).catch(() => {})
       }
     } catch (e) {
       console.warn('[generateImage] 添加到历史素材失败:', e)
