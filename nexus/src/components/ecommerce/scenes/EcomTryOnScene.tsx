@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { EcomDraftV1, EcomTryOnScene as TryOnScene, EcomMediaVariant } from '@/lib/ecommerce/types'
 import { generateEcomImage, bgCacheToProject } from '@/lib/ecommerce/generateMedia'
-import { analyzeMultiRefImages, buildFusionPrompt } from '@/lib/ecommerce/batchFusion'
+import { analyzeMultiRefImages, buildTryOnPrompt } from '@/lib/ecommerce/batchFusion'
 import { createEmptySlot } from '@/lib/ecommerce/draftStorage'
 import { useAssetsStore } from '@/store/assets'
 import { VariantThumb } from '../shared/VariantThumb'
@@ -85,12 +85,13 @@ export default function EcomTryOnScene({ draft, setDraftSafe, generating, setGen
 
     setAnalyzingIdx(idx)
     try {
-      const productContext = [draft.product.name, draft.product.description, draft.product.sellingPoints.join(', ')].filter(Boolean).join(' | ')
+      const productContext = [draft.product.name, draft.product.description, (draft.product.sellingPoints || []).join(', ')].filter(Boolean).join(' | ')
       const result = await analyzeMultiRefImages(modelUrl, [productUrl], productContext)
-      const fusionPrompt = await buildFusionPrompt(result.mainAnalysis, result.secondaryAnalyses, '将商品穿戴/融合到模特图片上')
+      const userHint = scene.prompt || ''
+      const tryOnPrompt = await buildTryOnPrompt(result.mainAnalysis, result.secondaryAnalyses[0] || '', userHint)
       patchScene(idx, {
-        aiAnalysis: `${result.fusionStrategy}`,
-        prompt: fusionPrompt,
+        aiAnalysis: result.fusionStrategy,
+        prompt: tryOnPrompt,
       })
       window.$message?.success?.('AI 分析完成')
     } catch (err: any) {
@@ -129,8 +130,8 @@ export default function EcomTryOnScene({ draft, setDraftSafe, generating, setGen
       const result = await generateEcomImage({
         modelKey: draft.models.imageModelKey,
         prompt: scene.prompt,
-        size: draft.models.imageSize,
-        quality: draft.models.imageQuality,
+        size: draft.models.imageAspectRatio || draft.models.imageSize,
+        quality: draft.models.imageResolution || draft.models.imageQuality,
         refImages: [modelUrl, productUrl],
       })
 
@@ -226,15 +227,23 @@ export default function EcomTryOnScene({ draft, setDraftSafe, generating, setGen
               </div>
             </div>
 
+            <textarea
+              value={scene.prompt}
+              onChange={e => patchScene(idx, { prompt: e.target.value })}
+              placeholder="描述你想要的效果（如：让模特穿上这件白色羽绒服）。点击 AI 分析后会自动优化提示词..."
+              rows={3}
+              className="mt-3 w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs resize-none focus:border-[var(--accent-color)] focus:outline-none"
+            />
+
             {scene.aiAnalysis && (
-              <div className="mt-3 rounded-lg bg-[var(--bg-tertiary)] px-3 py-2 text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                {scene.aiAnalysis}
+              <div className="mt-2 rounded-lg bg-[var(--bg-tertiary)] px-3 py-2 text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                <span className="font-medium text-[var(--accent-color)]">AI 分析：</span>{scene.aiAnalysis}
               </div>
             )}
 
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="secondary" onClick={() => handleAnalyze(idx)} disabled={analyzingIdx !== null} className="gap-1">
-                {analyzingIdx === idx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />} AI 分析
+                {analyzingIdx === idx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />} AI 分析润色
               </Button>
               <Button size="sm" onClick={() => handleGenerate(idx)} disabled={generating} className="gap-1">
                 {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />} 生成换装
@@ -245,14 +254,6 @@ export default function EcomTryOnScene({ draft, setDraftSafe, generating, setGen
                 </Button>
               )}
             </div>
-
-            <textarea
-              value={scene.prompt}
-              onChange={e => patchScene(idx, { prompt: e.target.value })}
-              placeholder="提示词（AI 分析后自动填入，也可手动编辑）..."
-              rows={3}
-              className="mt-3 w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs resize-none focus:border-[var(--accent-color)] focus:outline-none"
-            />
 
             <VariantHistoryStrip
               variants={scene.resultSlot?.variants || []}

@@ -164,7 +164,7 @@ export default function EcomBatchScene({ draft, setDraftSafe, generating, setGen
             secondaryUrls,
             prompt: fusionPrompt,
             aspectRatio: draft.models.imageRatio,
-            resolution: draft.models.imageQuality,
+            resolution: draft.models.imageResolution || draft.models.imageQuality,
           })
           displayUrl = result.displayUrl
         } else {
@@ -174,8 +174,8 @@ export default function EcomBatchScene({ draft, setDraftSafe, generating, setGen
           const result = await generateEcomImage({
             modelKey: draft.models.imageModelKey,
             prompt,
-            size: draft.models.imageSize,
-            quality: draft.models.imageQuality,
+            size: draft.models.imageAspectRatio || draft.models.imageSize,
+            quality: draft.models.imageResolution || draft.models.imageQuality,
             refImages: allRefs,
           })
           displayUrl = result.displayUrl || result.imageUrl

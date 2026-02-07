@@ -60,7 +60,7 @@ export default function EcomPosterScene({ draft, setDraftSafe, generating, setGe
         modelKey: draft.models.imageModelKey,
         prompt,
         size: '9:16',
-        quality: draft.models.imageQuality,
+        quality: draft.models.imageResolution || draft.models.imageQuality,
         refImages: refUrls,
       })
       const displayUrl = result.displayUrl || result.imageUrl

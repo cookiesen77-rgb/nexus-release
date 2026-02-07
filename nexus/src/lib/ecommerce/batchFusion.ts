@@ -7,6 +7,28 @@ const ANALYZE_PROMPT = `Analyze this image for e-commerce product fusion. Output
 **STYLE**: Visual style, lighting, background
 **ELEMENT**: Key element that could be transferred to another image`
 
+const TRYON_SYSTEM_PROMPT = `You are an expert fashion/e-commerce virtual try-on prompt engineer.
+
+Your ONLY job: Write a prompt that makes the AI image model generate a photo of the PERSON from Image 1 WEARING/HOLDING the PRODUCT from Image 2.
+
+CRITICAL RULES:
+1. The person's face, body, pose, hair MUST be preserved EXACTLY as in Image 1
+2. The product (clothing/accessory/jewelry) from Image 2 MUST replace the corresponding item on the person
+3. Describe the FINAL result image — person wearing the new item — not the process
+4. Include lighting, background, and photography style that match Image 1
+5. NEVER describe the two source images separately — describe ONE final combined photo
+6. Output ONLY the prompt text (100-150 words), no explanations, no thinking process, no markdown
+
+Example for clothing: "Professional fashion photograph of [person description] wearing [product description], [pose], [lighting], [background], commercial e-commerce quality"
+Example for accessories: "Studio portrait of [person description] wearing [jewelry/accessory description] on [body part], [lighting], [background], product showcase angle"`
+
+function stripThinkingProcess(text: string): string {
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '')
+  cleaned = cleaned.replace(/^(Let me |I'll |I need to |First,? |Now,? |Here's |Thinking|Step \d).*\n/gim, '')
+  cleaned = cleaned.replace(/^\s*[\n\r]+/gm, '')
+  return cleaned.trim()
+}
+
 function ensureBase64(url: string): Promise<string> {
   if (url.startsWith('data:')) return Promise.resolve(extractBase64(url))
   return fetch(url)
@@ -78,6 +100,25 @@ export async function buildFusionPrompt(
       },
     ],
   })
+}
+
+export async function buildTryOnPrompt(
+  modelAnalysis: string,
+  productAnalysis: string,
+  userRequest: string,
+): Promise<string> {
+  const model = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview'
+  const raw = await chatCompletions({
+    model,
+    messages: [
+      { role: 'system', content: TRYON_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `PERSON (Image 1):\n${modelAnalysis}\n\nPRODUCT TO WEAR (Image 2):\n${productAnalysis}\n\n${userRequest ? `User's specific instruction: "${userRequest}"` : 'Make the person wear/hold the product naturally.'}`,
+      },
+    ],
+  })
+  return stripThinkingProcess(raw)
 }
 
 interface GenerateMultiRefParams {

@@ -51,8 +51,8 @@ export default function EcomDetailScene({ draft, setDraftSafe, generating, setGe
         const result = await generateEcomImage({
           modelKey: draft.models.imageModelKey,
           prompt,
-          size: draft.models.imageSize,
-          quality: draft.models.imageQuality,
+          size: draft.models.imageAspectRatio || draft.models.imageSize,
+          quality: draft.models.imageResolution || draft.models.imageQuality,
           refImages: refUrls,
         })
 
