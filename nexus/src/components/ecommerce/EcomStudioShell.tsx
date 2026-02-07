@@ -147,9 +147,6 @@ export default function EcomStudioShell({ projectId, onRequestClose }: Props) {
     setCurrentProjectId(nextId)
   }, [flushNow, setCurrentProjectId])
 
-  // ===== Generation state (shared) =====
-  const [generating, setGenerating] = useState(false)
-
   // ===== Media picker =====
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerOpts, setPickerOpts] = useState<{ kinds: string[]; multiple?: boolean; onConfirm: (items: EcomPickedMedia[]) => void }>({ kinds: ['image'], onConfirm: () => {} })
@@ -173,7 +170,7 @@ export default function EcomStudioShell({ projectId, onRequestClose }: Props) {
   }, [])
 
   // ===== Scene routing =====
-  const sceneProps = { draft, setDraftSafe, generating, setGenerating, onOpenMediaPicker: openMediaPicker, onAddToCanvas: handleAddToCanvas }
+  const sceneProps = { draft, setDraftSafe, onOpenMediaPicker: openMediaPicker, onAddToCanvas: handleAddToCanvas }
 
   return (
     <div className="flex h-screen w-full flex-col bg-[var(--bg-primary)] text-[var(--text-primary)]">

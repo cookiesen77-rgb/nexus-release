@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Plus, Wand2, Loader2, Trash2, Megaphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EcomDraftV1, EcomMediaVariant, EcomPosterCampaign } from '@/lib/ecommerce/types'
@@ -7,17 +7,17 @@ import { useAssetsStore } from '@/store/assets'
 import { createEmptySlot } from '@/lib/ecommerce/draftStorage'
 import { VariantThumb } from '../shared/VariantThumb'
 
-interface Props {
+interface SceneProps {
   draft: EcomDraftV1
   setDraftSafe: (fn: React.SetStateAction<EcomDraftV1>) => void
-  generating: boolean
-  setGenerating: (v: boolean) => void
   onOpenMediaPicker?: (opts: { kinds: string[]; multiple?: boolean; onConfirm: (items: any[]) => void }) => void
+  onAddToCanvas?: (url: string, label: string) => void
 }
 
 const makeVariantId = () => `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
-export default function EcomPosterScene({ draft, setDraftSafe, generating, setGenerating }: Props) {
+export default function EcomPosterScene({ draft, setDraftSafe }: SceneProps) {
+  const [generating, setGenerating] = useState(false)
   const handleAdd = useCallback(() => {
     setDraftSafe(prev => ({
       ...prev,
@@ -99,7 +99,7 @@ export default function EcomPosterScene({ draft, setDraftSafe, generating, setGe
     } finally {
       setGenerating(false)
     }
-  }, [draft, generating, setDraftSafe, setGenerating])
+  }, [draft, generating, setDraftSafe])
 
   const handleDelete = useCallback((idx: number) => {
     setDraftSafe(prev => ({ ...prev, posterScenes: prev.posterScenes.filter((_, i) => i !== idx) }))

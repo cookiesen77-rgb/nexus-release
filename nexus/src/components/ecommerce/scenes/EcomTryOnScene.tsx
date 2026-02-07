@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Plus, Trash2, Loader2, Upload, Wand2, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -13,8 +13,6 @@ import { VariantHistoryStrip } from '../shared/VariantHistoryStrip'
 interface SceneProps {
   draft: EcomDraftV1
   setDraftSafe: (fn: React.SetStateAction<EcomDraftV1>) => void
-  generating: boolean
-  setGenerating: (v: boolean) => void
   onOpenMediaPicker?: (opts: { kinds: string[]; multiple?: boolean; onConfirm: (items: any[]) => void }) => void
   onAddToCanvas?: (url: string, label: string) => void
 }
@@ -26,8 +24,9 @@ const getSlotUrl = (slot: { variants: EcomMediaVariant[]; selectedVariantId?: st
   return v?.displayUrl || v?.sourceUrl || ''
 }
 
-export default function EcomTryOnScene({ draft, setDraftSafe, generating, setGenerating, onAddToCanvas }: SceneProps) {
-  const [analyzingIdx, setAnalyzingIdx] = React.useState<number | null>(null)
+export default function EcomTryOnScene({ draft, setDraftSafe, onAddToCanvas }: SceneProps) {
+  const [generating, setGenerating] = useState(false)
+  const [analyzingIdx, setAnalyzingIdx] = useState<number | null>(null)
 
   const patchScene = useCallback((idx: number, patch: Partial<TryOnScene>) => {
     setDraftSafe(prev => {
@@ -170,7 +169,7 @@ export default function EcomTryOnScene({ draft, setDraftSafe, generating, setGen
     } finally {
       setGenerating(false)
     }
-  }, [draft, generating, setDraftSafe, setGenerating])
+  }, [draft, generating, setDraftSafe])
 
   return (
     <div className="space-y-4">

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Wand2, Loader2, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -8,17 +8,17 @@ import { useAssetsStore } from '@/store/assets'
 import { VariantThumb } from '../shared/VariantThumb'
 import { VariantHistoryStrip } from '../shared/VariantHistoryStrip'
 
-interface Props {
+interface SceneProps {
   draft: EcomDraftV1
   setDraftSafe: (fn: React.SetStateAction<EcomDraftV1>) => void
-  generating: boolean
-  setGenerating: (v: boolean) => void
   onOpenMediaPicker?: (opts: { kinds: string[]; multiple?: boolean; onConfirm: (items: any[]) => void }) => void
+  onAddToCanvas?: (url: string, label: string) => void
 }
 
 const makeVariantId = () => `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
-export default function EcomHeroScene({ draft, setDraftSafe, generating, setGenerating, onOpenMediaPicker }: Props) {
+export default function EcomHeroScene({ draft, setDraftSafe, onOpenMediaPicker }: SceneProps) {
+  const [generating, setGenerating] = useState(false)
   const slot = draft.heroScene.slot
   const selectedVariant = slot.variants.find(v => v.id === slot.selectedVariantId) || slot.variants[slot.variants.length - 1] || null
 
@@ -87,7 +87,7 @@ export default function EcomHeroScene({ draft, setDraftSafe, generating, setGene
     } finally {
       setGenerating(false)
     }
-  }, [draft, generating, setDraftSafe, setGenerating])
+  }, [draft, generating, setDraftSafe])
 
   const handleDownload = useCallback((url: string, filename: string) => {
     const a = document.createElement('a')

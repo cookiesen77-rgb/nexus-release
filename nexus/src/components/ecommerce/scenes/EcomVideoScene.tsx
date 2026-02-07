@@ -14,9 +14,8 @@ import { VariantHistoryStrip } from '../shared/VariantHistoryStrip'
 interface SceneProps {
   draft: EcomDraftV1
   setDraftSafe: (fn: React.SetStateAction<EcomDraftV1>) => void
-  generating: boolean
-  setGenerating: (v: boolean) => void
   onOpenMediaPicker?: (opts: { kinds: string[]; multiple?: boolean; onConfirm: (items: any[]) => void }) => void
+  onAddToCanvas?: (url: string, label: string) => void
 }
 
 const makeVariantId = () => `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
@@ -29,8 +28,19 @@ const VIDEO_TYPE_OPTIONS: { value: EcomVideoType; label: string }[] = [
   { value: 'custom', label: '自定义' },
 ]
 
-export default function EcomVideoScene({ draft, setDraftSafe, generating, setGenerating }: SceneProps) {
+const VIDEO_STYLE_PRESETS = [
+  { label: '真实产品展示', hint: '真实产品在纯色背景下缓慢旋转，自然光照，保持产品原始外观和材质细节' },
+  { label: '电影级质感', hint: '电影级画面，浅景深，慢速推镜头，戏剧性光影，产品居中' },
+  { label: '生活场景', hint: '产品在温馨的日常生活场景中被自然使用，暖色调，自然光' },
+  { label: '开箱展示', hint: '俯拍角度，双手拆开精美包装，逐一展示产品和配件' },
+  { label: '微距特写', hint: '极近距离拍摄产品材质纹理，缓慢平移，展现工艺细节' },
+  { label: '模特展示', hint: '模特自然展示产品，自信微笑，柔和的棚拍灯光，干净背景' },
+  { label: '对比展示', hint: '产品使用前后对比，分屏或过渡效果，突出产品效果' },
+  { label: '节日促销', hint: '喜庆氛围，产品搭配节日装饰，动感文字叠加区域' },
+]
 
+export default function EcomVideoScene({ draft, setDraftSafe }: SceneProps) {
+  const [generating, setGenerating] = useState(false)
   const [ttsGenerating, setTtsGenerating] = useState<string | null>(null)
 
   const patchScene = useCallback((idx: number, patch: Partial<EcomDraftV1['videoScenes'][0]>) => {
@@ -192,7 +202,7 @@ export default function EcomVideoScene({ draft, setDraftSafe, generating, setGen
     } finally {
       setGenerating(false)
     }
-  }, [draft, generating, setDraftSafe, setGenerating, patchScene])
+  }, [draft, generating, setDraftSafe, patchScene])
 
   return (
     <div className="space-y-4">
@@ -252,6 +262,18 @@ export default function EcomVideoScene({ draft, setDraftSafe, generating, setGen
                   <option value="5">5秒</option>
                   <option value="10">10秒</option>
                 </select>
+              </div>
+
+              <div className="flex flex-wrap gap-1">
+                {VIDEO_STYLE_PRESETS.map(p => (
+                  <button
+                    key={p.label}
+                    onClick={() => patchScene(idx, { prompt: p.hint })}
+                    className="rounded-full border border-[var(--border-color)] px-2 py-0.5 text-[10px] text-[var(--text-secondary)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)]"
+                  >
+                    {p.label}
+                  </button>
+                ))}
               </div>
 
               <textarea

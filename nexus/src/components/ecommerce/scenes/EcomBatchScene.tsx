@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Plus, Trash2, Loader2, Upload, Download, Layers, Wand2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -12,14 +12,14 @@ import { VariantThumb } from '../shared/VariantThumb'
 interface SceneProps {
   draft: EcomDraftV1
   setDraftSafe: (fn: React.SetStateAction<EcomDraftV1>) => void
-  generating: boolean
-  setGenerating: (v: boolean) => void
   onOpenMediaPicker?: (opts: { kinds: string[]; multiple?: boolean; onConfirm: (items: any[]) => void }) => void
+  onAddToCanvas?: (url: string, label: string) => void
 }
 
 const makeVariantId = () => `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
-export default function EcomBatchScene({ draft, setDraftSafe, generating, setGenerating }: SceneProps) {
+export default function EcomBatchScene({ draft, setDraftSafe }: SceneProps) {
+  const [generating, setGenerating] = useState(false)
 
   const patchItems = useCallback((fn: (items: EcomBatchItem[]) => EcomBatchItem[]) => {
     setDraftSafe(prev => ({ ...prev, batchScene: { ...prev.batchScene, items: fn([...prev.batchScene.items]) } }))
@@ -217,7 +217,7 @@ export default function EcomBatchScene({ draft, setDraftSafe, generating, setGen
 
     setGenerating(false)
     window.$message?.success?.(`批量生成完成：成功 ${successCount}/${items.length}`)
-  }, [draft, generating, setGenerating, patchItems])
+  }, [draft, generating, patchItems])
 
   const handleDownload = useCallback((url: string, filename: string) => {
     const a = document.createElement('a')

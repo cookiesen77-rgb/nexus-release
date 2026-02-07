@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Wand2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EcomDraftV1, EcomMediaVariant } from '@/lib/ecommerce/types'
@@ -7,17 +7,17 @@ import { buildDetailPrompt, collectProductRefUrls, generateEcomImage, bgCacheToP
 import { useAssetsStore } from '@/store/assets'
 import { VariantThumb } from '../shared/VariantThumb'
 
-interface Props {
+interface SceneProps {
   draft: EcomDraftV1
   setDraftSafe: (fn: React.SetStateAction<EcomDraftV1>) => void
-  generating: boolean
-  setGenerating: (v: boolean) => void
   onOpenMediaPicker?: (opts: { kinds: string[]; multiple?: boolean; onConfirm: (items: any[]) => void }) => void
+  onAddToCanvas?: (url: string, label: string) => void
 }
 
 const makeVariantId = () => `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
-export default function EcomDetailScene({ draft, setDraftSafe, generating, setGenerating }: Props) {
+export default function EcomDetailScene({ draft, setDraftSafe }: SceneProps) {
+  const [generating, setGenerating] = useState(false)
   const handleGenerate = useCallback(async () => {
     if (generating) return
     if (!draft.product.name && draft.productRefs.length === 0) {
@@ -93,7 +93,7 @@ export default function EcomDetailScene({ draft, setDraftSafe, generating, setGe
 
     setGenerating(false)
     window.$message?.success?.(`详情页套图完成：成功 ${successCount}/9`)
-  }, [draft, generating, setDraftSafe, setGenerating])
+  }, [draft, generating, setDraftSafe])
 
   return (
     <div className="space-y-4">

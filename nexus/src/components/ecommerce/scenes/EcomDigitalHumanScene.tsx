@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Plus, Trash2, Loader2, Upload, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EcomDraftV1, EcomDigitalHumanScene as DHScene, EcomMediaVariant } from '@/lib/ecommerce/types'
@@ -12,8 +12,6 @@ import { VariantHistoryStrip } from '../shared/VariantHistoryStrip'
 interface SceneProps {
   draft: EcomDraftV1
   setDraftSafe: (fn: React.SetStateAction<EcomDraftV1>) => void
-  generating: boolean
-  setGenerating: (v: boolean) => void
   onOpenMediaPicker?: (opts: { kinds: string[]; multiple?: boolean; onConfirm: (items: any[]) => void }) => void
   onAddToCanvas?: (url: string, label: string) => void
 }
@@ -25,7 +23,8 @@ const getSlotUrl = (slot: { variants: EcomMediaVariant[]; selectedVariantId?: st
   return v?.displayUrl || v?.sourceUrl || ''
 }
 
-export default function EcomDigitalHumanScene({ draft, setDraftSafe, generating, setGenerating }: SceneProps) {
+export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProps) {
+  const [generating, setGenerating] = useState(false)
 
   const patchScene = useCallback((idx: number, patch: Partial<DHScene>) => {
     setDraftSafe(prev => {
@@ -155,7 +154,7 @@ export default function EcomDigitalHumanScene({ draft, setDraftSafe, generating,
     } finally {
       setGenerating(false)
     }
-  }, [draft, generating, setDraftSafe, setGenerating])
+  }, [draft, generating, setDraftSafe])
 
   return (
     <div className="space-y-4">
