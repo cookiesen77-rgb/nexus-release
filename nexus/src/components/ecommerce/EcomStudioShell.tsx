@@ -23,6 +23,8 @@ import EcomTryOnScene from './scenes/EcomTryOnScene'
 import EcomPosterScene from './scenes/EcomPosterScene'
 import EcomVideoScene from './scenes/EcomVideoScene'
 import EcomBatchScene from './scenes/EcomBatchScene'
+import EcomMotionControlScene from './scenes/EcomMotionControlScene'
+import EcomMultiElementsScene from './scenes/EcomMultiElementsScene'
 
 interface Props {
   projectId: string
@@ -204,6 +206,8 @@ export default function EcomStudioShell({ projectId, onRequestClose }: Props) {
           {activeScene === 'poster' && <EcomPosterScene {...sceneProps} />}
           {activeScene === 'video' && <EcomVideoScene {...sceneProps} />}
           {activeScene === 'batch' && <EcomBatchScene {...sceneProps} />}
+          {activeScene === 'motion_control' && <EcomMotionControlScene {...sceneProps} />}
+          {activeScene === 'multi_elements' && <EcomMultiElementsScene {...sceneProps} />}
         </div>
 
         <EcomChatPanel

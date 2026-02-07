@@ -1,7 +1,7 @@
 // E-Commerce Studio Types
 
 export type EcomDraftVersion = 1
-export type EcomSceneType = 'hero' | 'detail_page' | 'try_on' | 'poster' | 'video' | 'batch'
+export type EcomSceneType = 'hero' | 'detail_page' | 'try_on' | 'poster' | 'video' | 'batch' | 'motion_control' | 'multi_elements'
 export type EcomMediaStatus = 'pending' | 'running' | 'success' | 'error'
 export type EcomCreatedBy = 'auto' | 'manual' | 'template'
 
@@ -78,25 +78,33 @@ export interface EcomDetailPageScene {
   consistencyPrompt: string
 }
 
-// Try-on mode: Kling video models for virtual try-on / digital human workflows
-export type EcomTryOnMode = 'avatar_image2video' | 'motion_control' | 'multi_elements'
-
 export interface EcomTryOnScene {
   id: string
-  mode: EcomTryOnMode
-  prompt: string
-  sourceImageSlot: EcomMediaSlot
-  referenceVideoSlot: EcomMediaSlot
-  audioSlot: EcomMediaSlot
+  modelImageSlot: EcomMediaSlot
+  productImageSlot: EcomMediaSlot
   resultSlot: EcomMediaSlot
-  modeParams: EcomTryOnModeParams
+  prompt: string
+  aiAnalysis?: string
 }
 
-export interface EcomTryOnModeParams {
-  avatarMode?: 'std' | 'pro'
-  keepOriginalSound?: boolean
-  characterOrientation?: 'up' | 'down' | 'left' | 'right'
-  multiElementsTaskId?: string
+export interface EcomMotionControlScene {
+  id: string
+  sourceImageSlot: EcomMediaSlot
+  referenceVideoSlot: EcomMediaSlot
+  resultSlot: EcomMediaSlot
+  prompt: string
+  mode: 'std' | 'pro'
+  keepOriginalSound: boolean
+  characterOrientation: 'up' | 'down' | 'left' | 'right'
+}
+
+export interface EcomMultiElementsScene {
+  id: string
+  sourceVideoSlot: EcomMediaSlot
+  resultSlot: EcomMediaSlot
+  prompt: string
+  editPrompt: string
+  taskId?: string
 }
 
 export type EcomPosterCampaign = 'double_11' | '618' | 'new_year' | 'black_friday' | 'custom'
@@ -119,6 +127,8 @@ export interface EcomModelPrefs {
   imageSize: string
   imageQuality: string
   imageRatio: string
+  imageResolution: string
+  imageAspectRatio: string
   videoModelKey: string
   videoRatio: string
   videoDuration: number
@@ -185,6 +195,8 @@ export interface EcomDraftV1 {
   posterScenes: EcomPosterScene[]
   videoScenes: EcomVideoScene[]
   batchScene: EcomBatchScene
+  motionControlScenes: EcomMotionControlScene[]
+  multiElementsScenes: EcomMultiElementsScene[]
 
   chatHistory: EcomChatMessage[]
   activeScene: EcomSceneType

@@ -37,6 +37,8 @@ export const createDefaultDraft = (pid: string): EcomDraftV1 => ({
     imageSize: '3:4',
     imageQuality: '2K',
     imageRatio: '1:1',
+    imageResolution: '2K',
+    imageAspectRatio: '1:1',
     videoModelKey: DEFAULT_VIDEO_MODEL,
     videoRatio: '9:16',
     videoDuration: 5,
@@ -63,6 +65,8 @@ export const createDefaultDraft = (pid: string): EcomDraftV1 => ({
     mainRefRole: 'product',
     items: [],
   },
+  motionControlScenes: [],
+  multiElementsScenes: [],
   chatHistory: [],
   activeScene: 'hero',
 })
@@ -88,6 +92,8 @@ export const loadDraft = (pid: string): EcomDraftV1 => {
       tryOnScenes: Array.isArray(parsed.tryOnScenes) ? parsed.tryOnScenes : [],
       posterScenes: Array.isArray(parsed.posterScenes) ? parsed.posterScenes : [],
       videoScenes: Array.isArray(parsed.videoScenes) ? parsed.videoScenes : [],
+      motionControlScenes: Array.isArray(parsed.motionControlScenes) ? parsed.motionControlScenes : [],
+      multiElementsScenes: Array.isArray(parsed.multiElementsScenes) ? parsed.multiElementsScenes : [],
       batchScene: {
         ...defaults.batchScene,
         ...parsed.batchScene,

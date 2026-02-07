@@ -21,6 +21,8 @@ const SCENE_PROMPT_PATH: Record<EcomSceneType, (d: EcomDraftV1) => string> = {
   poster: d => d.posterScenes[0]?.prompt ?? '',
   video: d => d.videoScenes[0]?.prompt ?? '',
   batch: d => d.batchScene.promptTemplate,
+  motion_control: d => d.motionControlScenes[0]?.prompt ?? '',
+  multi_elements: d => d.multiElementsScenes[0]?.prompt ?? '',
 }
 
 function applyPromptToScene(prev: EcomDraftV1, scene: EcomSceneType, text: string): EcomDraftV1 {
@@ -40,6 +42,14 @@ function applyPromptToScene(prev: EcomDraftV1, scene: EcomSceneType, text: strin
       const s = [...prev.videoScenes]; s[0] = { ...s[0], prompt: text }; return { ...prev, videoScenes: s }
     }
     case 'batch': return { ...prev, batchScene: { ...prev.batchScene, promptTemplate: text } }
+    case 'motion_control': {
+      if (!prev.motionControlScenes.length) return prev
+      const s = [...prev.motionControlScenes]; s[0] = { ...s[0], prompt: text }; return { ...prev, motionControlScenes: s }
+    }
+    case 'multi_elements': {
+      if (!prev.multiElementsScenes.length) return prev
+      const s = [...prev.multiElementsScenes]; s[0] = { ...s[0], prompt: text }; return { ...prev, multiElementsScenes: s }
+    }
     default: return prev
   }
 }

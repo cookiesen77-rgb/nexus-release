@@ -11,6 +11,8 @@ const SCENE_LABELS: Record<EcomSceneType, string> = {
   poster: '营销海报',
   video: '商品视频',
   batch: '批量生成',
+  motion_control: '动作控制',
+  multi_elements: '多模态编辑',
 }
 
 const BRAND_TONE_MAP: Record<string, string> = {

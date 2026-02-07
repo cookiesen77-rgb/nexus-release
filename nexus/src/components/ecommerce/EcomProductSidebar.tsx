@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { Image, LayoutGrid, Shirt, Megaphone, Video, Layers, Upload, X, Wand2 } from 'lucide-react'
+import { Image, LayoutGrid, Shirt, Megaphone, Video, Layers, Upload, X, Wand2, Move3D, Clapperboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { EcomDraftV1, EcomSceneType } from '@/lib/ecommerce/types'
 import type { EcomTemplate } from '@/lib/ecommerce/templates'
@@ -25,6 +25,8 @@ const SCENE_TABS: { type: EcomSceneType; label: string; icon: React.ComponentTyp
   { type: 'poster', label: '营销海报', icon: Megaphone },
   { type: 'video', label: '带货视频', icon: Video },
   { type: 'batch', label: '批量出图', icon: Layers },
+  { type: 'motion_control', label: '动作控制', icon: Move3D },
+  { type: 'multi_elements', label: '多模态编辑', icon: Clapperboard },
 ]
 
 const CATEGORIES = ['服饰', '数码', '美妆', '食品', '珠宝', '家居', '母婴', '其他']
@@ -225,6 +227,26 @@ export default function EcomProductSidebar({
           {(IMAGE_MODELS as { key: string; label: string }[]).map(m => (
             <option key={m.key} value={m.key}>{m.label}</option>
           ))}
+        </select>
+
+        <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">画面比例</div>
+        <select
+          value={draft.models.imageAspectRatio}
+          onChange={e => patchModels({ imageAspectRatio: e.target.value })}
+          className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs focus:border-[var(--accent-color)] focus:outline-none"
+        >
+          {['1:1','16:9','9:16','3:4','4:3','3:2','2:3','21:9'].map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+
+        <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">清晰度</div>
+        <select
+          value={draft.models.imageResolution}
+          onChange={e => patchModels({ imageResolution: e.target.value })}
+          className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs focus:border-[var(--accent-color)] focus:outline-none"
+        >
+          <option value="1k">标准 1K</option>
+          <option value="2K">高清 2K</option>
+          <option value="4k">超清 4K</option>
         </select>
 
         <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">视频模型</div>
