@@ -112,7 +112,7 @@ export default function EcomMultiElementsScene({ draft, setDraftSafe, generating
         }
         return { ...prev, multiElementsScenes: scenes }
       })
-      useAssetsStore.getState().addAsset({ type: 'video', src: result.videoUrl, title: `${draft.product.name || '商品'} · 多模态编辑` })
+      useAssetsStore.getState().addAsset({ type: 'video', src: result.videoUrl, title: `${draft.product.name || '商品'} · 多模态编辑`, model: draft.models.videoModelKey })
       bgCacheToProject(result.videoUrl, draft.projectId, 'video')
       window.$message?.success?.('多模态编辑完成')
     } catch (err: any) {

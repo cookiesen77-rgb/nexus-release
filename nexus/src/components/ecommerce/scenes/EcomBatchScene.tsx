@@ -6,6 +6,7 @@ import type { EcomDraftV1, EcomMediaVariant, EcomBatchItem } from '@/lib/ecommer
 import { generateEcomImage, buildBatchItemPrompt, collectProductRefUrls, bgCacheToProject } from '@/lib/ecommerce/generateMedia'
 import { analyzeMultiRefImages, buildFusionPrompt, generateMultiRefImage } from '@/lib/ecommerce/batchFusion'
 import { createEmptySlot } from '@/lib/ecommerce/draftStorage'
+import { useAssetsStore } from '@/store/assets'
 import { VariantThumb } from '../shared/VariantThumb'
 
 interface SceneProps {
@@ -163,7 +164,7 @@ export default function EcomBatchScene({ draft, setDraftSafe, generating, setGen
             mainUrl,
             secondaryUrls,
             prompt: fusionPrompt,
-            aspectRatio: draft.models.imageRatio,
+            aspectRatio: draft.models.imageAspectRatio || draft.models.imageRatio,
             resolution: draft.models.imageResolution || draft.models.imageQuality,
           })
           displayUrl = result.displayUrl
@@ -194,6 +195,7 @@ export default function EcomBatchScene({ draft, setDraftSafe, generating, setGen
           }
           return its
         })
+        useAssetsStore.getState().addAsset({ type: 'image', src: displayUrl, title: `${item.productName || '商品'} · 批量`, model: draft.models.imageModelKey })
         bgCacheToProject(displayUrl, draft.projectId, 'image', draft.models.imageModelKey)
         successCount++
       } catch (err: any) {
@@ -307,7 +309,7 @@ export default function EcomBatchScene({ draft, setDraftSafe, generating, setGen
                 <div className="text-[9px] text-[var(--text-secondary)] mb-0.5">副参考图</div>
                 <div className="flex gap-1 flex-wrap">
                   {item.secondaryRefSlots.map((slot, si) => {
-                    const sv = slot.variants[0]
+                    const sv = slot.variants?.[0]
                     return (
                       <div key={slot.id} className="relative group">
                         {sv && <VariantThumb variant={sv} className="h-10 w-10" />}

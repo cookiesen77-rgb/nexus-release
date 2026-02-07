@@ -24,6 +24,7 @@ const SCENE_PROMPT_PATH: Record<EcomSceneType, (d: EcomDraftV1) => string> = {
   batch: d => d.batchScene.promptTemplate,
   motion_control: d => d.motionControlScenes[0]?.prompt ?? '',
   multi_elements: d => d.multiElementsScenes[0]?.prompt ?? '',
+  digital_human: d => d.digitalHumanScenes[0]?.prompt ?? '',
 }
 
 function applyPromptToScene(prev: EcomDraftV1, scene: EcomSceneType, text: string): EcomDraftV1 {
@@ -50,6 +51,10 @@ function applyPromptToScene(prev: EcomDraftV1, scene: EcomSceneType, text: strin
     case 'multi_elements': {
       if (!prev.multiElementsScenes.length) return prev
       const s = [...prev.multiElementsScenes]; s[0] = { ...s[0], prompt: text }; return { ...prev, multiElementsScenes: s }
+    }
+    case 'digital_human': {
+      if (!prev.digitalHumanScenes.length) return prev
+      const s = [...prev.digitalHumanScenes]; s[0] = { ...s[0], prompt: text }; return { ...prev, digitalHumanScenes: s }
     }
     default: return prev
   }
@@ -147,7 +152,7 @@ export default function EcomChatPanel({ draft, setDraftSafe, activeScene, onOpen
   }, [activeScene, setDraftSafe])
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex w-80 flex-shrink-0 flex-col border-l border-[var(--border-color)]">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-[var(--border-color)] p-3">
         <div className="text-sm font-semibold text-[var(--text-primary)]">AI 微调助手</div>

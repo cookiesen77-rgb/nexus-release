@@ -3,6 +3,7 @@ import { Plus, Wand2, Loader2, Trash2, Megaphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EcomDraftV1, EcomMediaVariant, EcomPosterCampaign } from '@/lib/ecommerce/types'
 import { buildPosterPrompt, collectProductRefUrls, generateEcomImage, bgCacheToProject } from '@/lib/ecommerce/generateMedia'
+import { useAssetsStore } from '@/store/assets'
 import { createEmptySlot } from '@/lib/ecommerce/draftStorage'
 import { VariantThumb } from '../shared/VariantThumb'
 
@@ -77,6 +78,7 @@ export default function EcomPosterScene({ draft, setDraftSafe, generating, setGe
         }
         return { ...prev, posterScenes: scenes }
       })
+      useAssetsStore.getState().addAsset({ type: 'image', src: result.imageUrl || displayUrl, title: `${draft.product.name || '商品'} · 海报`, model: draft.models.imageModelKey })
       bgCacheToProject(result.imageUrl, draft.projectId, 'image', draft.models.imageModelKey)
       window.$message?.success?.('海报生成成功')
     } catch (err: any) {

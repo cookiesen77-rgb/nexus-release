@@ -1,7 +1,7 @@
 // E-Commerce Studio Types
 
 export type EcomDraftVersion = 1
-export type EcomSceneType = 'hero' | 'detail_page' | 'try_on' | 'poster' | 'video' | 'batch' | 'motion_control' | 'multi_elements'
+export type EcomSceneType = 'hero' | 'detail_page' | 'try_on' | 'poster' | 'video' | 'batch' | 'motion_control' | 'multi_elements' | 'digital_human'
 export type EcomMediaStatus = 'pending' | 'running' | 'success' | 'error'
 export type EcomCreatedBy = 'auto' | 'manual' | 'template'
 
@@ -168,6 +168,15 @@ export interface EcomBatchScene {
   items: EcomBatchItem[]
 }
 
+export interface EcomDigitalHumanScene {
+  id: string
+  imageSlot: EcomMediaSlot
+  audioSlot: EcomMediaSlot
+  resultSlot: EcomMediaSlot
+  prompt: string
+  mode: 'std' | 'pro'
+}
+
 // Chat message with multimodal support
 export type EcomChatContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
 
@@ -197,6 +206,7 @@ export interface EcomDraftV1 {
   batchScene: EcomBatchScene
   motionControlScenes: EcomMotionControlScene[]
   multiElementsScenes: EcomMultiElementsScene[]
+  digitalHumanScenes: EcomDigitalHumanScene[]
 
   chatHistory: EcomChatMessage[]
   activeScene: EcomSceneType

@@ -67,6 +67,7 @@ export const createDefaultDraft = (pid: string): EcomDraftV1 => ({
   },
   motionControlScenes: [],
   multiElementsScenes: [],
+  digitalHumanScenes: [],
   chatHistory: [],
   activeScene: 'hero',
 })
@@ -136,6 +137,18 @@ const migrateMultiElementsScene = (raw: any): any => {
   }
 }
 
+const migrateDigitalHumanScene = (raw: any): any => {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    id: raw.id || makeId(),
+    imageSlot: migrateSlot(raw.imageSlot || raw.sourceImageSlot, '人像照片'),
+    audioSlot: migrateSlot(raw.audioSlot, '音频'),
+    resultSlot: migrateSlot(raw.resultSlot, '生成结果'),
+    prompt: raw.prompt || '',
+    mode: raw.mode || 'std',
+  }
+}
+
 const migrateBatchItem = (raw: any): any => {
   if (!raw || typeof raw !== 'object') return null
   return {
@@ -169,6 +182,7 @@ export const loadDraft = (pid: string): EcomDraftV1 => {
       videoScenes: Array.isArray(parsed.videoScenes) ? parsed.videoScenes.map(migrateVideoScene).filter(Boolean) : [],
       motionControlScenes: Array.isArray(parsed.motionControlScenes) ? parsed.motionControlScenes.map(migrateMotionControlScene).filter(Boolean) : [],
       multiElementsScenes: Array.isArray(parsed.multiElementsScenes) ? parsed.multiElementsScenes.map(migrateMultiElementsScene).filter(Boolean) : [],
+      digitalHumanScenes: Array.isArray(parsed.digitalHumanScenes) ? parsed.digitalHumanScenes.map(migrateDigitalHumanScene).filter(Boolean) : [],
       batchScene: {
         ...defaults.batchScene,
         ...parsed.batchScene,

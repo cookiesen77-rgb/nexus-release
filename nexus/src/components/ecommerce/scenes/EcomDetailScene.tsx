@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import type { EcomDraftV1, EcomMediaVariant } from '@/lib/ecommerce/types'
 import { ECOM_DETAIL_ROLES } from '@/lib/ecommerce/types'
 import { buildDetailPrompt, collectProductRefUrls, generateEcomImage, bgCacheToProject } from '@/lib/ecommerce/generateMedia'
+import { useAssetsStore } from '@/store/assets'
 import { VariantThumb } from '../shared/VariantThumb'
 
 interface Props {
@@ -70,6 +71,7 @@ export default function EcomDetailScene({ draft, setDraftSafe, generating, setGe
           }
           return { ...prev, detailPageScene: { ...prev.detailPageScene, images } }
         })
+        useAssetsStore.getState().addAsset({ type: 'image', src: result.imageUrl || displayUrl, title: `${draft.product.name || '商品'} · 详情页`, model: draft.models.imageModelKey })
         bgCacheToProject(result.imageUrl, draft.projectId, 'image', draft.models.imageModelKey)
         successCount++
       } catch (err: any) {
