@@ -208,8 +208,9 @@ export default function EcomVideoScene({ draft, setDraftSafe, generating, setGen
       )}
 
       {draft.videoScenes.map((scene, idx) => {
-        const firstV = scene.firstFrameSlot.variants[0]
-        const videoV = scene.videoSlot.variants.find(v => v.id === scene.videoSlot.selectedVariantId) || scene.videoSlot.variants[scene.videoSlot.variants.length - 1]
+        const firstV = scene.firstFrameSlot?.variants?.[0]
+        const videoVariants = scene.videoSlot?.variants || []
+        const videoV = videoVariants.find(v => v.id === scene.videoSlot?.selectedVariantId) || videoVariants[videoVariants.length - 1]
 
         return (
           <div key={scene.id} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
@@ -340,8 +341,8 @@ export default function EcomVideoScene({ draft, setDraftSafe, generating, setGen
               </div>
 
               <VariantHistoryStrip
-                variants={scene.videoSlot.variants}
-                selectedVariantId={scene.videoSlot.selectedVariantId}
+                variants={scene.videoSlot?.variants || []}
+                selectedVariantId={scene.videoSlot?.selectedVariantId}
                 mediaType="video"
                 onSelect={vid => setDraftSafe(prev => {
                   const scenes = [...prev.videoScenes]

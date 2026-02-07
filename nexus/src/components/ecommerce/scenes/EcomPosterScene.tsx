@@ -123,7 +123,8 @@ export default function EcomPosterScene({ draft, setDraftSafe, generating, setGe
       )}
 
       {draft.posterScenes.map((poster, idx) => {
-        const v = poster.slot.variants.find(x => x.id === poster.slot.selectedVariantId) || poster.slot.variants[poster.slot.variants.length - 1]
+        const posterVariants = poster.slot?.variants || []
+        const v = posterVariants.find(x => x.id === poster.slot?.selectedVariantId) || posterVariants[posterVariants.length - 1]
         return (
           <div key={poster.id} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
             <div className="mb-3 flex items-center justify-between">

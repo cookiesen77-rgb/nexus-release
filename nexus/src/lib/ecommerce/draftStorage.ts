@@ -71,6 +71,81 @@ export const createDefaultDraft = (pid: string): EcomDraftV1 => ({
   activeScene: 'hero',
 })
 
+const migrateSlot = (raw: any, fallbackLabel: string): any => {
+  if (raw && typeof raw === 'object' && Array.isArray(raw.variants)) return raw
+  return createEmptySlot(fallbackLabel)
+}
+
+const migrateTryOnScene = (raw: any): any => {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    id: raw.id || makeId(),
+    modelImageSlot: migrateSlot(raw.modelImageSlot || raw.humanImageSlot || raw.sourceImageSlot, '模特照片'),
+    productImageSlot: migrateSlot(raw.productImageSlot || raw.clothImageSlot, '商品图片'),
+    resultSlot: migrateSlot(raw.resultSlot, '生成结果'),
+    prompt: raw.prompt || '',
+    aiAnalysis: raw.aiAnalysis || '',
+  }
+}
+
+const migrateVideoScene = (raw: any): any => {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    id: raw.id || makeId(),
+    videoType: raw.videoType || 'product_rotate',
+    prompt: raw.prompt || '',
+    firstFrameSlot: migrateSlot(raw.firstFrameSlot, '首帧画面'),
+    videoSlot: migrateSlot(raw.videoSlot, '视频'),
+    digitalHumanAudioUrl: raw.digitalHumanAudioUrl,
+    ttsText: raw.ttsText,
+    ttsAudioDataUrl: raw.ttsAudioDataUrl,
+  }
+}
+
+const migratePosterScene = (raw: any): any => {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    ...raw,
+    slot: migrateSlot(raw.slot, '营销海报'),
+  }
+}
+
+const migrateMotionControlScene = (raw: any): any => {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    id: raw.id || makeId(),
+    sourceImageSlot: migrateSlot(raw.sourceImageSlot, '人物图片'),
+    referenceVideoSlot: migrateSlot(raw.referenceVideoSlot, '参考视频'),
+    resultSlot: migrateSlot(raw.resultSlot, '生成结果'),
+    prompt: raw.prompt || '',
+    mode: raw.mode || 'std',
+    keepOriginalSound: !!raw.keepOriginalSound,
+    characterOrientation: raw.characterOrientation || 'up',
+  }
+}
+
+const migrateMultiElementsScene = (raw: any): any => {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    id: raw.id || makeId(),
+    sourceVideoSlot: migrateSlot(raw.sourceVideoSlot, '待编辑视频'),
+    resultSlot: migrateSlot(raw.resultSlot, '生成结果'),
+    prompt: raw.prompt || '',
+    editPrompt: raw.editPrompt || '',
+    taskId: raw.taskId,
+  }
+}
+
+const migrateBatchItem = (raw: any): any => {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    ...raw,
+    refSlot: migrateSlot(raw.refSlot, '参考图'),
+    resultSlot: migrateSlot(raw.resultSlot, '生成结果'),
+    secondaryRefSlots: Array.isArray(raw.secondaryRefSlots) ? raw.secondaryRefSlots : [],
+  }
+}
+
 export const loadDraft = (pid: string): EcomDraftV1 => {
   try {
     const raw = localStorage.getItem(`${DRAFT_PREFIX}:${pid}`)
@@ -89,16 +164,16 @@ export const loadDraft = (pid: string): EcomDraftV1 => {
         ...parsed.detailPageScene,
         images: Array.isArray(parsed.detailPageScene?.images) && parsed.detailPageScene.images.length > 0 ? parsed.detailPageScene.images : defaults.detailPageScene.images,
       },
-      tryOnScenes: Array.isArray(parsed.tryOnScenes) ? parsed.tryOnScenes : [],
-      posterScenes: Array.isArray(parsed.posterScenes) ? parsed.posterScenes : [],
-      videoScenes: Array.isArray(parsed.videoScenes) ? parsed.videoScenes : [],
-      motionControlScenes: Array.isArray(parsed.motionControlScenes) ? parsed.motionControlScenes : [],
-      multiElementsScenes: Array.isArray(parsed.multiElementsScenes) ? parsed.multiElementsScenes : [],
+      tryOnScenes: Array.isArray(parsed.tryOnScenes) ? parsed.tryOnScenes.map(migrateTryOnScene).filter(Boolean) : [],
+      posterScenes: Array.isArray(parsed.posterScenes) ? parsed.posterScenes.map(migratePosterScene).filter(Boolean) : [],
+      videoScenes: Array.isArray(parsed.videoScenes) ? parsed.videoScenes.map(migrateVideoScene).filter(Boolean) : [],
+      motionControlScenes: Array.isArray(parsed.motionControlScenes) ? parsed.motionControlScenes.map(migrateMotionControlScene).filter(Boolean) : [],
+      multiElementsScenes: Array.isArray(parsed.multiElementsScenes) ? parsed.multiElementsScenes.map(migrateMultiElementsScene).filter(Boolean) : [],
       batchScene: {
         ...defaults.batchScene,
         ...parsed.batchScene,
         items: Array.isArray(parsed.batchScene?.items)
-          ? parsed.batchScene.items.map((item: any) => ({ ...item, secondaryRefSlots: Array.isArray(item.secondaryRefSlots) ? item.secondaryRefSlots : [] }))
+          ? parsed.batchScene.items.map(migrateBatchItem).filter(Boolean)
           : [],
       },
       chatHistory: Array.isArray(parsed.chatHistory) ? parsed.chatHistory : [],

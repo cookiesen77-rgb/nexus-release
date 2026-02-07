@@ -185,9 +185,10 @@ export default function EcomTryOnScene({ draft, setDraftSafe, generating, setGen
       )}
 
       {draft.tryOnScenes.map((scene, idx) => {
-        const modelV = scene.modelImageSlot.variants[0]
-        const productV = scene.productImageSlot.variants[0]
-        const resultV = scene.resultSlot.variants.find(v => v.id === scene.resultSlot.selectedVariantId) || scene.resultSlot.variants[scene.resultSlot.variants.length - 1]
+        const modelV = scene.modelImageSlot?.variants?.[0]
+        const productV = scene.productImageSlot?.variants?.[0]
+        const resultVariants = scene.resultSlot?.variants || []
+        const resultV = resultVariants.find(v => v.id === scene.resultSlot?.selectedVariantId) || resultVariants[resultVariants.length - 1]
         const resultUrl = resultV?.status === 'success' ? (resultV.displayUrl || resultV.sourceUrl || '') : ''
 
         return (
@@ -254,8 +255,8 @@ export default function EcomTryOnScene({ draft, setDraftSafe, generating, setGen
             />
 
             <VariantHistoryStrip
-              variants={scene.resultSlot.variants}
-              selectedVariantId={scene.resultSlot.selectedVariantId}
+              variants={scene.resultSlot?.variants || []}
+              selectedVariantId={scene.resultSlot?.selectedVariantId}
               onSelect={vid => patchScene(idx, { resultSlot: { ...scene.resultSlot, selectedVariantId: vid } })}
             />
           </div>

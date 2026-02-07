@@ -112,7 +112,8 @@ export default function EcomDetailScene({ draft, setDraftSafe, generating, setGe
 
       <div className="grid grid-cols-3 gap-3">
         {draft.detailPageScene.images.map((img, i) => {
-          const v = img.slot.variants.find(x => x.id === img.slot.selectedVariantId) || img.slot.variants[img.slot.variants.length - 1]
+          const imgVariants = img.slot?.variants || []
+          const v = imgVariants.find(x => x.id === img.slot?.selectedVariantId) || imgVariants[imgVariants.length - 1]
           const roleLabel = ECOM_DETAIL_ROLES.find(r => r.role === img.role)?.label || img.role
           return (
             <div key={img.id} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-2">

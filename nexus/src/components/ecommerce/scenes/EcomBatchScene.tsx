@@ -275,8 +275,9 @@ export default function EcomBatchScene({ draft, setDraftSafe, generating, setGen
 
       <div className="grid grid-cols-2 gap-3">
         {draft.batchScene.items.map((item, idx) => {
-          const refV = item.refSlot.variants[0]
-          const resultV = item.resultSlot.variants.find(v => v.id === item.resultSlot.selectedVariantId) || item.resultSlot.variants[item.resultSlot.variants.length - 1]
+          const refV = item.refSlot?.variants?.[0]
+          const resultVariants = item.resultSlot?.variants || []
+          const resultV = resultVariants.find(v => v.id === item.resultSlot?.selectedVariantId) || resultVariants[resultVariants.length - 1]
 
           return (
             <div key={item.id} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">

@@ -175,9 +175,10 @@ export default function EcomMotionControlScene({ draft, setDraftSafe, generating
       )}
 
       {draft.motionControlScenes.map((scene, idx) => {
-        const sourceV = scene.sourceImageSlot.variants[0]
-        const refVideoV = scene.referenceVideoSlot.variants[0]
-        const resultV = scene.resultSlot.variants.find(v => v.id === scene.resultSlot.selectedVariantId) || scene.resultSlot.variants[scene.resultSlot.variants.length - 1]
+        const sourceV = scene.sourceImageSlot?.variants?.[0]
+        const refVideoV = scene.referenceVideoSlot?.variants?.[0]
+        const resultVariants = scene.resultSlot?.variants || []
+        const resultV = resultVariants.find(v => v.id === scene.resultSlot?.selectedVariantId) || resultVariants[resultVariants.length - 1]
 
         return (
           <div key={scene.id} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
@@ -261,8 +262,8 @@ export default function EcomMotionControlScene({ draft, setDraftSafe, generating
             />
 
             <VariantHistoryStrip
-              variants={scene.resultSlot.variants}
-              selectedVariantId={scene.resultSlot.selectedVariantId}
+              variants={scene.resultSlot?.variants || []}
+              selectedVariantId={scene.resultSlot?.selectedVariantId}
               mediaType="video"
               onSelect={vid => patchScene(idx, { resultSlot: { ...scene.resultSlot, selectedVariantId: vid } })}
             />
