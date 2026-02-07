@@ -1,0 +1,26 @@
+[
+  {
+    "no": 1,
+    "title": "内容分析（漫画适配）",
+    "language": "ZH",
+    "description": "把源素材转成可视化叙事分析：目标受众、价值、主题、人物弧线、推荐画风与页数。",
+    "prompt": "你是知识漫画策划师。请阅读素材并输出分析，严格使用以下结构与格式。\n\n输出格式：\n1) YAML Front Matter\n---\ntitle: \"[标题]\"\ntopic: \"[主题]\"\ntime_span: \"[时间跨度/时代]\"\nsource_language: \"[源语言]\"\nuser_language: \"zh\"\naspect_ratio: \"3:4\"\nrecommended_page_count: [数字]\n---\n2) Markdown 分析正文，必须包含以下小节：\n- Target Audience（Primary/Secondary/Tertiary）\n- Value Proposition（Knowledge/Emotional/Practical）\n- Core Themes（表格：Theme | Narrative Potential | Visual Opportunity）\n- Key Figures & Story Arcs（每个角色：弧线/视觉识别/关键节点）\n- Content Signals（匹配到的 Style / Layout 组合建议）\n- Recommended Approaches（按适配度排序：Chronological / Thematic / Character-focused）\n\n页数建议规则：短故事 5-8 页，中等复杂度 9-15 页，完整传记 16-25 页。\n\n素材：\n<<<在此粘贴原始内容>>>",
+    "tags": ["Comic", "Analysis", "Storyboard"]
+  },
+  {
+    "no": 2,
+    "title": "分镜脚本（封面 + 分页）",
+    "language": "ZH",
+    "description": "把分析结果改写为完整分镜：封面 + 每页镜头拆解 + 总提示词。",
+    "prompt": "你是分镜师。根据分析与所选叙事方式/画风/布局，输出完整分镜脚本，中文输出。\n\n输出格式：\n---\ntitle: \"[漫画标题]\"\ntopic: \"[主题]\"\ntime_span: \"[时间跨度/时代]\"\nnarrative_approach: \"chronological / thematic / character-focused\"\nrecommended_style: \"[风格]\"\nrecommended_layout: \"[布局]\"\naspect_ratio: \"3:4\"\nlanguage: \"zh\"\npage_count: [N]\ngenerated: \"YYYY-MM-DD HH:mm\"\n---\n\n# [漫画标题] - 分镜脚本\n**Character Reference**: characters/characters.png\n\n## Cover\n- Filename: 00-cover-[slug].png\n- Core Message: [一句话核心信息]\n- Visual Design: 标题字体/主视觉/色调/副标题信息\n- Visual Prompt: [封面完整提示词]\n\n## Page 1 / N\n- Filename: 01-page-[slug].png\n- Layout: [standard/cinematic/dense/splash/mixed]\n- Narrative Layer: [Main/Narrator/Mixed]\n- Core Message: [本页要传达的要点]\n- Panel Layout:\n  - Panel Count: X\n  - Layout Type: grid/irregular/splash\n  - Panel 1: 场景/镜头/人物动作/环境/光影/色调/文本元素\n  - Panel 2: ...\n- Page Hook: [页尾钩子]\n- Visual Prompt: [本页完整提示词，包含角色一致性要求]\n\n按页序号继续输出直到 N 页。默认 N=4（如未指定）。\n\n分析摘要与角色设定如下：\n<<<在此粘贴分析摘要/角色设定/风格偏好>>>",
+    "tags": ["Comic", "Storyboard", "Pages"]
+  },
+  {
+    "no": 3,
+    "title": "角色设定（characters.md）",
+    "language": "ZH",
+    "description": "生成角色设定与参考图提示词，保证漫画角色一致性。",
+    "prompt": "请根据剧情与分镜，生成 characters.md 角色设定文档，中文输出。\n\n格式要求：\n# Character Definitions - [漫画标题]\n**Style**: [风格]\n**Art Direction**: [线条/上色/年代感等]\n\n## Character 1: [名字]\n- Role: [主角/配角/导师/反派]\n- Age: [年龄段]\n- Appearance: 脸型/发型/眼睛/体型/识别特征\n- Costume: 默认服装/配色/配饰\n- Expression Range: Neutral / Happy / Thinking / Determined\n- Visual Reference Notes: [补充] \n\n（依次输出所有角色）\n\n## Reference Sheet Prompt\nCharacter reference sheet in [style], clean lines, flat colors: \n- [角色1]：正面、3/4、表情四连\n- [角色2]：正面、3/4、表情四连\nColor palette: [每个角色主色]，白底，清晰标签。\n\n剧情与风格偏好：\n<<<在此粘贴剧情摘要/角色关系/画风偏好>>>",
+    "tags": ["Comic", "Characters", "Reference"]
+  }
+]

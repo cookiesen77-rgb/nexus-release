@@ -1,0 +1,4002 @@
+[
+  {
+    "id": 1,
+    "en": "Pan",
+    "zh": "横摇",
+    "category": "基础运镜",
+    "scene": "纪录片",
+    "desc": "横摇是一种基础运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 2,
+    "en": "Tilt",
+    "zh": "纵摇",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "纵摇是一种基础运镜技术，常用于直播活动中"
+  },
+  {
+    "id": 3,
+    "en": "Dolly",
+    "zh": "推拉",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "推拉是一种基础运镜技术，常用于音乐MV中"
+  },
+  {
+    "id": 4,
+    "en": "Truck",
+    "zh": "平移",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "平移是一种基础运镜技术，常用于广告制作中"
+  },
+  {
+    "id": 5,
+    "en": "Crane",
+    "zh": "升降",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "升降是一种基础运镜技术，常用于音乐MV中"
+  },
+  {
+    "id": 6,
+    "en": "Zoom",
+    "zh": "变焦",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "变焦是一种基础运镜技术，常用于直播活动中"
+  },
+  {
+    "id": 7,
+    "en": "Arc",
+    "zh": "弧形运动",
+    "category": "基础运镜",
+    "scene": "纪录片",
+    "desc": "弧形运动是一种基础运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 8,
+    "en": "Pedestal",
+    "zh": "底座升降",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "底座升降是一种基础运镜技术，常用于广告制作中"
+  },
+  {
+    "id": 9,
+    "en": "Handheld",
+    "zh": "手持拍摄",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "手持拍摄是一种基础运镜技术，常用于广告制作中"
+  },
+  {
+    "id": 10,
+    "en": "Steadicam",
+    "zh": "斯坦尼康",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "斯坦尼康是一种基础运镜技术，常用于短视频中"
+  },
+  {
+    "id": 11,
+    "en": "Dolly Zoom",
+    "zh": "滑动变焦",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "滑动变焦是一种复合运镜技术，常用于音乐MV中"
+  },
+  {
+    "id": 12,
+    "en": "Tilt Pan",
+    "zh": "摇镜头",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "摇镜头是一种复合运镜技术，常用于音乐MV中"
+  },
+  {
+    "id": 13,
+    "en": "Tracking Shot",
+    "zh": "跟拍",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "跟拍是一种复合运镜技术，常用于电视剧中"
+  },
+  {
+    "id": 14,
+    "en": "Dolly Tilt",
+    "zh": "俯仰移动",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "俯仰移动是一种复合运镜技术，常用于直播活动中"
+  },
+  {
+    "id": 15,
+    "en": "Crane Shot",
+    "zh": "吊臂拍摄",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "吊臂拍摄是一种复合运镜技术，常用于短视频中"
+  },
+  {
+    "id": 16,
+    "en": "Steadicam Tracking",
+    "zh": "斯坦尼康跟拍",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "斯坦尼康跟拍是一种复合运镜技术，常用于直播活动中"
+  },
+  {
+    "id": 17,
+    "en": "Whip Pan",
+    "zh": "甩镜头",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "甩镜头是一种复合运镜技术，常用于广告制作中"
+  },
+  {
+    "id": 18,
+    "en": "Tilt Zoom",
+    "zh": "俯仰变焦",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "俯仰变焦是一种复合运镜技术，常用于短视频中"
+  },
+  {
+    "id": 19,
+    "en": "Orbit Shot",
+    "zh": "环绕拍摄",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "环绕拍摄是一种复合运镜技术，常用于音乐MV中"
+  },
+  {
+    "id": 20,
+    "en": "Spiral Shot",
+    "zh": "螺旋拍摄",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "螺旋拍摄是一种复合运镜技术，常用于电影拍摄中"
+  },
+  {
+    "id": 21,
+    "en": "Bullet Time",
+    "zh": "子弹时间",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "子弹时间是一种特殊运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 22,
+    "en": "POV Shot",
+    "zh": "主观视角",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "主观视角是一种特殊运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 23,
+    "en": "Point of View",
+    "zh": "视点镜头",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "视点镜头是一种特殊运镜技术，常用于音乐MV中"
+  },
+  {
+    "id": 24,
+    "en": "Steadicam Shot",
+    "zh": "稳定器拍摄",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "稳定器拍摄是一种特殊运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 25,
+    "en": "Drone Shot",
+    "zh": "无人机拍摄",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "无人机拍摄是一种特殊运镜技术，常用于短视频中"
+  },
+  {
+    "id": 26,
+    "en": "Car Mount",
+    "zh": "车载拍摄",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "车载拍摄是一种特殊运镜技术，常用于广告制作中"
+  },
+  {
+    "id": 27,
+    "en": "Underwater Shooting",
+    "zh": "水下拍摄",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "水下拍摄是一种特殊运镜技术，常用于短视频中"
+  },
+  {
+    "id": 28,
+    "en": "Time Lapse",
+    "zh": "延时摄影",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "延时摄影是一种特殊运镜技术，常用于电影拍摄中"
+  },
+  {
+    "id": 29,
+    "en": "High Speed Photography",
+    "zh": "高速摄影",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "高速摄影是一种特殊运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 30,
+    "en": "Macro Photography",
+    "zh": "微距摄影",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "微距摄影是一种特殊运镜技术，常用于直播活动中"
+  },
+  {
+    "id": 31,
+    "en": "Static Shot",
+    "zh": "固定镜头",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "固定镜头是一种静态运镜技术，常用于电视剧中"
+  },
+  {
+    "id": 32,
+    "en": "Locked-Off Shot",
+    "zh": "锁定镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "锁定镜头是一种静态运镜技术，常用于广告制作中"
+  },
+  {
+    "id": 33,
+    "en": "Long Take",
+    "zh": "长镜头",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "长镜头是一种静态运镜技术，常用于电视剧中"
+  },
+  {
+    "id": 34,
+    "en": "Wide Shot",
+    "zh": "全景镜头",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "全景镜头是一种静态运镜技术，常用于电视剧中"
+  },
+  {
+    "id": 35,
+    "en": "Medium Shot",
+    "zh": "中景镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "中景镜头是一种静态运镜技术，常用于广告制作中"
+  },
+  {
+    "id": 36,
+    "en": "Close-Up",
+    "zh": "特写镜头",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "特写镜头是一种静态运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 37,
+    "en": "Extreme Close-Up",
+    "zh": "大特写镜头",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "大特写镜头是一种静态运镜技术，常用于直播活动中"
+  },
+  {
+    "id": 38,
+    "en": "Extreme Wide Shot",
+    "zh": "大全景镜头",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "大全景镜头是一种静态运镜技术，常用于电影拍摄中"
+  },
+  {
+    "id": 39,
+    "en": "Over-the-Shoulder Shot",
+    "zh": "过肩镜头",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "过肩镜头是一种静态运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 40,
+    "en": "Two-Shot",
+    "zh": "双人镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "双人镜头是一种静态运镜技术，常用于广告制作中"
+  },
+  {
+    "id": 41,
+    "en": "Follow Shot",
+    "zh": "跟镜头",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "跟镜头是一种动态运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 42,
+    "en": "Moving Shot",
+    "zh": "移动镜头",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "移动镜头是一种动态运镜技术，常用于音乐MV中"
+  },
+  {
+    "id": 43,
+    "en": "Tracking Shot",
+    "zh": "轨道拍摄",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "轨道拍摄是一种动态运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 44,
+    "en": "Steadicam Shot",
+    "zh": "斯坦尼康拍摄",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "斯坦尼康拍摄是一种动态运镜技术，常用于电影拍摄中"
+  },
+  {
+    "id": 45,
+    "en": "Handheld Shot",
+    "zh": "手持拍摄",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "手持拍摄是一种动态运镜技术，常用于音乐MV中"
+  },
+  {
+    "id": 46,
+    "en": "Crane Shot",
+    "zh": "吊臂拍摄",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "吊臂拍摄是一种动态运镜技术，常用于直播活动中"
+  },
+  {
+    "id": 47,
+    "en": "Jib Shot",
+    "zh": "摇臂拍摄",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "摇臂拍摄是一种动态运镜技术，常用于电影拍摄中"
+  },
+  {
+    "id": 48,
+    "en": "Dolly Shot",
+    "zh": "推拉拍摄",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "推拉拍摄是一种动态运镜技术，常用于音乐MV中"
+  },
+  {
+    "id": 49,
+    "en": "Truck Shot",
+    "zh": "平移拍摄",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "平移拍摄是一种动态运镜技术，常用于纪录片中"
+  },
+  {
+    "id": 50,
+    "en": "Drone Shot",
+    "zh": "无人机拍摄",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "无人机拍摄是一种动态运镜技术，常用于直播活动中"
+  },
+  {
+    "id": 51,
+    "en": "Sudden Tracking Shot",
+    "zh": "Sudden的跟拍",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "Sudden的跟拍是一种基于跟拍的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 52,
+    "en": "Over-the-Shoulder Shot with Aggressive Focus",
+    "zh": "过肩镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "过肩镜头（Aggressive风格）是一种基于过肩镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 53,
+    "en": "Car Mount with Sudden Focus",
+    "zh": "Sudden的车载拍摄",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "Sudden的车载拍摄是一种基于车载拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 54,
+    "en": "Rapid Dolly Tilt",
+    "zh": "俯仰移动（Rapid风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "俯仰移动（Rapid风格）是一种基于俯仰移动的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 55,
+    "en": "Rapid Pedestal",
+    "zh": "Rapid的底座升降",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "Rapid的底座升降是一种基于底座升降的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 56,
+    "en": "Fast Crane Shot",
+    "zh": "Fast的吊臂拍摄",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "Fast的吊臂拍摄是一种基于吊臂拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 57,
+    "en": "Aggressive Point of View",
+    "zh": "Aggressive的视点镜头",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Aggressive的视点镜头是一种基于视点镜头的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 58,
+    "en": "Tracking Shot with Slow Lens",
+    "zh": "Slow的轨道拍摄",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "Slow的轨道拍摄是一种基于轨道拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 59,
+    "en": "Rapid Orbit Shot",
+    "zh": "环绕拍摄（Rapid风格）",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "环绕拍摄（Rapid风格）是一种基于环绕拍摄的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 60,
+    "en": "Static Shot with Subtle Lens",
+    "zh": "固定镜头（Subtle风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "固定镜头（Subtle风格）是一种基于固定镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 61,
+    "en": "Fast Crane Shot",
+    "zh": "吊臂拍摄（Fast风格）",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "吊臂拍摄（Fast风格）是一种基于吊臂拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 62,
+    "en": "Extreme Wide Shot with Gradual Perspective",
+    "zh": "大全景镜头（Gradual风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "大全景镜头（Gradual风格）是一种基于大全景镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 63,
+    "en": "Dolly Shot with Quick Angle",
+    "zh": "推拉拍摄（Quick风格）",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "推拉拍摄（Quick风格）是一种基于推拉拍摄的动态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 64,
+    "en": "Bullet Time with Gentle Movement",
+    "zh": "Gentle的子弹时间",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "Gentle的子弹时间是一种基于子弹时间的特殊运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 65,
+    "en": "Underwater Shooting with Quick Motion",
+    "zh": "水下拍摄（Quick风格）",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "水下拍摄（Quick风格）是一种基于水下拍摄的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 66,
+    "en": "Fast Extreme Close-Up",
+    "zh": "Fast的大特写镜头",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "Fast的大特写镜头是一种基于大特写镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 67,
+    "en": "Gentle Orbit Shot",
+    "zh": "环绕拍摄（Gentle风格）",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "环绕拍摄（Gentle风格）是一种基于环绕拍摄的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 68,
+    "en": "Quick Drone Shot",
+    "zh": "无人机拍摄（Quick风格）",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "无人机拍摄（Quick风格）是一种基于无人机拍摄的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 69,
+    "en": "Tilt with Subtle Motion",
+    "zh": "纵摇（Subtle风格）",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "纵摇（Subtle风格）是一种基于纵摇的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 70,
+    "en": "Tilt with Smooth Shot",
+    "zh": "Smooth的纵摇",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "Smooth的纵摇是一种基于纵摇的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 71,
+    "en": "Subtle Arc",
+    "zh": "弧形运动（Subtle风格）",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "弧形运动（Subtle风格）是一种基于弧形运动的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 72,
+    "en": "Rapid Macro Photography",
+    "zh": "微距摄影（Rapid风格）",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "微距摄影（Rapid风格）是一种基于微距摄影的特殊运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 73,
+    "en": "Gentle Steadicam Tracking",
+    "zh": "斯坦尼康跟拍（Gentle风格）",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "斯坦尼康跟拍（Gentle风格）是一种基于斯坦尼康跟拍的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 74,
+    "en": "Static Shot with Subtle Lens",
+    "zh": "固定镜头（Subtle风格）",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "固定镜头（Subtle风格）是一种基于固定镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 75,
+    "en": "Tracking Shot with Gradual Focus",
+    "zh": "跟拍（Gradual风格）",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "跟拍（Gradual风格）是一种基于跟拍的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 76,
+    "en": "Gradual Orbit Shot",
+    "zh": "环绕拍摄（Gradual风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "环绕拍摄（Gradual风格）是一种基于环绕拍摄的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 77,
+    "en": "Zoom with Rapid Perspective",
+    "zh": "变焦（Rapid风格）",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "变焦（Rapid风格）是一种基于变焦的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 78,
+    "en": "Quick Medium Shot",
+    "zh": "Quick的中景镜头",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "Quick的中景镜头是一种基于中景镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 79,
+    "en": "Dolly with Fast Movement",
+    "zh": "Fast的推拉",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "Fast的推拉是一种基于推拉的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 80,
+    "en": "Slow Drone Shot",
+    "zh": "Slow的无人机拍摄",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "Slow的无人机拍摄是一种基于无人机拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 81,
+    "en": "Slow Close-Up",
+    "zh": "特写镜头（Slow风格）",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "特写镜头（Slow风格）是一种基于特写镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 82,
+    "en": "Extreme Close-Up with Gentle Movement",
+    "zh": "Gentle的大特写镜头",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "Gentle的大特写镜头是一种基于大特写镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 83,
+    "en": "Extreme Close-Up with Gentle Camera",
+    "zh": "大特写镜头（Gentle风格）",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "大特写镜头（Gentle风格）是一种基于大特写镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 84,
+    "en": "Fast Steadicam Shot",
+    "zh": "斯坦尼康拍摄（Fast风格）",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "斯坦尼康拍摄（Fast风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 85,
+    "en": "Smooth Handheld Shot",
+    "zh": "手持拍摄（Smooth风格）",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "手持拍摄（Smooth风格）是一种基于手持拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 86,
+    "en": "Tilt Pan with Gentle Movement",
+    "zh": "摇镜头（Gentle风格）",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "摇镜头（Gentle风格）是一种基于摇镜头的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 87,
+    "en": "Quick Crane Shot",
+    "zh": "Quick的吊臂拍摄",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "Quick的吊臂拍摄是一种基于吊臂拍摄的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 88,
+    "en": "Aggressive Steadicam Shot",
+    "zh": "稳定器拍摄（Aggressive风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "稳定器拍摄（Aggressive风格）是一种基于稳定器拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 89,
+    "en": "Rapid Two-Shot",
+    "zh": "双人镜头（Rapid风格）",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "双人镜头（Rapid风格）是一种基于双人镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 90,
+    "en": "Aggressive Arc",
+    "zh": "弧形运动（Aggressive风格）",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "弧形运动（Aggressive风格）是一种基于弧形运动的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 91,
+    "en": "Quick Car Mount",
+    "zh": "车载拍摄（Quick风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "车载拍摄（Quick风格）是一种基于车载拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 92,
+    "en": "Crane Shot with Smooth Movement",
+    "zh": "Smooth的吊臂拍摄",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "Smooth的吊臂拍摄是一种基于吊臂拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 93,
+    "en": "Slow Medium Shot",
+    "zh": "中景镜头（Slow风格）",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "中景镜头（Slow风格）是一种基于中景镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 94,
+    "en": "Gentle Handheld",
+    "zh": "Gentle的手持拍摄",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "Gentle的手持拍摄是一种基于手持拍摄的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 95,
+    "en": "High Speed Photography with Quick Perspective",
+    "zh": "Quick的高速摄影",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "Quick的高速摄影是一种基于高速摄影的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 96,
+    "en": "Two-Shot with Gradual Movement",
+    "zh": "Gradual的双人镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "Gradual的双人镜头是一种基于双人镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 97,
+    "en": "Drone Shot with Gentle View",
+    "zh": "无人机拍摄（Gentle风格）",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "无人机拍摄（Gentle风格）是一种基于无人机拍摄的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 98,
+    "en": "Moving Shot with Gentle Focus",
+    "zh": "移动镜头（Gentle风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "移动镜头（Gentle风格）是一种基于移动镜头的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 99,
+    "en": "Tilt Zoom with Rapid Frame",
+    "zh": "俯仰变焦（Rapid风格）",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "俯仰变焦（Rapid风格）是一种基于俯仰变焦的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 100,
+    "en": "Dolly Tilt with Sudden Camera",
+    "zh": "Sudden的俯仰移动",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "Sudden的俯仰移动是一种基于俯仰移动的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 101,
+    "en": "Spiral Shot with Rapid Focus",
+    "zh": "Rapid的螺旋拍摄",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "Rapid的螺旋拍摄是一种基于螺旋拍摄的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 102,
+    "en": "Handheld with Sudden Camera",
+    "zh": "手持拍摄（Sudden风格）",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "手持拍摄（Sudden风格）是一种基于手持拍摄的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 103,
+    "en": "Dolly with Quick Movement",
+    "zh": "推拉（Quick风格）",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "推拉（Quick风格）是一种基于推拉的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 104,
+    "en": "Long Take with Quick Angle",
+    "zh": "长镜头（Quick风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "长镜头（Quick风格）是一种基于长镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 105,
+    "en": "Close-Up with Quick Camera",
+    "zh": "Quick的特写镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "Quick的特写镜头是一种基于特写镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 106,
+    "en": "POV Shot with Slow Frame",
+    "zh": "Slow的主观视角",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "Slow的主观视角是一种基于主观视角的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 107,
+    "en": "Long Take with Fast Camera",
+    "zh": "长镜头（Fast风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "长镜头（Fast风格）是一种基于长镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 108,
+    "en": "Dolly Shot with Smooth Focus",
+    "zh": "Smooth的推拉拍摄",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "Smooth的推拉拍摄是一种基于推拉拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 109,
+    "en": "Handheld Shot with Gentle Focus",
+    "zh": "手持拍摄（Gentle风格）",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "手持拍摄（Gentle风格）是一种基于手持拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 110,
+    "en": "Subtle Tilt Zoom",
+    "zh": "Subtle的俯仰变焦",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "Subtle的俯仰变焦是一种基于俯仰变焦的复合运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 111,
+    "en": "Aggressive Long Take",
+    "zh": "Aggressive的长镜头",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "Aggressive的长镜头是一种基于长镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 112,
+    "en": "Quick Follow Shot",
+    "zh": "跟镜头（Quick风格）",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "跟镜头（Quick风格）是一种基于跟镜头的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 113,
+    "en": "Slow Extreme Wide Shot",
+    "zh": "Slow的大全景镜头",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "Slow的大全景镜头是一种基于大全景镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 114,
+    "en": "Steadicam Shot with Slow Angle",
+    "zh": "斯坦尼康拍摄（Slow风格）",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "斯坦尼康拍摄（Slow风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 115,
+    "en": "Jib Shot with Aggressive View",
+    "zh": "Aggressive的摇臂拍摄",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "Aggressive的摇臂拍摄是一种基于摇臂拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 116,
+    "en": "Sudden Drone Shot",
+    "zh": "无人机拍摄（Sudden风格）",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "无人机拍摄（Sudden风格）是一种基于无人机拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 117,
+    "en": "POV Shot with Rapid Focus",
+    "zh": "Rapid的主观视角",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Rapid的主观视角是一种基于主观视角的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 118,
+    "en": "Gentle Underwater Shooting",
+    "zh": "Gentle的水下拍摄",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "Gentle的水下拍摄是一种基于水下拍摄的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 119,
+    "en": "Gentle Underwater Shooting",
+    "zh": "Gentle的水下拍摄",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "Gentle的水下拍摄是一种基于水下拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 120,
+    "en": "Fast Steadicam Shot",
+    "zh": "Fast的稳定器拍摄",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Fast的稳定器拍摄是一种基于稳定器拍摄的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 121,
+    "en": "POV Shot with Subtle Camera",
+    "zh": "主观视角（Subtle风格）",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "主观视角（Subtle风格）是一种基于主观视角的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 122,
+    "en": "Tilt with Subtle Shot",
+    "zh": "纵摇（Subtle风格）",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "纵摇（Subtle风格）是一种基于纵摇的基础运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 123,
+    "en": "Aggressive Two-Shot",
+    "zh": "Aggressive的双人镜头",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "Aggressive的双人镜头是一种基于双人镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 124,
+    "en": "Rapid Tilt Zoom",
+    "zh": "俯仰变焦（Rapid风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "俯仰变焦（Rapid风格）是一种基于俯仰变焦的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 125,
+    "en": "Handheld with Gentle Angle",
+    "zh": "手持拍摄（Gentle风格）",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "手持拍摄（Gentle风格）是一种基于手持拍摄的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 126,
+    "en": "Car Mount with Slow Shot",
+    "zh": "车载拍摄（Slow风格）",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "车载拍摄（Slow风格）是一种基于车载拍摄的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 127,
+    "en": "Spiral Shot with Gradual View",
+    "zh": "Gradual的螺旋拍摄",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "Gradual的螺旋拍摄是一种基于螺旋拍摄的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 128,
+    "en": "Orbit Shot with Rapid Motion",
+    "zh": "Rapid的环绕拍摄",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "Rapid的环绕拍摄是一种基于环绕拍摄的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 129,
+    "en": "Quick Follow Shot",
+    "zh": "Quick的跟镜头",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "Quick的跟镜头是一种基于跟镜头的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 130,
+    "en": "Steadicam Shot with Smooth Angle",
+    "zh": "Smooth的稳定器拍摄",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "Smooth的稳定器拍摄是一种基于稳定器拍摄的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 131,
+    "en": "Fast Crane Shot",
+    "zh": "Fast的吊臂拍摄",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "Fast的吊臂拍摄是一种基于吊臂拍摄的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 132,
+    "en": "Smooth Steadicam Shot",
+    "zh": "Smooth的斯坦尼康拍摄",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "Smooth的斯坦尼康拍摄是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 133,
+    "en": "Quick Moving Shot",
+    "zh": "Quick的移动镜头",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "Quick的移动镜头是一种基于移动镜头的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 134,
+    "en": "Slow Medium Shot",
+    "zh": "中景镜头（Slow风格）",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "中景镜头（Slow风格）是一种基于中景镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 135,
+    "en": "Sudden Zoom",
+    "zh": "Sudden的变焦",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "Sudden的变焦是一种基于变焦的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 136,
+    "en": "Bullet Time with Gentle Perspective",
+    "zh": "Gentle的子弹时间",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Gentle的子弹时间是一种基于子弹时间的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 137,
+    "en": "Car Mount with Quick Shot",
+    "zh": "车载拍摄（Quick风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "车载拍摄（Quick风格）是一种基于车载拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 138,
+    "en": "Tracking Shot with Subtle Perspective",
+    "zh": "轨道拍摄（Subtle风格）",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "轨道拍摄（Subtle风格）是一种基于轨道拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 139,
+    "en": "Fast Over-the-Shoulder Shot",
+    "zh": "Fast的过肩镜头",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "Fast的过肩镜头是一种基于过肩镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 140,
+    "en": "Aggressive Follow Shot",
+    "zh": "跟镜头（Aggressive风格）",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "跟镜头（Aggressive风格）是一种基于跟镜头的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 141,
+    "en": "Drone Shot with Aggressive View",
+    "zh": "Aggressive的无人机拍摄",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "Aggressive的无人机拍摄是一种基于无人机拍摄的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 142,
+    "en": "Slow Truck Shot",
+    "zh": "Slow的平移拍摄",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "Slow的平移拍摄是一种基于平移拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 143,
+    "en": "Gentle Tilt",
+    "zh": "纵摇（Gentle风格）",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "纵摇（Gentle风格）是一种基于纵摇的基础运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 144,
+    "en": "Handheld Shot with Slow Lens",
+    "zh": "Slow的手持拍摄",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "Slow的手持拍摄是一种基于手持拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 145,
+    "en": "High Speed Photography with Slow Movement",
+    "zh": "Slow的高速摄影",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "Slow的高速摄影是一种基于高速摄影的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 146,
+    "en": "Aggressive Crane Shot",
+    "zh": "Aggressive的吊臂拍摄",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "Aggressive的吊臂拍摄是一种基于吊臂拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 147,
+    "en": "Subtle Dolly Tilt",
+    "zh": "Subtle的俯仰移动",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "Subtle的俯仰移动是一种基于俯仰移动的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 148,
+    "en": "Rapid Dolly",
+    "zh": "Rapid的推拉",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "Rapid的推拉是一种基于推拉的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 149,
+    "en": "Fast Tilt Zoom",
+    "zh": "俯仰变焦（Fast风格）",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "俯仰变焦（Fast风格）是一种基于俯仰变焦的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 150,
+    "en": "Rapid Steadicam Tracking",
+    "zh": "斯坦尼康跟拍（Rapid风格）",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "斯坦尼康跟拍（Rapid风格）是一种基于斯坦尼康跟拍的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 151,
+    "en": "Drone Shot with Fast Lens",
+    "zh": "Fast的无人机拍摄",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "Fast的无人机拍摄是一种基于无人机拍摄的特殊运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 152,
+    "en": "Aggressive Medium Shot",
+    "zh": "Aggressive的中景镜头",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "Aggressive的中景镜头是一种基于中景镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 153,
+    "en": "Gentle Locked-Off Shot",
+    "zh": "锁定镜头（Gentle风格）",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "锁定镜头（Gentle风格）是一种基于锁定镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 154,
+    "en": "Fast Moving Shot",
+    "zh": "移动镜头（Fast风格）",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "移动镜头（Fast风格）是一种基于移动镜头的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 155,
+    "en": "Gentle Dolly Shot",
+    "zh": "推拉拍摄（Gentle风格）",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "推拉拍摄（Gentle风格）是一种基于推拉拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 156,
+    "en": "Rapid Steadicam",
+    "zh": "斯坦尼康（Rapid风格）",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "斯坦尼康（Rapid风格）是一种基于斯坦尼康的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 157,
+    "en": "High Speed Photography with Subtle Perspective",
+    "zh": "高速摄影（Subtle风格）",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "高速摄影（Subtle风格）是一种基于高速摄影的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 158,
+    "en": "Gentle Pedestal",
+    "zh": "底座升降（Gentle风格）",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "底座升降（Gentle风格）是一种基于底座升降的基础运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 159,
+    "en": "Gradual Steadicam",
+    "zh": "Gradual的斯坦尼康",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "Gradual的斯坦尼康是一种基于斯坦尼康的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 160,
+    "en": "Aggressive Tilt Pan",
+    "zh": "摇镜头（Aggressive风格）",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "摇镜头（Aggressive风格）是一种基于摇镜头的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 161,
+    "en": "Steadicam Shot with Aggressive Movement",
+    "zh": "斯坦尼康拍摄（Aggressive风格）",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "斯坦尼康拍摄（Aggressive风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 162,
+    "en": "Subtle Drone Shot",
+    "zh": "无人机拍摄（Subtle风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "无人机拍摄（Subtle风格）是一种基于无人机拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 163,
+    "en": "Aggressive Crane",
+    "zh": "Aggressive的升降",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "Aggressive的升降是一种基于升降的基础运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 164,
+    "en": "Aggressive Extreme Wide Shot",
+    "zh": "大全景镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "大全景镜头（Aggressive风格）是一种基于大全景镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 165,
+    "en": "Smooth Follow Shot",
+    "zh": "跟镜头（Smooth风格）",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "跟镜头（Smooth风格）是一种基于跟镜头的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 166,
+    "en": "Gradual Locked-Off Shot",
+    "zh": "Gradual的锁定镜头",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "Gradual的锁定镜头是一种基于锁定镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 167,
+    "en": "Static Shot with Smooth View",
+    "zh": "Smooth的固定镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "Smooth的固定镜头是一种基于固定镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 168,
+    "en": "Fast Orbit Shot",
+    "zh": "Fast的环绕拍摄",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "Fast的环绕拍摄是一种基于环绕拍摄的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 169,
+    "en": "Steadicam Tracking with Gentle Movement",
+    "zh": "Gentle的斯坦尼康跟拍",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "Gentle的斯坦尼康跟拍是一种基于斯坦尼康跟拍的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 170,
+    "en": "Two-Shot with Aggressive Angle",
+    "zh": "双人镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "双人镜头（Aggressive风格）是一种基于双人镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 171,
+    "en": "Dolly with Gentle Frame",
+    "zh": "Gentle的推拉",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "Gentle的推拉是一种基于推拉的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 172,
+    "en": "Smooth Jib Shot",
+    "zh": "Smooth的摇臂拍摄",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "Smooth的摇臂拍摄是一种基于摇臂拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 173,
+    "en": "Macro Photography with Gentle Lens",
+    "zh": "Gentle的微距摄影",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "Gentle的微距摄影是一种基于微距摄影的特殊运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 174,
+    "en": "Orbit Shot with Rapid Motion",
+    "zh": "Rapid的环绕拍摄",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "Rapid的环绕拍摄是一种基于环绕拍摄的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 175,
+    "en": "Aggressive Zoom",
+    "zh": "Aggressive的变焦",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "Aggressive的变焦是一种基于变焦的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 176,
+    "en": "Medium Shot with Smooth Angle",
+    "zh": "中景镜头（Smooth风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "中景镜头（Smooth风格）是一种基于中景镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 177,
+    "en": "Slow Dolly Shot",
+    "zh": "Slow的推拉拍摄",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "Slow的推拉拍摄是一种基于推拉拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 178,
+    "en": "Tracking Shot with Fast Movement",
+    "zh": "轨道拍摄（Fast风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "轨道拍摄（Fast风格）是一种基于轨道拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 179,
+    "en": "Extreme Close-Up with Slow Lens",
+    "zh": "Slow的大特写镜头",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "Slow的大特写镜头是一种基于大特写镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 180,
+    "en": "Gradual Spiral Shot",
+    "zh": "Gradual的螺旋拍摄",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "Gradual的螺旋拍摄是一种基于螺旋拍摄的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 181,
+    "en": "Fast Static Shot",
+    "zh": "Fast的固定镜头",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "Fast的固定镜头是一种基于固定镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 182,
+    "en": "Locked-Off Shot with Aggressive Movement",
+    "zh": "锁定镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "锁定镜头（Aggressive风格）是一种基于锁定镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 183,
+    "en": "Tracking Shot with Gentle Frame",
+    "zh": "轨道拍摄（Gentle风格）",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "轨道拍摄（Gentle风格）是一种基于轨道拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 184,
+    "en": "Arc with Quick Shot",
+    "zh": "Quick的弧形运动",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "Quick的弧形运动是一种基于弧形运动的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 185,
+    "en": "Tilt Pan with Gradual Frame",
+    "zh": "摇镜头（Gradual风格）",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "摇镜头（Gradual风格）是一种基于摇镜头的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 186,
+    "en": "Drone Shot with Slow Motion",
+    "zh": "无人机拍摄（Slow风格）",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "无人机拍摄（Slow风格）是一种基于无人机拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 187,
+    "en": "Long Take with Smooth Motion",
+    "zh": "长镜头（Smooth风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "长镜头（Smooth风格）是一种基于长镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 188,
+    "en": "Slow Arc",
+    "zh": "弧形运动（Slow风格）",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "弧形运动（Slow风格）是一种基于弧形运动的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 189,
+    "en": "Gentle Point of View",
+    "zh": "视点镜头（Gentle风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "视点镜头（Gentle风格）是一种基于视点镜头的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 190,
+    "en": "Quick Truck",
+    "zh": "Quick的平移",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "Quick的平移是一种基于平移的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 191,
+    "en": "Macro Photography with Quick Angle",
+    "zh": "Quick的微距摄影",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "Quick的微距摄影是一种基于微距摄影的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 192,
+    "en": "Sudden Long Take",
+    "zh": "长镜头（Sudden风格）",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "长镜头（Sudden风格）是一种基于长镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 193,
+    "en": "Wide Shot with Fast Perspective",
+    "zh": "全景镜头（Fast风格）",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "全景镜头（Fast风格）是一种基于全景镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 194,
+    "en": "Fast Tilt Zoom",
+    "zh": "Fast的俯仰变焦",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "Fast的俯仰变焦是一种基于俯仰变焦的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 195,
+    "en": "Sudden Crane",
+    "zh": "升降（Sudden风格）",
+    "category": "基础运镜",
+    "scene": "纪录片",
+    "desc": "升降（Sudden风格）是一种基于升降的基础运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 196,
+    "en": "Quick Spiral Shot",
+    "zh": "Quick的螺旋拍摄",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "Quick的螺旋拍摄是一种基于螺旋拍摄的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 197,
+    "en": "POV Shot with Slow Motion",
+    "zh": "主观视角（Slow风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "主观视角（Slow风格）是一种基于主观视角的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 198,
+    "en": "Handheld with Rapid View",
+    "zh": "Rapid的手持拍摄",
+    "category": "基础运镜",
+    "scene": "纪录片",
+    "desc": "Rapid的手持拍摄是一种基于手持拍摄的基础运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 199,
+    "en": "Dolly Zoom with Gentle Movement",
+    "zh": "滑动变焦（Gentle风格）",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "滑动变焦（Gentle风格）是一种基于滑动变焦的复合运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 200,
+    "en": "Quick Jib Shot",
+    "zh": "Quick的摇臂拍摄",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "Quick的摇臂拍摄是一种基于摇臂拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 201,
+    "en": "Spiral Shot with Quick Camera",
+    "zh": "螺旋拍摄（Quick风格）",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "螺旋拍摄（Quick风格）是一种基于螺旋拍摄的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 202,
+    "en": "Steadicam Shot with Gradual Perspective",
+    "zh": "Gradual的稳定器拍摄",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "Gradual的稳定器拍摄是一种基于稳定器拍摄的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 203,
+    "en": "Aggressive Over-the-Shoulder Shot",
+    "zh": "过肩镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "过肩镜头（Aggressive风格）是一种基于过肩镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 204,
+    "en": "Over-the-Shoulder Shot with Aggressive Angle",
+    "zh": "过肩镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "过肩镜头（Aggressive风格）是一种基于过肩镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 205,
+    "en": "Aggressive Orbit Shot",
+    "zh": "Aggressive的环绕拍摄",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "Aggressive的环绕拍摄是一种基于环绕拍摄的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 206,
+    "en": "Tilt Pan with Fast Perspective",
+    "zh": "Fast的摇镜头",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "Fast的摇镜头是一种基于摇镜头的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 207,
+    "en": "Follow Shot with Slow Angle",
+    "zh": "Slow的跟镜头",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "Slow的跟镜头是一种基于跟镜头的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 208,
+    "en": "Car Mount with Smooth View",
+    "zh": "车载拍摄（Smooth风格）",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "车载拍摄（Smooth风格）是一种基于车载拍摄的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 209,
+    "en": "Rapid Extreme Wide Shot",
+    "zh": "大全景镜头（Rapid风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "大全景镜头（Rapid风格）是一种基于大全景镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 210,
+    "en": "Rapid Handheld",
+    "zh": "手持拍摄（Rapid风格）",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "手持拍摄（Rapid风格）是一种基于手持拍摄的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 211,
+    "en": "Subtle Steadicam Shot",
+    "zh": "Subtle的斯坦尼康拍摄",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "Subtle的斯坦尼康拍摄是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 212,
+    "en": "Truck Shot with Aggressive Lens",
+    "zh": "Aggressive的平移拍摄",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "Aggressive的平移拍摄是一种基于平移拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 213,
+    "en": "Point of View with Slow Perspective",
+    "zh": "Slow的视点镜头",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "Slow的视点镜头是一种基于视点镜头的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 214,
+    "en": "Slow Crane Shot",
+    "zh": "吊臂拍摄（Slow风格）",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "吊臂拍摄（Slow风格）是一种基于吊臂拍摄的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 215,
+    "en": "Quick Drone Shot",
+    "zh": "无人机拍摄（Quick风格）",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "无人机拍摄（Quick风格）是一种基于无人机拍摄的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 216,
+    "en": "Gentle Over-the-Shoulder Shot",
+    "zh": "过肩镜头（Gentle风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "过肩镜头（Gentle风格）是一种基于过肩镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 217,
+    "en": "Crane Shot with Aggressive Motion",
+    "zh": "吊臂拍摄（Aggressive风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "吊臂拍摄（Aggressive风格）是一种基于吊臂拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 218,
+    "en": "Steadicam Tracking with Smooth Motion",
+    "zh": "斯坦尼康跟拍（Smooth风格）",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "斯坦尼康跟拍（Smooth风格）是一种基于斯坦尼康跟拍的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 219,
+    "en": "Extreme Close-Up with Aggressive Shot",
+    "zh": "Aggressive的大特写镜头",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "Aggressive的大特写镜头是一种基于大特写镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 220,
+    "en": "Steadicam with Rapid Motion",
+    "zh": "斯坦尼康（Rapid风格）",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "斯坦尼康（Rapid风格）是一种基于斯坦尼康的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 221,
+    "en": "Gentle Time Lapse",
+    "zh": "延时摄影（Gentle风格）",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "延时摄影（Gentle风格）是一种基于延时摄影的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 222,
+    "en": "Steadicam with Smooth Focus",
+    "zh": "斯坦尼康（Smooth风格）",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "斯坦尼康（Smooth风格）是一种基于斯坦尼康的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 223,
+    "en": "Sudden Crane",
+    "zh": "升降（Sudden风格）",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "升降（Sudden风格）是一种基于升降的基础运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 224,
+    "en": "Tilt Pan with Gradual Shot",
+    "zh": "Gradual的摇镜头",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "Gradual的摇镜头是一种基于摇镜头的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 225,
+    "en": "Spiral Shot with Gradual Camera",
+    "zh": "螺旋拍摄（Gradual风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "螺旋拍摄（Gradual风格）是一种基于螺旋拍摄的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 226,
+    "en": "Steadicam Shot with Subtle Perspective",
+    "zh": "斯坦尼康拍摄（Subtle风格）",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "斯坦尼康拍摄（Subtle风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 227,
+    "en": "Tilt Zoom with Gradual Movement",
+    "zh": "俯仰变焦（Gradual风格）",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "俯仰变焦（Gradual风格）是一种基于俯仰变焦的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 228,
+    "en": "Macro Photography with Smooth Camera",
+    "zh": "微距摄影（Smooth风格）",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "微距摄影（Smooth风格）是一种基于微距摄影的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 229,
+    "en": "Rapid Whip Pan",
+    "zh": "Rapid的甩镜头",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "Rapid的甩镜头是一种基于甩镜头的复合运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 230,
+    "en": "Aggressive POV Shot",
+    "zh": "主观视角（Aggressive风格）",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "主观视角（Aggressive风格）是一种基于主观视角的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 231,
+    "en": "Dolly Shot with Subtle Perspective",
+    "zh": "推拉拍摄（Subtle风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "推拉拍摄（Subtle风格）是一种基于推拉拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 232,
+    "en": "Crane Shot with Subtle Perspective",
+    "zh": "吊臂拍摄（Subtle风格）",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "吊臂拍摄（Subtle风格）是一种基于吊臂拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 233,
+    "en": "Extreme Wide Shot with Quick Movement",
+    "zh": "大全景镜头（Quick风格）",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "大全景镜头（Quick风格）是一种基于大全景镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 234,
+    "en": "Macro Photography with Subtle Motion",
+    "zh": "微距摄影（Subtle风格）",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "微距摄影（Subtle风格）是一种基于微距摄影的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 235,
+    "en": "Fast POV Shot",
+    "zh": "Fast的主观视角",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "Fast的主观视角是一种基于主观视角的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 236,
+    "en": "High Speed Photography with Gentle Focus",
+    "zh": "Gentle的高速摄影",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "Gentle的高速摄影是一种基于高速摄影的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 237,
+    "en": "Smooth Car Mount",
+    "zh": "车载拍摄（Smooth风格）",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "车载拍摄（Smooth风格）是一种基于车载拍摄的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 238,
+    "en": "Slow Close-Up",
+    "zh": "Slow的特写镜头",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "Slow的特写镜头是一种基于特写镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 239,
+    "en": "Macro Photography with Sudden Frame",
+    "zh": "Sudden的微距摄影",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "Sudden的微距摄影是一种基于微距摄影的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 240,
+    "en": "Gentle Macro Photography",
+    "zh": "微距摄影（Gentle风格）",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "微距摄影（Gentle风格）是一种基于微距摄影的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 241,
+    "en": "Sudden Static Shot",
+    "zh": "固定镜头（Sudden风格）",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "固定镜头（Sudden风格）是一种基于固定镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 242,
+    "en": "Handheld Shot with Smooth View",
+    "zh": "Smooth的手持拍摄",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "Smooth的手持拍摄是一种基于手持拍摄的动态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 243,
+    "en": "Zoom with Sudden Focus",
+    "zh": "Sudden的变焦",
+    "category": "基础运镜",
+    "scene": "纪录片",
+    "desc": "Sudden的变焦是一种基于变焦的基础运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 244,
+    "en": "Rapid Bullet Time",
+    "zh": "Rapid的子弹时间",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "Rapid的子弹时间是一种基于子弹时间的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 245,
+    "en": "Crane with Gentle Frame",
+    "zh": "升降（Gentle风格）",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "升降（Gentle风格）是一种基于升降的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 246,
+    "en": "Smooth Tilt Zoom",
+    "zh": "Smooth的俯仰变焦",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "Smooth的俯仰变焦是一种基于俯仰变焦的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 247,
+    "en": "Fast Steadicam Tracking",
+    "zh": "Fast的斯坦尼康跟拍",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "Fast的斯坦尼康跟拍是一种基于斯坦尼康跟拍的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 248,
+    "en": "Gradual Two-Shot",
+    "zh": "双人镜头（Gradual风格）",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "双人镜头（Gradual风格）是一种基于双人镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 249,
+    "en": "Gradual Car Mount",
+    "zh": "车载拍摄（Gradual风格）",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "车载拍摄（Gradual风格）是一种基于车载拍摄的特殊运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 250,
+    "en": "Gradual Macro Photography",
+    "zh": "Gradual的微距摄影",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Gradual的微距摄影是一种基于微距摄影的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 251,
+    "en": "Tilt with Smooth Angle",
+    "zh": "Smooth的纵摇",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "Smooth的纵摇是一种基于纵摇的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 252,
+    "en": "Handheld with Slow Angle",
+    "zh": "Slow的手持拍摄",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "Slow的手持拍摄是一种基于手持拍摄的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 253,
+    "en": "Gradual POV Shot",
+    "zh": "主观视角（Gradual风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "主观视角（Gradual风格）是一种基于主观视角的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 254,
+    "en": "Aggressive Orbit Shot",
+    "zh": "环绕拍摄（Aggressive风格）",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "环绕拍摄（Aggressive风格）是一种基于环绕拍摄的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 255,
+    "en": "Macro Photography with Slow View",
+    "zh": "Slow的微距摄影",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "Slow的微距摄影是一种基于微距摄影的特殊运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 256,
+    "en": "Sudden Close-Up",
+    "zh": "Sudden的特写镜头",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "Sudden的特写镜头是一种基于特写镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 257,
+    "en": "Handheld Shot with Aggressive View",
+    "zh": "Aggressive的手持拍摄",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "Aggressive的手持拍摄是一种基于手持拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 258,
+    "en": "Smooth Dolly Tilt",
+    "zh": "俯仰移动（Smooth风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "俯仰移动（Smooth风格）是一种基于俯仰移动的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 259,
+    "en": "Point of View with Gentle Lens",
+    "zh": "Gentle的视点镜头",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "Gentle的视点镜头是一种基于视点镜头的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 260,
+    "en": "Aggressive Steadicam Shot",
+    "zh": "斯坦尼康拍摄（Aggressive风格）",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "斯坦尼康拍摄（Aggressive风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 261,
+    "en": "Drone Shot with Subtle Frame",
+    "zh": "Subtle的无人机拍摄",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "Subtle的无人机拍摄是一种基于无人机拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 262,
+    "en": "Sudden Whip Pan",
+    "zh": "Sudden的甩镜头",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "Sudden的甩镜头是一种基于甩镜头的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 263,
+    "en": "Subtle Whip Pan",
+    "zh": "甩镜头（Subtle风格）",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "甩镜头（Subtle风格）是一种基于甩镜头的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 264,
+    "en": "Macro Photography with Fast Movement",
+    "zh": "微距摄影（Fast风格）",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "微距摄影（Fast风格）是一种基于微距摄影的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 265,
+    "en": "Quick Tilt Pan",
+    "zh": "Quick的摇镜头",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "Quick的摇镜头是一种基于摇镜头的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 266,
+    "en": "Follow Shot with Gentle Lens",
+    "zh": "Gentle的跟镜头",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "Gentle的跟镜头是一种基于跟镜头的动态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 267,
+    "en": "Aggressive Underwater Shooting",
+    "zh": "水下拍摄（Aggressive风格）",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "水下拍摄（Aggressive风格）是一种基于水下拍摄的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 268,
+    "en": "Fast Truck",
+    "zh": "平移（Fast风格）",
+    "category": "基础运镜",
+    "scene": "纪录片",
+    "desc": "平移（Fast风格）是一种基于平移的基础运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 269,
+    "en": "Truck Shot with Gentle Frame",
+    "zh": "平移拍摄（Gentle风格）",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "平移拍摄（Gentle风格）是一种基于平移拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 270,
+    "en": "Crane with Slow View",
+    "zh": "升降（Slow风格）",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "升降（Slow风格）是一种基于升降的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 271,
+    "en": "Steadicam Shot with Gradual Perspective",
+    "zh": "稳定器拍摄（Gradual风格）",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "稳定器拍摄（Gradual风格）是一种基于稳定器拍摄的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 272,
+    "en": "Sudden Orbit Shot",
+    "zh": "Sudden的环绕拍摄",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "Sudden的环绕拍摄是一种基于环绕拍摄的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 273,
+    "en": "Car Mount with Subtle Angle",
+    "zh": "Subtle的车载拍摄",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "Subtle的车载拍摄是一种基于车载拍摄的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 274,
+    "en": "Handheld with Fast Shot",
+    "zh": "Fast的手持拍摄",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "Fast的手持拍摄是一种基于手持拍摄的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 275,
+    "en": "Quick Steadicam Shot",
+    "zh": "斯坦尼康拍摄（Quick风格）",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "斯坦尼康拍摄（Quick风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 276,
+    "en": "Gentle Pan",
+    "zh": "横摇（Gentle风格）",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "横摇（Gentle风格）是一种基于横摇的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 277,
+    "en": "Orbit Shot with Subtle Lens",
+    "zh": "环绕拍摄（Subtle风格）",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "环绕拍摄（Subtle风格）是一种基于环绕拍摄的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 278,
+    "en": "Gentle Pan",
+    "zh": "横摇（Gentle风格）",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "横摇（Gentle风格）是一种基于横摇的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 279,
+    "en": "Tracking Shot with Fast Angle",
+    "zh": "跟拍（Fast风格）",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "跟拍（Fast风格）是一种基于跟拍的复合运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 280,
+    "en": "Quick Moving Shot",
+    "zh": "移动镜头（Quick风格）",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "移动镜头（Quick风格）是一种基于移动镜头的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 281,
+    "en": "Gentle Crane Shot",
+    "zh": "吊臂拍摄（Gentle风格）",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "吊臂拍摄（Gentle风格）是一种基于吊臂拍摄的复合运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 282,
+    "en": "Tilt with Rapid Lens",
+    "zh": "Rapid的纵摇",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "Rapid的纵摇是一种基于纵摇的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 283,
+    "en": "Slow Close-Up",
+    "zh": "特写镜头（Slow风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "特写镜头（Slow风格）是一种基于特写镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 284,
+    "en": "Slow Close-Up",
+    "zh": "特写镜头（Slow风格）",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "特写镜头（Slow风格）是一种基于特写镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 285,
+    "en": "Dolly with Fast Motion",
+    "zh": "Fast的推拉",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "Fast的推拉是一种基于推拉的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 286,
+    "en": "Over-the-Shoulder Shot with Quick Camera",
+    "zh": "Quick的过肩镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "Quick的过肩镜头是一种基于过肩镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 287,
+    "en": "Tracking Shot with Aggressive Movement",
+    "zh": "轨道拍摄（Aggressive风格）",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "轨道拍摄（Aggressive风格）是一种基于轨道拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 288,
+    "en": "Fast Jib Shot",
+    "zh": "摇臂拍摄（Fast风格）",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "摇臂拍摄（Fast风格）是一种基于摇臂拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 289,
+    "en": "Sudden Crane",
+    "zh": "升降（Sudden风格）",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "升降（Sudden风格）是一种基于升降的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 290,
+    "en": "Slow Extreme Wide Shot",
+    "zh": "Slow的大全景镜头",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "Slow的大全景镜头是一种基于大全景镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 291,
+    "en": "Sudden Close-Up",
+    "zh": "Sudden的特写镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "Sudden的特写镜头是一种基于特写镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 292,
+    "en": "Static Shot with Quick View",
+    "zh": "Quick的固定镜头",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "Quick的固定镜头是一种基于固定镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 293,
+    "en": "Aggressive Dolly Shot",
+    "zh": "推拉拍摄（Aggressive风格）",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "推拉拍摄（Aggressive风格）是一种基于推拉拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 294,
+    "en": "Jib Shot with Aggressive Perspective",
+    "zh": "Aggressive的摇臂拍摄",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "Aggressive的摇臂拍摄是一种基于摇臂拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 295,
+    "en": "Gentle Moving Shot",
+    "zh": "移动镜头（Gentle风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "移动镜头（Gentle风格）是一种基于移动镜头的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 296,
+    "en": "Time Lapse with Quick Movement",
+    "zh": "延时摄影（Quick风格）",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "延时摄影（Quick风格）是一种基于延时摄影的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 297,
+    "en": "Truck Shot with Smooth View",
+    "zh": "Smooth的平移拍摄",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "Smooth的平移拍摄是一种基于平移拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 298,
+    "en": "Aggressive Close-Up",
+    "zh": "Aggressive的特写镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "Aggressive的特写镜头是一种基于特写镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 299,
+    "en": "Extreme Close-Up with Smooth Lens",
+    "zh": "大特写镜头（Smooth风格）",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "大特写镜头（Smooth风格）是一种基于大特写镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 300,
+    "en": "Steadicam with Rapid Focus",
+    "zh": "斯坦尼康（Rapid风格）",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "斯坦尼康（Rapid风格）是一种基于斯坦尼康的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 301,
+    "en": "Steadicam Shot with Rapid Perspective",
+    "zh": "稳定器拍摄（Rapid风格）",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "稳定器拍摄（Rapid风格）是一种基于稳定器拍摄的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 302,
+    "en": "Quick Orbit Shot",
+    "zh": "环绕拍摄（Quick风格）",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "环绕拍摄（Quick风格）是一种基于环绕拍摄的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 303,
+    "en": "Gradual Tracking Shot",
+    "zh": "Gradual的轨道拍摄",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "Gradual的轨道拍摄是一种基于轨道拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 304,
+    "en": "Tracking Shot with Gradual Frame",
+    "zh": "Gradual的跟拍",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "Gradual的跟拍是一种基于跟拍的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 305,
+    "en": "Steadicam Shot with Rapid Motion",
+    "zh": "Rapid的斯坦尼康拍摄",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "Rapid的斯坦尼康拍摄是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 306,
+    "en": "Steadicam with Aggressive Motion",
+    "zh": "斯坦尼康（Aggressive风格）",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "斯坦尼康（Aggressive风格）是一种基于斯坦尼康的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 307,
+    "en": "Handheld with Rapid Motion",
+    "zh": "Rapid的手持拍摄",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "Rapid的手持拍摄是一种基于手持拍摄的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 308,
+    "en": "Long Take with Aggressive Camera",
+    "zh": "长镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "长镜头（Aggressive风格）是一种基于长镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 309,
+    "en": "Macro Photography with Slow Movement",
+    "zh": "Slow的微距摄影",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "Slow的微距摄影是一种基于微距摄影的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 310,
+    "en": "Tracking Shot with Aggressive Perspective",
+    "zh": "Aggressive的轨道拍摄",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "Aggressive的轨道拍摄是一种基于轨道拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 311,
+    "en": "Slow Tilt Zoom",
+    "zh": "Slow的俯仰变焦",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "Slow的俯仰变焦是一种基于俯仰变焦的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 312,
+    "en": "Drone Shot with Sudden Angle",
+    "zh": "无人机拍摄（Sudden风格）",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "无人机拍摄（Sudden风格）是一种基于无人机拍摄的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 313,
+    "en": "Truck with Aggressive Frame",
+    "zh": "平移（Aggressive风格）",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "平移（Aggressive风格）是一种基于平移的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 314,
+    "en": "Tilt with Subtle Motion",
+    "zh": "Subtle的纵摇",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "Subtle的纵摇是一种基于纵摇的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 315,
+    "en": "Drone Shot with Subtle Focus",
+    "zh": "无人机拍摄（Subtle风格）",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "无人机拍摄（Subtle风格）是一种基于无人机拍摄的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 316,
+    "en": "Fast Tilt Pan",
+    "zh": "摇镜头（Fast风格）",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "摇镜头（Fast风格）是一种基于摇镜头的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 317,
+    "en": "Tilt with Gentle Lens",
+    "zh": "纵摇（Gentle风格）",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "纵摇（Gentle风格）是一种基于纵摇的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 318,
+    "en": "Dolly Zoom with Smooth Frame",
+    "zh": "滑动变焦（Smooth风格）",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "滑动变焦（Smooth风格）是一种基于滑动变焦的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 319,
+    "en": "Subtle Drone Shot",
+    "zh": "无人机拍摄（Subtle风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "无人机拍摄（Subtle风格）是一种基于无人机拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 320,
+    "en": "Aggressive Static Shot",
+    "zh": "固定镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "固定镜头（Aggressive风格）是一种基于固定镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 321,
+    "en": "Subtle Static Shot",
+    "zh": "固定镜头（Subtle风格）",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "固定镜头（Subtle风格）是一种基于固定镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 322,
+    "en": "Orbit Shot with Fast Shot",
+    "zh": "Fast的环绕拍摄",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "Fast的环绕拍摄是一种基于环绕拍摄的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 323,
+    "en": "Spiral Shot with Sudden Angle",
+    "zh": "Sudden的螺旋拍摄",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "Sudden的螺旋拍摄是一种基于螺旋拍摄的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 324,
+    "en": "Aggressive Medium Shot",
+    "zh": "中景镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "中景镜头（Aggressive风格）是一种基于中景镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 325,
+    "en": "Quick Static Shot",
+    "zh": "固定镜头（Quick风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "固定镜头（Quick风格）是一种基于固定镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 326,
+    "en": "Car Mount with Aggressive Focus",
+    "zh": "车载拍摄（Aggressive风格）",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "车载拍摄（Aggressive风格）是一种基于车载拍摄的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 327,
+    "en": "Tilt Pan with Gentle Angle",
+    "zh": "摇镜头（Gentle风格）",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "摇镜头（Gentle风格）是一种基于摇镜头的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 328,
+    "en": "Aggressive Dolly",
+    "zh": "Aggressive的推拉",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "Aggressive的推拉是一种基于推拉的基础运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 329,
+    "en": "Whip Pan with Aggressive Perspective",
+    "zh": "Aggressive的甩镜头",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "Aggressive的甩镜头是一种基于甩镜头的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 330,
+    "en": "Quick High Speed Photography",
+    "zh": "高速摄影（Quick风格）",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "高速摄影（Quick风格）是一种基于高速摄影的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 331,
+    "en": "Medium Shot with Rapid Angle",
+    "zh": "Rapid的中景镜头",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "Rapid的中景镜头是一种基于中景镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 332,
+    "en": "Locked-Off Shot with Rapid View",
+    "zh": "Rapid的锁定镜头",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "Rapid的锁定镜头是一种基于锁定镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 333,
+    "en": "Aggressive Crane Shot",
+    "zh": "吊臂拍摄（Aggressive风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "吊臂拍摄（Aggressive风格）是一种基于吊臂拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 334,
+    "en": "Aggressive Follow Shot",
+    "zh": "Aggressive的跟镜头",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "Aggressive的跟镜头是一种基于跟镜头的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 335,
+    "en": "Bullet Time with Gradual Camera",
+    "zh": "Gradual的子弹时间",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Gradual的子弹时间是一种基于子弹时间的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 336,
+    "en": "Whip Pan with Sudden Camera",
+    "zh": "Sudden的甩镜头",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "Sudden的甩镜头是一种基于甩镜头的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 337,
+    "en": "Long Take with Sudden Frame",
+    "zh": "长镜头（Sudden风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "长镜头（Sudden风格）是一种基于长镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 338,
+    "en": "Quick Locked-Off Shot",
+    "zh": "Quick的锁定镜头",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "Quick的锁定镜头是一种基于锁定镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 339,
+    "en": "Quick Truck",
+    "zh": "Quick的平移",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "Quick的平移是一种基于平移的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 340,
+    "en": "Drone Shot with Gentle Camera",
+    "zh": "无人机拍摄（Gentle风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "无人机拍摄（Gentle风格）是一种基于无人机拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 341,
+    "en": "Rapid Long Take",
+    "zh": "Rapid的长镜头",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "Rapid的长镜头是一种基于长镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 342,
+    "en": "Gradual Dolly Shot",
+    "zh": "Gradual的推拉拍摄",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "Gradual的推拉拍摄是一种基于推拉拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 343,
+    "en": "Gradual Steadicam",
+    "zh": "Gradual的斯坦尼康",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "Gradual的斯坦尼康是一种基于斯坦尼康的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 344,
+    "en": "Dolly Tilt with Quick Perspective",
+    "zh": "俯仰移动（Quick风格）",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "俯仰移动（Quick风格）是一种基于俯仰移动的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 345,
+    "en": "Moving Shot with Sudden Movement",
+    "zh": "Sudden的移动镜头",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "Sudden的移动镜头是一种基于移动镜头的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 346,
+    "en": "Sudden Tilt",
+    "zh": "Sudden的纵摇",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "Sudden的纵摇是一种基于纵摇的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 347,
+    "en": "Close-Up with Sudden Perspective",
+    "zh": "特写镜头（Sudden风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "特写镜头（Sudden风格）是一种基于特写镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 348,
+    "en": "Steadicam with Quick Movement",
+    "zh": "Quick的斯坦尼康",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "Quick的斯坦尼康是一种基于斯坦尼康的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 349,
+    "en": "Fast Long Take",
+    "zh": "Fast的长镜头",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "Fast的长镜头是一种基于长镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 350,
+    "en": "Gradual Truck",
+    "zh": "平移（Gradual风格）",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "平移（Gradual风格）是一种基于平移的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 351,
+    "en": "Crane Shot with Aggressive Shot",
+    "zh": "Aggressive的吊臂拍摄",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "Aggressive的吊臂拍摄是一种基于吊臂拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 352,
+    "en": "Two-Shot with Subtle View",
+    "zh": "双人镜头（Subtle风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "双人镜头（Subtle风格）是一种基于双人镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 353,
+    "en": "Subtle Dolly",
+    "zh": "推拉（Subtle风格）",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "推拉（Subtle风格）是一种基于推拉的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 354,
+    "en": "Follow Shot with Gradual Focus",
+    "zh": "跟镜头（Gradual风格）",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "跟镜头（Gradual风格）是一种基于跟镜头的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 355,
+    "en": "Slow Car Mount",
+    "zh": "车载拍摄（Slow风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "车载拍摄（Slow风格）是一种基于车载拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 356,
+    "en": "Static Shot with Quick Frame",
+    "zh": "固定镜头（Quick风格）",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "固定镜头（Quick风格）是一种基于固定镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 357,
+    "en": "Tracking Shot with Sudden Frame",
+    "zh": "跟拍（Sudden风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "跟拍（Sudden风格）是一种基于跟拍的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 358,
+    "en": "Aggressive Crane Shot",
+    "zh": "吊臂拍摄（Aggressive风格）",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "吊臂拍摄（Aggressive风格）是一种基于吊臂拍摄的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 359,
+    "en": "Time Lapse with Gradual Motion",
+    "zh": "延时摄影（Gradual风格）",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "延时摄影（Gradual风格）是一种基于延时摄影的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 360,
+    "en": "Macro Photography with Slow Movement",
+    "zh": "Slow的微距摄影",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "Slow的微距摄影是一种基于微距摄影的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 361,
+    "en": "Rapid Wide Shot",
+    "zh": "Rapid的全景镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "Rapid的全景镜头是一种基于全景镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 362,
+    "en": "Macro Photography with Subtle Movement",
+    "zh": "微距摄影（Subtle风格）",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "微距摄影（Subtle风格）是一种基于微距摄影的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 363,
+    "en": "Follow Shot with Sudden Angle",
+    "zh": "Sudden的跟镜头",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "Sudden的跟镜头是一种基于跟镜头的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 364,
+    "en": "Tracking Shot with Smooth Focus",
+    "zh": "Smooth的轨道拍摄",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "Smooth的轨道拍摄是一种基于轨道拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 365,
+    "en": "Subtle Wide Shot",
+    "zh": "Subtle的全景镜头",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "Subtle的全景镜头是一种基于全景镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 366,
+    "en": "Long Take with Rapid Angle",
+    "zh": "长镜头（Rapid风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "长镜头（Rapid风格）是一种基于长镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 367,
+    "en": "Quick Dolly Shot",
+    "zh": "Quick的推拉拍摄",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "Quick的推拉拍摄是一种基于推拉拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 368,
+    "en": "Slow Crane Shot",
+    "zh": "吊臂拍摄（Slow风格）",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "吊臂拍摄（Slow风格）是一种基于吊臂拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 369,
+    "en": "Steadicam Shot with Gradual Motion",
+    "zh": "斯坦尼康拍摄（Gradual风格）",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "斯坦尼康拍摄（Gradual风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 370,
+    "en": "Rapid Truck",
+    "zh": "平移（Rapid风格）",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "平移（Rapid风格）是一种基于平移的基础运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 371,
+    "en": "Fast Dolly Zoom",
+    "zh": "滑动变焦（Fast风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "滑动变焦（Fast风格）是一种基于滑动变焦的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 372,
+    "en": "Slow Underwater Shooting",
+    "zh": "水下拍摄（Slow风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "水下拍摄（Slow风格）是一种基于水下拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 373,
+    "en": "Slow POV Shot",
+    "zh": "Slow的主观视角",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "Slow的主观视角是一种基于主观视角的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 374,
+    "en": "Pedestal with Gentle Frame",
+    "zh": "Gentle的底座升降",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "Gentle的底座升降是一种基于底座升降的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 375,
+    "en": "Slow Time Lapse",
+    "zh": "延时摄影（Slow风格）",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "延时摄影（Slow风格）是一种基于延时摄影的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 376,
+    "en": "Point of View with Subtle Lens",
+    "zh": "视点镜头（Subtle风格）",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "视点镜头（Subtle风格）是一种基于视点镜头的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 377,
+    "en": "Rapid Time Lapse",
+    "zh": "延时摄影（Rapid风格）",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "延时摄影（Rapid风格）是一种基于延时摄影的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 378,
+    "en": "Crane with Sudden Shot",
+    "zh": "升降（Sudden风格）",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "升降（Sudden风格）是一种基于升降的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 379,
+    "en": "Zoom with Fast Frame",
+    "zh": "Fast的变焦",
+    "category": "基础运镜",
+    "scene": "纪录片",
+    "desc": "Fast的变焦是一种基于变焦的基础运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 380,
+    "en": "Steadicam Shot with Rapid Lens",
+    "zh": "Rapid的斯坦尼康拍摄",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "Rapid的斯坦尼康拍摄是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 381,
+    "en": "Subtle Tracking Shot",
+    "zh": "Subtle的轨道拍摄",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "Subtle的轨道拍摄是一种基于轨道拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 382,
+    "en": "Macro Photography with Quick Lens",
+    "zh": "Quick的微距摄影",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Quick的微距摄影是一种基于微距摄影的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 383,
+    "en": "Dolly with Aggressive Focus",
+    "zh": "推拉（Aggressive风格）",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "推拉（Aggressive风格）是一种基于推拉的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 384,
+    "en": "Sudden Jib Shot",
+    "zh": "摇臂拍摄（Sudden风格）",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "摇臂拍摄（Sudden风格）是一种基于摇臂拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 385,
+    "en": "Smooth Time Lapse",
+    "zh": "Smooth的延时摄影",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Smooth的延时摄影是一种基于延时摄影的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 386,
+    "en": "Fast Tilt Pan",
+    "zh": "摇镜头（Fast风格）",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "摇镜头（Fast风格）是一种基于摇镜头的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 387,
+    "en": "Gradual Steadicam Shot",
+    "zh": "Gradual的稳定器拍摄",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Gradual的稳定器拍摄是一种基于稳定器拍摄的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 388,
+    "en": "Subtle Whip Pan",
+    "zh": "Subtle的甩镜头",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "Subtle的甩镜头是一种基于甩镜头的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 389,
+    "en": "Follow Shot with Subtle View",
+    "zh": "Subtle的跟镜头",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "Subtle的跟镜头是一种基于跟镜头的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 390,
+    "en": "Truck with Subtle Angle",
+    "zh": "平移（Subtle风格）",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "平移（Subtle风格）是一种基于平移的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 391,
+    "en": "Gradual Dolly Tilt",
+    "zh": "Gradual的俯仰移动",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "Gradual的俯仰移动是一种基于俯仰移动的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 392,
+    "en": "High Speed Photography with Rapid Movement",
+    "zh": "Rapid的高速摄影",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "Rapid的高速摄影是一种基于高速摄影的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 393,
+    "en": "Smooth Dolly Tilt",
+    "zh": "俯仰移动（Smooth风格）",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "俯仰移动（Smooth风格）是一种基于俯仰移动的复合运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 394,
+    "en": "Sudden Crane",
+    "zh": "Sudden的升降",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "Sudden的升降是一种基于升降的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 395,
+    "en": "Bullet Time with Rapid Focus",
+    "zh": "Rapid的子弹时间",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "Rapid的子弹时间是一种基于子弹时间的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 396,
+    "en": "Sudden Tilt Pan",
+    "zh": "摇镜头（Sudden风格）",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "摇镜头（Sudden风格）是一种基于摇镜头的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 397,
+    "en": "Handheld Shot with Slow Frame",
+    "zh": "Slow的手持拍摄",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "Slow的手持拍摄是一种基于手持拍摄的动态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 398,
+    "en": "Sudden Dolly Tilt",
+    "zh": "Sudden的俯仰移动",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "Sudden的俯仰移动是一种基于俯仰移动的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 399,
+    "en": "Whip Pan with Aggressive Motion",
+    "zh": "Aggressive的甩镜头",
+    "category": "复合运镜",
+    "scene": "直播活动",
+    "desc": "Aggressive的甩镜头是一种基于甩镜头的复合运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 400,
+    "en": "Handheld with Smooth Movement",
+    "zh": "Smooth的手持拍摄",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "Smooth的手持拍摄是一种基于手持拍摄的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 401,
+    "en": "Gentle Steadicam Shot",
+    "zh": "稳定器拍摄（Gentle风格）",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "稳定器拍摄（Gentle风格）是一种基于稳定器拍摄的特殊运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 402,
+    "en": "Zoom with Fast Lens",
+    "zh": "Fast的变焦",
+    "category": "基础运镜",
+    "scene": "音乐MV",
+    "desc": "Fast的变焦是一种基于变焦的基础运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 403,
+    "en": "Steadicam Shot with Rapid Motion",
+    "zh": "斯坦尼康拍摄（Rapid风格）",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "斯坦尼康拍摄（Rapid风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 404,
+    "en": "Subtle Truck",
+    "zh": "平移（Subtle风格）",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "平移（Subtle风格）是一种基于平移的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 405,
+    "en": "Aggressive Pan",
+    "zh": "Aggressive的横摇",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "Aggressive的横摇是一种基于横摇的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 406,
+    "en": "Steadicam Shot with Subtle Movement",
+    "zh": "斯坦尼康拍摄（Subtle风格）",
+    "category": "动态运镜",
+    "scene": "短视频",
+    "desc": "斯坦尼康拍摄（Subtle风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 407,
+    "en": "Sudden Truck Shot",
+    "zh": "平移拍摄（Sudden风格）",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "平移拍摄（Sudden风格）是一种基于平移拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 408,
+    "en": "Steadicam Shot with Slow Motion",
+    "zh": "斯坦尼康拍摄（Slow风格）",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "斯坦尼康拍摄（Slow风格）是一种基于斯坦尼康拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 409,
+    "en": "Truck Shot with Quick Frame",
+    "zh": "平移拍摄（Quick风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "平移拍摄（Quick风格）是一种基于平移拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 410,
+    "en": "Rapid Drone Shot",
+    "zh": "无人机拍摄（Rapid风格）",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "无人机拍摄（Rapid风格）是一种基于无人机拍摄的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 411,
+    "en": "Fast Extreme Wide Shot",
+    "zh": "大全景镜头（Fast风格）",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "大全景镜头（Fast风格）是一种基于大全景镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 412,
+    "en": "Pan with Quick Frame",
+    "zh": "横摇（Quick风格）",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "横摇（Quick风格）是一种基于横摇的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 413,
+    "en": "Extreme Wide Shot with Quick Movement",
+    "zh": "Quick的大全景镜头",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "Quick的大全景镜头是一种基于大全景镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 414,
+    "en": "Moving Shot with Sudden Shot",
+    "zh": "Sudden的移动镜头",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "Sudden的移动镜头是一种基于移动镜头的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 415,
+    "en": "Time Lapse with Aggressive Frame",
+    "zh": "Aggressive的延时摄影",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Aggressive的延时摄影是一种基于延时摄影的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 416,
+    "en": "Locked-Off Shot with Smooth View",
+    "zh": "锁定镜头（Smooth风格）",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "锁定镜头（Smooth风格）是一种基于锁定镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 417,
+    "en": "Dolly with Gentle Motion",
+    "zh": "推拉（Gentle风格）",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "推拉（Gentle风格）是一种基于推拉的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 418,
+    "en": "Quick Tilt Pan",
+    "zh": "摇镜头（Quick风格）",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "摇镜头（Quick风格）是一种基于摇镜头的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 419,
+    "en": "Crane with Fast Angle",
+    "zh": "Fast的升降",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "Fast的升降是一种基于升降的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 420,
+    "en": "Drone Shot with Quick Focus",
+    "zh": "Quick的无人机拍摄",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "Quick的无人机拍摄是一种基于无人机拍摄的特殊运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 421,
+    "en": "Extreme Wide Shot with Rapid Motion",
+    "zh": "Rapid的大全景镜头",
+    "category": "静态运镜",
+    "scene": "音乐MV",
+    "desc": "Rapid的大全景镜头是一种基于大全景镜头的静态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 422,
+    "en": "Slow Bullet Time",
+    "zh": "子弹时间（Slow风格）",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "子弹时间（Slow风格）是一种基于子弹时间的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 423,
+    "en": "Crane Shot with Gradual Perspective",
+    "zh": "Gradual的吊臂拍摄",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "Gradual的吊臂拍摄是一种基于吊臂拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 424,
+    "en": "Smooth Dolly Tilt",
+    "zh": "Smooth的俯仰移动",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "Smooth的俯仰移动是一种基于俯仰移动的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 425,
+    "en": "Subtle Dolly Zoom",
+    "zh": "Subtle的滑动变焦",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "Subtle的滑动变焦是一种基于滑动变焦的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 426,
+    "en": "Dolly Zoom with Aggressive Camera",
+    "zh": "滑动变焦（Aggressive风格）",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "滑动变焦（Aggressive风格）是一种基于滑动变焦的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 427,
+    "en": "Aggressive Car Mount",
+    "zh": "车载拍摄（Aggressive风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "车载拍摄（Aggressive风格）是一种基于车载拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 428,
+    "en": "Slow Car Mount",
+    "zh": "车载拍摄（Slow风格）",
+    "category": "特殊运镜",
+    "scene": "纪录片",
+    "desc": "车载拍摄（Slow风格）是一种基于车载拍摄的特殊运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 429,
+    "en": "Dolly Tilt with Sudden Perspective",
+    "zh": "俯仰移动（Sudden风格）",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "俯仰移动（Sudden风格）是一种基于俯仰移动的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 430,
+    "en": "Handheld with Rapid Camera",
+    "zh": "Rapid的手持拍摄",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "Rapid的手持拍摄是一种基于手持拍摄的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 431,
+    "en": "Subtle Underwater Shooting",
+    "zh": "Subtle的水下拍摄",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "Subtle的水下拍摄是一种基于水下拍摄的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 432,
+    "en": "Sudden Follow Shot",
+    "zh": "跟镜头（Sudden风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "跟镜头（Sudden风格）是一种基于跟镜头的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 433,
+    "en": "Underwater Shooting with Fast View",
+    "zh": "Fast的水下拍摄",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "Fast的水下拍摄是一种基于水下拍摄的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 434,
+    "en": "Slow Orbit Shot",
+    "zh": "环绕拍摄（Slow风格）",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "环绕拍摄（Slow风格）是一种基于环绕拍摄的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 435,
+    "en": "Quick Truck",
+    "zh": "平移（Quick风格）",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "平移（Quick风格）是一种基于平移的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 436,
+    "en": "Tilt Pan with Subtle Angle",
+    "zh": "摇镜头（Subtle风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "摇镜头（Subtle风格）是一种基于摇镜头的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 437,
+    "en": "Truck Shot with Subtle Motion",
+    "zh": "Subtle的平移拍摄",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "Subtle的平移拍摄是一种基于平移拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 438,
+    "en": "Orbit Shot with Aggressive Frame",
+    "zh": "Aggressive的环绕拍摄",
+    "category": "复合运镜",
+    "scene": "纪录片",
+    "desc": "Aggressive的环绕拍摄是一种基于环绕拍摄的复合运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 439,
+    "en": "Subtle Over-the-Shoulder Shot",
+    "zh": "过肩镜头（Subtle风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "过肩镜头（Subtle风格）是一种基于过肩镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 440,
+    "en": "High Speed Photography with Gentle View",
+    "zh": "Gentle的高速摄影",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "Gentle的高速摄影是一种基于高速摄影的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 441,
+    "en": "Aggressive Pedestal",
+    "zh": "底座升降（Aggressive风格）",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "底座升降（Aggressive风格）是一种基于底座升降的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 442,
+    "en": "Orbit Shot with Gentle Movement",
+    "zh": "Gentle的环绕拍摄",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "Gentle的环绕拍摄是一种基于环绕拍摄的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 443,
+    "en": "Crane Shot with Aggressive Frame",
+    "zh": "吊臂拍摄（Aggressive风格）",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "吊臂拍摄（Aggressive风格）是一种基于吊臂拍摄的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 444,
+    "en": "Subtle Spiral Shot",
+    "zh": "螺旋拍摄（Subtle风格）",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "螺旋拍摄（Subtle风格）是一种基于螺旋拍摄的复合运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 445,
+    "en": "Tracking Shot with Gentle Camera",
+    "zh": "Gentle的跟拍",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "Gentle的跟拍是一种基于跟拍的复合运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 446,
+    "en": "Smooth Steadicam Shot",
+    "zh": "稳定器拍摄（Smooth风格）",
+    "category": "特殊运镜",
+    "scene": "短视频",
+    "desc": "稳定器拍摄（Smooth风格）是一种基于稳定器拍摄的特殊运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 447,
+    "en": "Extreme Wide Shot with Sudden Frame",
+    "zh": "大全景镜头（Sudden风格）",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "大全景镜头（Sudden风格）是一种基于大全景镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 448,
+    "en": "Steadicam with Sudden Movement",
+    "zh": "斯坦尼康（Sudden风格）",
+    "category": "基础运镜",
+    "scene": "电影拍摄",
+    "desc": "斯坦尼康（Sudden风格）是一种基于斯坦尼康的基础运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 449,
+    "en": "Over-the-Shoulder Shot with Smooth Lens",
+    "zh": "Smooth的过肩镜头",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "Smooth的过肩镜头是一种基于过肩镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 450,
+    "en": "Subtle Long Take",
+    "zh": "长镜头（Subtle风格）",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "长镜头（Subtle风格）是一种基于长镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 451,
+    "en": "Subtle Handheld",
+    "zh": "Subtle的手持拍摄",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "Subtle的手持拍摄是一种基于手持拍摄的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 452,
+    "en": "Gradual Crane Shot",
+    "zh": "Gradual的吊臂拍摄",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "Gradual的吊臂拍摄是一种基于吊臂拍摄的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 453,
+    "en": "Steadicam Tracking with Fast Shot",
+    "zh": "斯坦尼康跟拍（Fast风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "斯坦尼康跟拍（Fast风格）是一种基于斯坦尼康跟拍的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 454,
+    "en": "Quick Handheld Shot",
+    "zh": "Quick的手持拍摄",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "Quick的手持拍摄是一种基于手持拍摄的动态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 455,
+    "en": "Pedestal with Slow Camera",
+    "zh": "Slow的底座升降",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "Slow的底座升降是一种基于底座升降的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 456,
+    "en": "Dolly Shot with Slow Frame",
+    "zh": "推拉拍摄（Slow风格）",
+    "category": "动态运镜",
+    "scene": "纪录片",
+    "desc": "推拉拍摄（Slow风格）是一种基于推拉拍摄的动态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 457,
+    "en": "Gentle Dolly Zoom",
+    "zh": "滑动变焦（Gentle风格）",
+    "category": "复合运镜",
+    "scene": "音乐MV",
+    "desc": "滑动变焦（Gentle风格）是一种基于滑动变焦的复合运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 458,
+    "en": "Crane Shot with Fast Frame",
+    "zh": "Fast的吊臂拍摄",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "Fast的吊臂拍摄是一种基于吊臂拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 459,
+    "en": "Quick Truck",
+    "zh": "Quick的平移",
+    "category": "基础运镜",
+    "scene": "广告制作",
+    "desc": "Quick的平移是一种基于平移的基础运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 460,
+    "en": "Gradual Spiral Shot",
+    "zh": "螺旋拍摄（Gradual风格）",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "螺旋拍摄（Gradual风格）是一种基于螺旋拍摄的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 461,
+    "en": "Fast Underwater Shooting",
+    "zh": "水下拍摄（Fast风格）",
+    "category": "特殊运镜",
+    "scene": "电影拍摄",
+    "desc": "水下拍摄（Fast风格）是一种基于水下拍摄的特殊运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 462,
+    "en": "Subtle Two-Shot",
+    "zh": "双人镜头（Subtle风格）",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "双人镜头（Subtle风格）是一种基于双人镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 463,
+    "en": "Subtle Over-the-Shoulder Shot",
+    "zh": "过肩镜头（Subtle风格）",
+    "category": "静态运镜",
+    "scene": "电影拍摄",
+    "desc": "过肩镜头（Subtle风格）是一种基于过肩镜头的静态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 464,
+    "en": "Medium Shot with Subtle Movement",
+    "zh": "Subtle的中景镜头",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "Subtle的中景镜头是一种基于中景镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 465,
+    "en": "Gentle Tracking Shot",
+    "zh": "Gentle的跟拍",
+    "category": "复合运镜",
+    "scene": "电影拍摄",
+    "desc": "Gentle的跟拍是一种基于跟拍的复合运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 466,
+    "en": "Fast Drone Shot",
+    "zh": "无人机拍摄（Fast风格）",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "无人机拍摄（Fast风格）是一种基于无人机拍摄的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 467,
+    "en": "Subtle High Speed Photography",
+    "zh": "高速摄影（Subtle风格）",
+    "category": "特殊运镜",
+    "scene": "直播活动",
+    "desc": "高速摄影（Subtle风格）是一种基于高速摄影的特殊运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 468,
+    "en": "Crane Shot with Gradual Perspective",
+    "zh": "Gradual的吊臂拍摄",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "Gradual的吊臂拍摄是一种基于吊臂拍摄的动态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 469,
+    "en": "Subtle Close-Up",
+    "zh": "特写镜头（Subtle风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "特写镜头（Subtle风格）是一种基于特写镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 470,
+    "en": "Rapid Medium Shot",
+    "zh": "中景镜头（Rapid风格）",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "中景镜头（Rapid风格）是一种基于中景镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 471,
+    "en": "Gradual Two-Shot",
+    "zh": "双人镜头（Gradual风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "双人镜头（Gradual风格）是一种基于双人镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 472,
+    "en": "Drone Shot with Quick Shot",
+    "zh": "无人机拍摄（Quick风格）",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "无人机拍摄（Quick风格）是一种基于无人机拍摄的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 473,
+    "en": "Dolly Zoom with Rapid Focus",
+    "zh": "Rapid的滑动变焦",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "Rapid的滑动变焦是一种基于滑动变焦的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 474,
+    "en": "Sudden Tilt Pan",
+    "zh": "Sudden的摇镜头",
+    "category": "复合运镜",
+    "scene": "广告制作",
+    "desc": "Sudden的摇镜头是一种基于摇镜头的复合运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 475,
+    "en": "Sudden Follow Shot",
+    "zh": "跟镜头（Sudden风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "跟镜头（Sudden风格）是一种基于跟镜头的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 476,
+    "en": "Smooth Drone Shot",
+    "zh": "Smooth的无人机拍摄",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "Smooth的无人机拍摄是一种基于无人机拍摄的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 477,
+    "en": "Dolly with Smooth Lens",
+    "zh": "Smooth的推拉",
+    "category": "基础运镜",
+    "scene": "电视剧",
+    "desc": "Smooth的推拉是一种基于推拉的基础运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 478,
+    "en": "Point of View with Rapid Motion",
+    "zh": "Rapid的视点镜头",
+    "category": "特殊运镜",
+    "scene": "广告制作",
+    "desc": "Rapid的视点镜头是一种基于视点镜头的特殊运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 479,
+    "en": "Extreme Wide Shot with Aggressive Shot",
+    "zh": "大全景镜头（Aggressive风格）",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "大全景镜头（Aggressive风格）是一种基于大全景镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 480,
+    "en": "Sudden Two-Shot",
+    "zh": "双人镜头（Sudden风格）",
+    "category": "静态运镜",
+    "scene": "短视频",
+    "desc": "双人镜头（Sudden风格）是一种基于双人镜头的静态运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 481,
+    "en": "Rapid Static Shot",
+    "zh": "固定镜头（Rapid风格）",
+    "category": "静态运镜",
+    "scene": "广告制作",
+    "desc": "固定镜头（Rapid风格）是一种基于固定镜头的静态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 482,
+    "en": "Fast Locked-Off Shot",
+    "zh": "锁定镜头（Fast风格）",
+    "category": "静态运镜",
+    "scene": "直播活动",
+    "desc": "锁定镜头（Fast风格）是一种基于锁定镜头的静态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 483,
+    "en": "Slow Orbit Shot",
+    "zh": "Slow的环绕拍摄",
+    "category": "复合运镜",
+    "scene": "短视频",
+    "desc": "Slow的环绕拍摄是一种基于环绕拍摄的复合运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 484,
+    "en": "Moving Shot with Slow Camera",
+    "zh": "移动镜头（Slow风格）",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "移动镜头（Slow风格）是一种基于移动镜头的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 485,
+    "en": "Follow Shot with Slow Frame",
+    "zh": "跟镜头（Slow风格）",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "跟镜头（Slow风格）是一种基于跟镜头的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 486,
+    "en": "Aggressive Tracking Shot",
+    "zh": "Aggressive的轨道拍摄",
+    "category": "动态运镜",
+    "scene": "直播活动",
+    "desc": "Aggressive的轨道拍摄是一种基于轨道拍摄的动态运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 487,
+    "en": "Sudden Drone Shot",
+    "zh": "Sudden的无人机拍摄",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "Sudden的无人机拍摄是一种基于无人机拍摄的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 488,
+    "en": "Sudden Moving Shot",
+    "zh": "移动镜头（Sudden风格）",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "移动镜头（Sudden风格）是一种基于移动镜头的动态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 489,
+    "en": "Gentle Moving Shot",
+    "zh": "移动镜头（Gentle风格）",
+    "category": "动态运镜",
+    "scene": "电影拍摄",
+    "desc": "移动镜头（Gentle风格）是一种基于移动镜头的动态运镜变体技术，增强了电影拍摄中的视觉表现力"
+  },
+  {
+    "id": 490,
+    "en": "Time Lapse with Rapid Frame",
+    "zh": "延时摄影（Rapid风格）",
+    "category": "特殊运镜",
+    "scene": "音乐MV",
+    "desc": "延时摄影（Rapid风格）是一种基于延时摄影的特殊运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 491,
+    "en": "Dolly Shot with Aggressive Angle",
+    "zh": "推拉拍摄（Aggressive风格）",
+    "category": "动态运镜",
+    "scene": "音乐MV",
+    "desc": "推拉拍摄（Aggressive风格）是一种基于推拉拍摄的动态运镜变体技术，增强了音乐MV中的视觉表现力"
+  },
+  {
+    "id": 492,
+    "en": "Smooth Tracking Shot",
+    "zh": "Smooth的轨道拍摄",
+    "category": "动态运镜",
+    "scene": "广告制作",
+    "desc": "Smooth的轨道拍摄是一种基于轨道拍摄的动态运镜变体技术，增强了广告制作中的视觉表现力"
+  },
+  {
+    "id": 493,
+    "en": "Dolly with Gentle Motion",
+    "zh": "推拉（Gentle风格）",
+    "category": "基础运镜",
+    "scene": "直播活动",
+    "desc": "推拉（Gentle风格）是一种基于推拉的基础运镜变体技术，增强了直播活动中的视觉表现力"
+  },
+  {
+    "id": 494,
+    "en": "Zoom with Quick Lens",
+    "zh": "Quick的变焦",
+    "category": "基础运镜",
+    "scene": "短视频",
+    "desc": "Quick的变焦是一种基于变焦的基础运镜变体技术，增强了短视频中的视觉表现力"
+  },
+  {
+    "id": 495,
+    "en": "Handheld Shot with Smooth Movement",
+    "zh": "手持拍摄（Smooth风格）",
+    "category": "动态运镜",
+    "scene": "电视剧",
+    "desc": "手持拍摄（Smooth风格）是一种基于手持拍摄的动态运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 496,
+    "en": "Sudden Static Shot",
+    "zh": "固定镜头（Sudden风格）",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "固定镜头（Sudden风格）是一种基于固定镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 497,
+    "en": "Point of View with Smooth Lens",
+    "zh": "视点镜头（Smooth风格）",
+    "category": "特殊运镜",
+    "scene": "电视剧",
+    "desc": "视点镜头（Smooth风格）是一种基于视点镜头的特殊运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 498,
+    "en": "Locked-Off Shot with Sudden Shot",
+    "zh": "Sudden的锁定镜头",
+    "category": "静态运镜",
+    "scene": "纪录片",
+    "desc": "Sudden的锁定镜头是一种基于锁定镜头的静态运镜变体技术，增强了纪录片中的视觉表现力"
+  },
+  {
+    "id": 499,
+    "en": "Rapid Steadicam Tracking",
+    "zh": "斯坦尼康跟拍（Rapid风格）",
+    "category": "复合运镜",
+    "scene": "电视剧",
+    "desc": "斯坦尼康跟拍（Rapid风格）是一种基于斯坦尼康跟拍的复合运镜变体技术，增强了电视剧中的视觉表现力"
+  },
+  {
+    "id": 500,
+    "en": "Long Take with Subtle Focus",
+    "zh": "Subtle的长镜头",
+    "category": "静态运镜",
+    "scene": "电视剧",
+    "desc": "Subtle的长镜头是一种基于长镜头的静态运镜变体技术，增强了电视剧中的视觉表现力"
+  }
+]

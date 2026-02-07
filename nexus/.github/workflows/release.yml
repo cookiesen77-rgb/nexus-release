@@ -1,0 +1,222 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-15
+            args: --target x86_64-apple-darwin
+            name: macOS-Intel
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            name: macOS-ARM
+          - platform: windows-latest
+            args: ''
+            name: Windows
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install target (macOS Intel)
+        if: matrix.name == 'macOS-Intel'
+        run: rustup target add x86_64-apple-darwin
+
+      - name: Install target (macOS ARM)
+        if: matrix.name == 'macOS-ARM'
+        run: rustup target add aarch64-apple-darwin
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Prepare FFmpeg sidecar (macOS Intel)
+        if: matrix.name == 'macOS-Intel'
+        run: |
+          mkdir -p src-tauri/binaries
+          curl -L --retry 3 --retry-delay 2 -o ffmpeg.zip "https://ffmpeg.martin-riedl.de/download/macos/amd64/1767299902_N-122320-g38e89fe502/ffmpeg.zip"
+          rm -rf ffmpeg-bin && mkdir -p ffmpeg-bin
+          unzip -q ffmpeg.zip -d ffmpeg-bin
+          mv ffmpeg-bin/ffmpeg "src-tauri/binaries/ffmpeg-x86_64-apple-darwin"
+          chmod +x "src-tauri/binaries/ffmpeg-x86_64-apple-darwin"
+
+      - name: Prepare FFmpeg sidecar (macOS ARM)
+        if: matrix.name == 'macOS-ARM'
+        run: |
+          mkdir -p src-tauri/binaries
+          curl -L --retry 3 --retry-delay 2 -o ffmpeg.zip "https://ffmpeg.martin-riedl.de/download/macos/arm64/1769883472_N-122609-g364d5dda91/ffmpeg.zip"
+          rm -rf ffmpeg-bin && mkdir -p ffmpeg-bin
+          unzip -q ffmpeg.zip -d ffmpeg-bin
+          mv ffmpeg-bin/ffmpeg "src-tauri/binaries/ffmpeg-aarch64-apple-darwin"
+          chmod +x "src-tauri/binaries/ffmpeg-aarch64-apple-darwin"
+
+      - name: Prepare FFmpeg sidecar (Windows)
+        if: matrix.name == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri\binaries | Out-Null
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          $zip = "ffmpeg.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          if (Test-Path ffmpeg-bin) { Remove-Item ffmpeg-bin -Recurse -Force }
+          Expand-Archive -Path $zip -DestinationPath ffmpeg-bin -Force
+          $ff = Get-ChildItem -Path ffmpeg-bin -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $ff) { throw "ffmpeg.exe not found in zip" }
+          Copy-Item $ff.FullName -Destination src-tauri\binaries\ffmpeg-x86_64-pc-windows-msvc.exe -Force
+
+      - name: Build Tauri app (signed for updater)
+        run: npm run tauri build -- ${{ matrix.args }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Upload artifacts (macOS Intel)
+        if: matrix.name == 'macOS-Intel'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel
+          path: |
+            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.tar.gz
+            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.tar.gz.sig
+
+      - name: Upload artifacts (macOS ARM)
+        if: matrix.name == 'macOS-ARM'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm
+          path: |
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.tar.gz
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.tar.gz.sig
+
+      - name: Upload artifacts (Windows)
+        if: matrix.name == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.nsis.zip
+            src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+
+  release:
+    needs: build-tauri
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Generate latest.json for Tauri updater
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          REPO="${{ github.repository }}"
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          # Read .sig files for each platform
+          MACOS_INTEL_SIG=""
+          MACOS_ARM_SIG=""
+          WINDOWS_SIG=""
+
+          for f in $(find artifacts/macos-intel -name '*.tar.gz.sig' 2>/dev/null); do
+            MACOS_INTEL_SIG=$(cat "$f")
+          done
+          for f in $(find artifacts/macos-arm -name '*.tar.gz.sig' 2>/dev/null); do
+            MACOS_ARM_SIG=$(cat "$f")
+          done
+          for f in $(find artifacts/windows -name '*.nsis.zip.sig' 2>/dev/null); do
+            WINDOWS_SIG=$(cat "$f")
+          done
+
+          # Find actual filenames
+          MACOS_INTEL_TAR=$(find artifacts/macos-intel -name '*.tar.gz' ! -name '*.sig' -printf '%f\n' 2>/dev/null | head -1)
+          MACOS_ARM_TAR=$(find artifacts/macos-arm -name '*.tar.gz' ! -name '*.sig' -printf '%f\n' 2>/dev/null | head -1)
+          WINDOWS_ZIP=$(find artifacts/windows -name '*.nsis.zip' ! -name '*.sig' -printf '%f\n' 2>/dev/null | head -1)
+
+          echo "Found updater bundles:"
+          echo "  macOS Intel: ${MACOS_INTEL_TAR:-NOT FOUND}"
+          echo "  macOS ARM:   ${MACOS_ARM_TAR:-NOT FOUND}"
+          echo "  Windows:     ${WINDOWS_ZIP:-NOT FOUND}"
+
+          # Build latest.json
+          cat > latest.json << ENDJSON
+          {
+            "version": "${VERSION}",
+            "notes": "Nexus v${VERSION}",
+            "pub_date": "${PUB_DATE}",
+            "platforms": {
+              "darwin-x86_64": {
+                "signature": "${MACOS_INTEL_SIG}",
+                "url": "https://github.com/${REPO}/releases/download/v${VERSION}/${MACOS_INTEL_TAR}"
+              },
+              "darwin-aarch64": {
+                "signature": "${MACOS_ARM_SIG}",
+                "url": "https://github.com/${REPO}/releases/download/v${VERSION}/${MACOS_ARM_TAR}"
+              },
+              "windows-x86_64": {
+                "signature": "${WINDOWS_SIG}",
+                "url": "https://github.com/${REPO}/releases/download/v${VERSION}/${WINDOWS_ZIP}"
+              }
+            }
+          }
+          ENDJSON
+          cat latest.json
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Nexus v${{ steps.version.outputs.version }}
+          body: |
+            ## Nexus v${{ steps.version.outputs.version }}
+
+            AI 工作流画布应用（支持自动更新）
+
+            ### 下载
+            - **macOS Intel**: `Nexus_${{ steps.version.outputs.version }}_x64.dmg`
+            - **macOS Apple Silicon**: `Nexus_${{ steps.version.outputs.version }}_aarch64.dmg`
+            - **Windows**: `Nexus_${{ steps.version.outputs.version }}_x64-setup.exe` / `.msi`
+
+            ### 获取 API Key
+            访问 [nexusapi.cn](https://nexusapi.cn/) 获取 API Key
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*.exe
+            artifacts/**/*.msi
+            artifacts/**/*.tar.gz
+            artifacts/**/*.nsis.zip
+            artifacts/**/*.sig
+            latest.json
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
