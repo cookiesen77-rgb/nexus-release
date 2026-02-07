@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from 'react'
-import { Plus, Trash2, Loader2, Upload, Play } from 'lucide-react'
+import { Plus, Trash2, Loader2, Upload, Play, Mic } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EcomDraftV1, EcomDigitalHumanScene as DHScene, EcomMediaVariant } from '@/lib/ecommerce/types'
 import { generateAvatarVideo } from '@/lib/ecommerce/klingAdvanced'
+import { generateTTS, TTS_MODELS } from '@/lib/ecommerce/tts'
 import { bgCacheToProject } from '@/lib/ecommerce/generateMedia'
 import { createEmptySlot } from '@/lib/ecommerce/draftStorage'
 import { useAssetsStore } from '@/store/assets'
@@ -25,6 +26,7 @@ const getSlotUrl = (slot: { variants: EcomMediaVariant[]; selectedVariantId?: st
 
 export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProps) {
   const [generating, setGenerating] = useState(false)
+  const [ttsGenerating, setTtsGenerating] = useState(false)
 
   const patchScene = useCallback((idx: number, patch: Partial<DHScene>) => {
     setDraftSafe(prev => {
@@ -87,6 +89,34 @@ export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProp
     reader.readAsDataURL(file)
     e.currentTarget.value = ''
   }, [draft.digitalHumanScenes, patchScene])
+
+  const handleTTS = useCallback(async (idx: number) => {
+    const scene = draft.digitalHumanScenes[idx]
+    const text = scene.prompt?.trim()
+    if (!text) { window.$message?.warning?.('请输入文案'); return }
+    setTtsGenerating(true)
+    try {
+      const { audioDataUrl } = await generateTTS({ text, model: draft.models.ttsModelKey })
+      const variantId = makeVariantId()
+      setDraftSafe(prev => {
+        const scenes = [...prev.digitalHumanScenes]
+        scenes[idx] = {
+          ...scenes[idx],
+          audioSlot: {
+            ...scenes[idx].audioSlot,
+            variants: [{ id: variantId, status: 'success' as const, createdAt: Date.now(), createdBy: 'auto' as const, displayUrl: audioDataUrl }],
+            selectedVariantId: variantId,
+          },
+        }
+        return { ...prev, digitalHumanScenes: scenes }
+      })
+      window.$message?.success?.('语音生成成功')
+    } catch (err: any) {
+      window.$message?.error?.(err?.message || 'TTS 生成失败')
+    } finally {
+      setTtsGenerating(false)
+    }
+  }, [draft.digitalHumanScenes, draft.models.ttsModelKey, setDraftSafe])
 
   const handleGenerate = useCallback(async (idx: number) => {
     if (generating) return
@@ -224,6 +254,32 @@ export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProp
                 <audio src={audioV.displayUrl} controls className="w-full h-8" />
               </div>
             )}
+
+            <div className="mt-3 space-y-2">
+              <div className="text-[10px] text-[var(--text-secondary)] mb-1">或使用 TTS 生成语音</div>
+              <textarea
+                value={scene.prompt}
+                onChange={e => patchScene(idx, { prompt: e.target.value })}
+                placeholder="输入带货文案，AI 将转为语音..."
+                rows={3}
+                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs resize-none"
+              />
+              <div className="flex gap-2 items-center">
+                <select
+                  value={draft.models.ttsModelKey}
+                  onChange={e => setDraftSafe(prev => ({ ...prev, models: { ...prev.models, ttsModelKey: e.target.value } }))}
+                  className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1 text-[11px]"
+                >
+                  {TTS_MODELS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+                </select>
+                <Button size="sm" onClick={() => handleTTS(idx)} disabled={ttsGenerating} className="gap-1">
+                  {ttsGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mic className="h-3 w-3" />} 生成语音
+                </Button>
+              </div>
+              {scene.audioSlot?.variants?.[0]?.displayUrl && (
+                <audio src={scene.audioSlot.variants[0].displayUrl} controls className="w-full h-8" />
+              )}
+            </div>
 
             <div className="mt-3 flex items-center gap-3">
               <select

@@ -260,6 +260,15 @@ export default function EcomProductSidebar({
             <option key={m.key} value={m.key}>{m.label}</option>
           ))}
         </select>
+        {(() => {
+          const cfg = (VIDEO_MODELS as any[]).find(m => m.key === draft.models.videoModelKey)
+          if (!cfg) return null
+          return (
+            <div className="text-[10px] text-[var(--text-secondary)] opacity-60">
+              比例: {(cfg.ratios || []).join(' / ')} | 时长: {(cfg.durs || []).map((d: any) => d.label).join(' / ')}
+            </div>
+          )
+        })()}
 
         <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">TTS 模型</div>
         <select

@@ -3,6 +3,7 @@ import { Plus, Trash2, Loader2, Upload, Play, Video, Mic } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { EcomDraftV1, EcomVideoType, EcomMediaVariant } from '@/lib/ecommerce/types'
+import { VIDEO_MODELS } from '@/config/models'
 import { generateEcomVideo, buildProductVideoPrompt, bgCacheToProject } from '@/lib/ecommerce/generateMedia'
 import { generateAvatarVideo } from '@/lib/ecommerce/klingAdvanced'
 import { generateTTS, TTS_MODELS } from '@/lib/ecommerce/tts'
@@ -38,6 +39,8 @@ const VIDEO_STYLE_PRESETS = [
   { label: '对比展示', hint: '产品使用前后对比，分屏或过渡效果，突出产品效果' },
   { label: '节日促销', hint: '喜庆氛围，产品搭配节日装饰，动感文字叠加区域' },
 ]
+
+const getVideoModelConfig = (key: string) => (VIDEO_MODELS as any[]).find(m => m.key === key)
 
 export default function EcomVideoScene({ draft, setDraftSafe }: SceneProps) {
   const [generating, setGenerating] = useState(false)
@@ -221,6 +224,7 @@ export default function EcomVideoScene({ draft, setDraftSafe }: SceneProps) {
         const firstV = scene.firstFrameSlot?.variants?.[0]
         const videoVariants = scene.videoSlot?.variants || []
         const videoV = videoVariants.find(v => v.id === scene.videoSlot?.selectedVariantId) || videoVariants[videoVariants.length - 1]
+        const modelCfg = getVideoModelConfig(draft.models.videoModelKey)
 
         return (
           <div key={scene.id} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
@@ -250,19 +254,21 @@ export default function EcomVideoScene({ draft, setDraftSafe }: SceneProps) {
                   onChange={e => setDraftSafe(prev => ({ ...prev, models: { ...prev.models, videoRatio: e.target.value } }))}
                   className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs"
                 >
-                  <option value="9:16">9:16 竖屏</option>
-                  <option value="16:9">16:9 横屏</option>
-                  <option value="1:1">1:1 方形</option>
+                  {(modelCfg?.ratios || ['16:9', '9:16']).map((r: string) => (
+                    <option key={r} value={r}>{r === '16:9' ? '16:9 横屏' : r === '9:16' ? '9:16 竖屏' : r}</option>
+                  ))}
                 </select>
                 <select
                   value={String(draft.models.videoDuration)}
                   onChange={e => setDraftSafe(prev => ({ ...prev, models: { ...prev.models, videoDuration: Number(e.target.value) } }))}
                   className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs"
                 >
-                  <option value="5">5秒</option>
-                  <option value="10">10秒</option>
+                  {(modelCfg?.durs || [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }]).map((d: any) => (
+                    <option key={d.key} value={String(d.key)}>{d.label}</option>
+                  ))}
                 </select>
               </div>
+              {modelCfg?.tips && <div className="text-[10px] text-[var(--text-secondary)] opacity-60 mt-1">{modelCfg.tips}</div>}
 
               <div className="flex flex-wrap gap-1">
                 {VIDEO_STYLE_PRESETS.map(p => (
