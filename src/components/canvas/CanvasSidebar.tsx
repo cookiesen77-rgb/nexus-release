@@ -1,5 +1,5 @@
 import React from 'react'
-import { Brush, Camera, Film, Hand, LayoutGrid, Link2, MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch, Save, Wand2 } from 'lucide-react'
+import { Brush, Camera, Film, Hand, LayoutGrid, Link2, MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch, Save, Wand2, ShoppingBag } from 'lucide-react'
 
 export type CanvasTool = 'select' | 'pan' | 'connect'
 
@@ -17,6 +17,7 @@ type Props = {
   onOpenPromptLibrary?: () => void
   onOpenPromptReverse?: () => void
   onOpenCameraControl?: () => void
+  onOpenEcomStudio?: () => void
   onSaveAsTemplate?: () => void
   onUndo?: () => void
   onRedo?: () => void
@@ -71,6 +72,7 @@ export default function CanvasSidebar({
   onOpenPromptLibrary,
   onOpenPromptReverse,
   onOpenCameraControl,
+  onOpenEcomStudio,
   onSaveAsTemplate,
   onUndo,
   onRedo,
@@ -103,6 +105,13 @@ export default function CanvasSidebar({
         onClick={() => onOpenShortDrama?.()}
       >
         <Film className="h-5 w-5" />
+      </IconButton>
+
+      <IconButton
+        title="电商工具台"
+        onClick={() => onOpenEcomStudio?.()}
+      >
+        <ShoppingBag className="h-5 w-5" />
       </IconButton>
 
       <IconButton

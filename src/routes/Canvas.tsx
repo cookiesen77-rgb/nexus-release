@@ -1544,6 +1544,7 @@ export default function Canvas() {
               canRedo={canRedo}
               onOpenWorkflow={() => setWorkflowTemplatesOpen(true)}
               onOpenShortDrama={() => nav(`/short-drama/${String(projectId || '').trim() || 'default'}`)}
+              onOpenEcomStudio={() => nav(`/ecommerce/${String(projectId || '').trim() || 'default'}`)}
               onOpenCameraControl={() => setCameraControlOpen(true)}
               onOpenDirector={() => setDirectorOpen(true)}
               onOpenSketch={() => setSketchOpen(true)}
