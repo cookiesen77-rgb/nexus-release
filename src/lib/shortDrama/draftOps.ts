@@ -51,7 +51,7 @@ export const setSlotSelectionLocked = (draft: ShortDramaDraftV2, slotId: string,
   updateSlotById(draft, slotId, (s) => ({ ...s, selectionLockedByUser: locked }))
 
 export const setSlotSelectedVariant = (draft: ShortDramaDraftV2, slotId: string, variantId: string | undefined) =>
-  updateSlotById(draft, slotId, (s) => ({ ...s, selectedVariantId: variantId }))
+  updateSlotById(draft, slotId, (s) => ({ ...s, selectedVariantId: variantId, selectionLockedByUser: true }))
 
 const shouldAutoSelect = (slot: ShortDramaMediaSlot, createdBy: ShortDramaCreatedBy) => {
   if (slot.selectionLockedByUser) return false

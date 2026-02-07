@@ -694,6 +694,11 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       const c = draft.characters.find((x) => x.id === characterId)
       if (!c) return []
       const inputs: string[] = []
+      if (c.sheet) {
+        const v = getSelectedVariant(c.sheet)
+        const input = await resolveVariantInput(v || undefined)
+        if (input) inputs.push(input)
+      }
       for (const slot of c.refs || []) {
         const v = getSelectedVariant(slot)
         const input = await resolveVariantInput(v || undefined)

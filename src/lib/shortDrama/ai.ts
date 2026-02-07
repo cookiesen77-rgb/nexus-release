@@ -183,6 +183,7 @@ export type ShortDramaScriptAnalysis = {
   shots?: {
     title: string
     beat?: string
+    scriptExcerpt?: string
     scene?: string
     characters?: string[]
     assets?: string[]
@@ -213,6 +214,10 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
   const videoDuration = videoCtx?.duration || opts.draft.models.videoDuration || 5
   const supportsFirstLastFrame = videoCtx?.supportsFirstLastFrame ?? true
   const videoRatio = videoCtx?.ratio || opts.draft.models.videoRatio || '9:16'
+  const targetShotCount = opts.draft.models.targetShotCount || 0
+  const shotCountHint = targetShotCount > 0
+    ? `用户要求生成 ${targetShotCount} 个镜头，请严格按此数量输出。`
+    : `请根据剧本内容自动决定镜头数量。原则：宁多勿少，每${videoDuration}秒为一个镜头，确保剧本的每一句台词、每一个动作、每一次情绪转折都有对应镜头，不要跳过任何细节。一般来说，一段500字的剧本至少需要15-25个镜头。`
 
   // 根据用户已选择的风格构建风格提示
   const stylePreset = opts.draft.style.presetId ? getShortDramaStylePresetById(opts.draft.style.presetId) : null
@@ -233,6 +238,9 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     `- 首尾帧支持: ${supportsFirstLastFrame ? '支持（AI会根据首帧和尾帧生成过渡动画，所以 startPrompt 和 endPrompt 必须是明确不同的两个画面状态）' : '不支持（只有首帧起效，endPrompt 可简化）'}`,
     `- 视频比例: ${videoRatio}`,
     '',
+    `【镜头数量要求 - 极其重要！】`,
+    shotCountHint,
+    '',
     userStyleContext ? `【用户已选择的风格】\n${userStyleContext}\n所有提示词必须严格遵循此风格基调。\n` : '',
     '输出 JSON schema（键名必须使用英文）：',
     '{',
@@ -250,6 +258,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     '  "shots": [{',
     '    "title": "string",',
     '    "beat": "string",',
+    '    "scriptExcerpt": "string  // 该镜头对应的原剧本片段（逐字引用原文，让用户清楚故事进展到哪里）",',
     '    "scene": "string",',
     '    "characters": ["string"],',
     '    "assets": ["string"],',
@@ -393,7 +402,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
       '',
       '你上一次输出未能被 JSON.parse 解析。',
       '请只输出完整、严格的 JSON（不要输出解释/Markdown/多余文字），确保所有括号与引号闭合。',
-      '如果剧本很长：最多输出 30 个 shots；宁可减少镜头数，也不要输出不完整 JSON。',
+      '如果剧本很长：最多输出 60 个 shots；宁可减少镜头数，也不要输出不完整 JSON。',
       'shots/characters/scenes 必须存在；没有就输出空数组 []（不要省略字段）。',
     ].join('\n')
     const retryUser = [
@@ -550,12 +559,14 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     const startPrompt = normalizeText(ai?.startPrompt)
     const endPrompt = normalizeText(ai?.endPrompt)
     const videoPrompt = normalizeText(ai?.videoPrompt)
+    const scriptExcerpt = normalizeText(ai?.scriptExcerpt)
 
     const existing = mergedShots[i]
     if (existing) {
       const nextShot = { ...existing }
       if (!nextShot.title || /^镜头\s+\d+$/.test(nextShot.title)) nextShot.title = title
       if (!nextShot.beat && beat) nextShot.beat = beat
+      if (!nextShot.scriptExcerpt && scriptExcerpt) nextShot.scriptExcerpt = scriptExcerpt
       if (!nextShot.videoPrompt && videoPrompt) nextShot.videoPrompt = videoPrompt
       if (!nextShot.sceneId && sceneName && sceneIdByName.get(sceneName)) nextShot.sceneId = sceneIdByName.get(sceneName)
       if ((!nextShot.characterIds || nextShot.characterIds.length === 0) && charNames.length > 0) {
@@ -570,6 +581,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     } else {
       const shot = createEmptyShot(title)
       shot.beat = beat
+      shot.scriptExcerpt = scriptExcerpt
       shot.videoPrompt = videoPrompt
       shot.sceneId = sceneName && sceneIdByName.get(sceneName) ? sceneIdByName.get(sceneName) : undefined
       shot.characterIds = charNames.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[]

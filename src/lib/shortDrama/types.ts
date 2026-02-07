@@ -71,6 +71,7 @@ export interface ShortDramaModels {
   videoRatio?: string
   videoDuration?: number
   videoSize?: string
+  targetShotCount?: number
 }
 
 export interface ShortDramaScriptSource {
@@ -170,6 +171,11 @@ export interface ShortDramaShot {
    * Optional beat/intent summary (emotion/action/dialogue)
    */
   beat?: string
+
+  /**
+   * Original script excerpt this shot corresponds to
+   */
+  scriptExcerpt?: string
 
   /**
    * Optional video prompt (camera/motion). If empty, auto or manual may derive it.

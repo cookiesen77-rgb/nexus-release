@@ -510,6 +510,12 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       const c = draft.characters.find((x) => x.id === characterId)
       if (!c) return []
       const inputs: string[] = []
+      // 优先收集角色设定图（sheet）
+      if (c.sheet) {
+        const v = getSelectedVariant(c.sheet)
+        const input = await resolveVariantInput(v || undefined)
+        if (input) inputs.push(input)
+      }
       for (const slot of c.refs || []) {
         const v = getSelectedVariant(slot)
         const input = await resolveVariantInput(v || undefined)
@@ -1142,6 +1148,23 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                     ))}
                   </select>
                 </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">目标镜头数</label>
+                  <select
+                    value={draft.models.targetShotCount || 0}
+                    onChange={(e) => patchModels({ targetShotCount: Number(e.target.value) || 0 })}
+                    className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
+                  >
+                    <option value={0}>自动（AI根据剧本决定，尽可能多）</option>
+                    <option value={10}>10 个镜头</option>
+                    <option value={15}>15 个镜头</option>
+                    <option value={20}>20 个镜头</option>
+                    <option value={25}>25 个镜头</option>
+                    <option value={30}>30 个镜头</option>
+                    <option value={40}>40 个镜头</option>
+                    <option value={50}>50 个镜头</option>
+                  </select>
+                </div>
                 <div className="grid grid-cols-1 gap-3">
                   <div className="flex flex-col gap-2">
                     <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">生图模型</label>
@@ -1753,6 +1776,14 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                   <div className="text-xs font-semibold text-[var(--text-primary)]">
                     {idx + 1}. {sh.title || '镜头'}
                   </div>
+                  {sh.scriptExcerpt && (
+                    <div className="mt-1 rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300 line-clamp-3 italic">
+                      原文：{sh.scriptExcerpt}
+                    </div>
+                  )}
+                  {sh.beat && !sh.scriptExcerpt && (
+                    <div className="mt-1 text-[11px] text-[var(--text-secondary)] line-clamp-2">{sh.beat}</div>
+                  )}
 
                   <div className="mt-2 grid gap-2 md:grid-cols-2">
                     <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-2">
