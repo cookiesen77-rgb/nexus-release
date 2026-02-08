@@ -447,11 +447,7 @@ export async function generateShortDramaImage(req: ShortDramaImageRequest): Prom
     }
 
     if (seedreamRefs.length > 0) {
-      payload.image = seedreamRefs.length === 1 ? seedreamRefs[0] : seedreamRefs
-      if (seedreamRefs.length > 1) {
-        payload.sequential_image_generation = 'auto'
-        payload.sequential_image_generation_options = { max_images: Math.min(3, seedreamRefs.length) }
-      }
+      payload.image = seedreamRefs
     }
 
     const rsp = await postJson<any>(modelCfg.endpoint, payload, {

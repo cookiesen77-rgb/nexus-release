@@ -820,7 +820,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
           ...updated[idx],
           data: storeNode.data
         }
-        console.log('[ReactFlowCanvas] 强制刷新节点:', nodeId, 'hasUrl:', !!(storeNode.data as any)?.url)
+        console.log('[ReactFlowCanvas] 强制刷新节点:', nodeId, 'hasUrl:', !!(storeNode.data as any)?.url, 'dataKeys:', Object.keys(storeNode.data || {}))
         return updated
       })
     }
