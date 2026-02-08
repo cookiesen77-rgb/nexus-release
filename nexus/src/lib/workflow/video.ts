@@ -2102,14 +2102,19 @@ export const generateVideoFromConfigNode = async (
         }
 
         // imageproxy CDN 不被腾讯 AIGC 信任，过滤掉
+        // 仅保留主流公网可达 CDN（AI生成图的原始URL通常可用）
         const validInfos = fileInfos.filter((fi: any) => {
           const u = String(fi.Url || '')
-          return u && !u.includes('imageproxy.zhongzhuan.chat') && /^https?:\/\//i.test(u)
+          if (!u || !/^https?:\/\//i.test(u)) return false
+          if (u.includes('imageproxy.zhongzhuan.chat')) return false
+          if (u.includes('127.0.0.1') || u.includes('localhost')) return false
+          return true
         })
         if (validInfos.length > 0) {
           ;(payload as any).file_infos = validInfos
         } else if (fileInfos.length > 0) {
-          console.warn('[video] tencent-aigc: 参考图 URL 不被腾讯服务器信任，降级为纯文生视频')
+          console.warn('[video] tencent-aigc: 参考图 URL 不被腾讯服务器信任（imageproxy CDN），已降级为纯文生视频。建议使用 AI 生成的图片作为参考（其 sourceUrl 通常可被外部访问）。')
+          window.$message?.warning?.('参考图 URL 不被腾讯服务器信任，已自动降级为纯文生视频。建议使用 AI 生成的图片。')
         }
       }
 
