@@ -1659,7 +1659,7 @@ export const generateVideoFromConfigNode = async (
           model_name: modelName,
           image,
           mode,
-          duration: String(durValue),
+          duration: durValue,
         }
         // API 约束：image_tail 不能为空字符串，仅在有尾帧时才传入
         if (tail) payload.image_tail = tail
@@ -1991,7 +1991,7 @@ export const generateVideoFromConfigNode = async (
       payload = {
         model: modelCfg.key,
         prompt: prompt || '',
-        duration: String(dur),
+        duration: dur,
         size: size,
         aspect_ratio: aspectRatio
       }
@@ -2101,7 +2101,16 @@ export const generateVideoFromConfigNode = async (
           }
         }
 
-        if (fileInfos.length > 0) (payload as any).file_infos = fileInfos
+        // imageproxy CDN 不被腾讯 AIGC 信任，过滤掉
+        const validInfos = fileInfos.filter((fi: any) => {
+          const u = String(fi.Url || '')
+          return u && !u.includes('imageproxy.zhongzhuan.chat') && /^https?:\/\//i.test(u)
+        })
+        if (validInfos.length > 0) {
+          ;(payload as any).file_infos = validInfos
+        } else if (fileInfos.length > 0) {
+          console.warn('[video] tencent-aigc: 参考图 URL 不被腾讯服务器信任，降级为纯文生视频')
+        }
       }
 
       // 尾帧
