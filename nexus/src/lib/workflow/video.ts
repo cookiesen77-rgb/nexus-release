@@ -2030,6 +2030,64 @@ export const generateVideoFromConfigNode = async (
           video: { duration: dur, size: size, aspect_ratio: aspectRatio }
         }
       }
+    } else if (modelCfg.format === 'tencent-aigc-video') {
+      // 腾讯 AIGC 视频（Vidu 等）：POST /tencent-vod/v1/aigc-video
+      const modelName = modelCfg.defaultParams?.model_name || 'Vidu'
+      const modelVersion = modelCfg.defaultParams?.model_version || 'q3-pro'
+      const dur = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg.defaultParams?.duration || 5)
+      const aspectRatio = ratio || modelCfg.defaultParams?.ratio || '16:9'
+      const resolution = modelCfg.defaultParams?.resolution || '1080P'
+
+      payload = {
+        model_name: modelName,
+        model_version: modelVersion,
+        prompt: prompt || '',
+        enhance_prompt: modelCfg.defaultParams?.enhance_prompt || 'Enabled',
+        output_config: {
+          storage_mode: 'Temporary',
+          duration: dur,
+          resolution,
+          aspect_ratio: aspectRatio,
+          audio_generation: modelCfg.defaultParams?.audio_generation || 'Enabled',
+        },
+      }
+
+      // 参考图（需要 HTTP URL，data: URL 需要先上传到 CDN）
+      if (firstFrame || refImages.length > 0) {
+        const allImages = firstFrame ? [firstFrame, ...refImages] : refImages
+        const fileInfos: any[] = []
+        for (const img of allImages.slice(0, 3)) {
+          const url = String(img || '').trim()
+          if (!url) continue
+          if (/^https?:\/\//i.test(url)) {
+            fileInfos.push({ Type: 'Url', Url: url })
+          } else if (url.startsWith('data:') && url.length > 100) {
+            // 上传 data URL 到 CDN
+            try {
+              const m = url.match(/^data:([^;]+);base64,(.*)$/)
+              if (m) {
+                const byteString = atob(m[2])
+                const bytes = new Uint8Array(byteString.length)
+                for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i)
+                const blob = new Blob([bytes], { type: m[1] })
+                const fd = new FormData()
+                fd.append('file', blob, `image.${m[1].split('/')[1] || 'png'}`)
+                const uploadResp = await postFormData<any>('https://imageproxy.zhongzhuan.chat/api/upload', fd, { authMode: 'bearer', timeoutMs: 60000 })
+                const httpUrl = String(uploadResp?.url || uploadResp?.data?.url || '').trim()
+                if (httpUrl && /^https?:\/\//i.test(httpUrl)) fileInfos.push({ Type: 'Url', Url: httpUrl })
+              }
+            } catch (e) {
+              console.warn('[video] 参考图上传失败:', e)
+            }
+          }
+        }
+        if (fileInfos.length > 0) (payload as any).file_infos = fileInfos
+      }
+
+      // 尾帧
+      if (lastFrame && /^https?:\/\//i.test(lastFrame)) {
+        (payload as any).last_frame_url = lastFrame
+      }
     } else {
       throw new Error(`暂未支持该视频模型格式：${String(modelCfg.format || '')}`)
     }

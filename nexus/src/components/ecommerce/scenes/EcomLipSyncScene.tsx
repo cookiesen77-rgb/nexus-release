@@ -19,8 +19,13 @@ interface SceneProps {
 
 const makeVariantId = () => `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
+const pickVariant = (slot: { variants: EcomMediaVariant[]; selectedVariantId?: string }) => {
+  if (!slot?.variants?.length) return undefined
+  return slot.variants.find(x => x.id === slot.selectedVariantId) || slot.variants[slot.variants.length - 1]
+}
+
 const getSlotUrl = (slot: { variants: EcomMediaVariant[]; selectedVariantId?: string }): string => {
-  const v = slot.variants.find(x => x.id === slot.selectedVariantId) || slot.variants[0]
+  const v = pickVariant(slot)
   return v?.displayUrl || v?.sourceUrl || ''
 }
 
@@ -95,12 +100,10 @@ export default function EcomLipSyncScene({ draft, setDraftSafe }: SceneProps) {
       const dataUrl = reader.result as string
       if (!dataUrl) return
       const variantId = makeVariantId()
-      const commaIdx = dataUrl.indexOf(',')
-      const rawBase64 = commaIdx > 0 ? dataUrl.slice(commaIdx + 1) : dataUrl
       patchScene(sceneIdx, {
         audioSlot: {
           ...draft.lipSyncScenes[sceneIdx]?.audioSlot,
-          variants: [{ id: variantId, status: 'success' as const, createdAt: Date.now(), createdBy: 'manual' as const, displayUrl: dataUrl, sourceUrl: rawBase64 }],
+          variants: [{ id: variantId, status: 'success' as const, createdAt: Date.now(), createdBy: 'manual' as const, displayUrl: dataUrl, sourceUrl: dataUrl }],
           selectedVariantId: variantId,
         },
       })
@@ -115,7 +118,7 @@ export default function EcomLipSyncScene({ draft, setDraftSafe }: SceneProps) {
     if (!text) { window.$message?.warning?.('请输入文案'); return }
     setTtsGenerating(true)
     try {
-      const { audioDataUrl, rawBase64 } = await generateTTS({ text, model: draft.models.ttsModelKey })
+      const { audioDataUrl } = await generateTTS({ text, model: draft.models.ttsModelKey })
       const variantId = makeVariantId()
       setDraftSafe(prev => {
         const scenes = [...prev.lipSyncScenes]
@@ -129,7 +132,7 @@ export default function EcomLipSyncScene({ draft, setDraftSafe }: SceneProps) {
               createdAt: Date.now(),
               createdBy: 'auto' as const,
               displayUrl: audioDataUrl,
-              sourceUrl: rawBase64,
+              sourceUrl: audioDataUrl,
             }],
             selectedVariantId: variantId,
           },
@@ -148,8 +151,12 @@ export default function EcomLipSyncScene({ draft, setDraftSafe }: SceneProps) {
     if (generating) return
     const scene = draft.lipSyncScenes[idx]
     const videoUrl = getSlotUrl(scene.videoSlot)
-    const audioV = scene.audioSlot?.variants?.[0]
-    const audioUrl = audioV?.sourceUrl || audioV?.displayUrl || ''
+    const audioV = pickVariant(scene.audioSlot)
+    const audioUrl = audioV?.sourceUrl?.startsWith('data:')
+      ? audioV.sourceUrl
+      : audioV?.displayUrl?.startsWith('data:')
+        ? audioV.displayUrl
+        : (audioV?.sourceUrl || audioV?.displayUrl || '')
     if (!videoUrl) { window.$message?.warning?.('请上传源视频或粘贴视频URL'); return }
     if (!audioUrl) { window.$message?.warning?.('请上传音频文件或使用TTS生成'); return }
 
@@ -226,8 +233,8 @@ export default function EcomLipSyncScene({ draft, setDraftSafe }: SceneProps) {
       )}
 
       {draft.lipSyncScenes.map((scene, idx) => {
-        const videoV = scene.videoSlot?.variants?.[0]
-        const audioV = scene.audioSlot?.variants?.[0]
+        const videoV = pickVariant(scene.videoSlot)
+        const audioV = pickVariant(scene.audioSlot)
         const resultVariants = scene.resultSlot?.variants || []
         const resultV = resultVariants.find(v => v.id === scene.resultSlot?.selectedVariantId) || resultVariants[resultVariants.length - 1]
 
@@ -321,8 +328,8 @@ export default function EcomLipSyncScene({ draft, setDraftSafe }: SceneProps) {
                   {ttsGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mic className="h-3 w-3" />} 生成语音
                 </Button>
               </div>
-              {scene.audioSlot?.variants?.[0]?.displayUrl && (
-                <audio src={scene.audioSlot.variants[0].displayUrl} controls className="w-full h-8" />
+              {audioV?.displayUrl && (
+                <audio src={audioV.displayUrl} controls className="w-full h-8" />
               )}
             </div>
 

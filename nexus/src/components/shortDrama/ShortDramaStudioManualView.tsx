@@ -2186,7 +2186,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
               const { exportStoryboardPdf } = await import('@/lib/shortDrama/storyboardExport')
               const bytes = await exportStoryboardPdf(draft)
               const { saveBytesAsFile } = await import('@/lib/download')
-              await saveBytesAsFile({ data: new Uint8Array(bytes), filename: `${draft.title || 'storyboard'}.pdf`, mimeType: 'application/pdf' })
+              const safeName = String(draft.title || 'storyboard').replace(/[<>:"/\\|?*]+/g, '_').trim() || 'storyboard'
+              await saveBytesAsFile({ data: new Uint8Array(bytes), filename: `${safeName}.pdf`, mimeType: 'application/pdf' })
               window.$message?.success?.('分镜表已导出')
             } catch (err: any) {
               window.$message?.error?.(err?.message || '导出失败')

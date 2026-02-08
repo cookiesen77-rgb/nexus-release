@@ -90,7 +90,21 @@ export default function EcomChatPanel({ draft, setDraftSafe, activeScene, onOpen
       onConfirm: async (items) => {
         const urls: string[] = []
         for (const it of items) {
-          const url = String((it as any).displayUrl || (it as any).sourceUrl || '').trim()
+          const sourceUrl = String((it as any).sourceUrl || '').trim()
+          const displayUrl = String((it as any).displayUrl || '').trim()
+          const sourceHttp = /^https?:///i.test(sourceUrl)
+          const displayHttp = /^https?:///i.test(displayUrl)
+          const sourceData = sourceUrl.startsWith('data:')
+          const displayData = displayUrl.startsWith('data:')
+          const url = sourceHttp
+            ? sourceUrl
+            : displayHttp
+              ? displayUrl
+              : sourceData
+                ? sourceUrl
+                : displayData
+                  ? displayUrl
+                  : (sourceUrl || displayUrl)
           if (url) { urls.push(url); continue }
           const mid = String((it as any).mediaId || '').trim()
           if (mid) {
