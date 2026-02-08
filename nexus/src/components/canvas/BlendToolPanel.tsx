@@ -97,7 +97,7 @@ Be extremely specific about identifiable features. Max 100 words.`
   const results = await Promise.all(images.map(async (img) => {
     const base64 = extractBase64(await ensureBase64(img))
     const result = await chatCompletions({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       messages: [
         {
           role: 'user',

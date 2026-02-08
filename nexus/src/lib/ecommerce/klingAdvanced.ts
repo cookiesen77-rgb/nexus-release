@@ -1,4 +1,4 @@
-import { postJson, getJson } from '@/lib/workflow/request'
+import { postJson, getJson, postFormData } from '@/lib/workflow/request'
 import { KLING_VIDEO_TOOLS } from '@/config/models'
 import { DEFAULT_API_BASE_URL } from '@/utils/constants'
 
@@ -11,6 +11,36 @@ function getKlingOrigin(): string {
   } catch { /* fallback */ }
   try { return new URL(DEFAULT_API_BASE_URL).origin } catch { /* fallback */ }
   return 'https://yunwu.ai'
+}
+
+// Upload data URL / base64 to CDN, return HTTP URL
+// Kling API body has size limits — must send HTTP URLs, not raw base64
+async function ensureHttpUrl(input: string, type: 'image' | 'audio' = 'image'): Promise<string> {
+  if (/^https?:\/\//i.test(input)) return input
+
+  let dataUrl = input
+  if (!dataUrl.startsWith('data:')) {
+    const mime = type === 'audio' ? 'audio/mp3' : 'image/png'
+    dataUrl = `data:${mime};base64,${dataUrl}`
+  }
+
+  const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/)
+  if (!m) throw new Error('数据格式错误')
+
+  const mimeType = m[1]
+  const byteString = atob(m[2])
+  const bytes = new Uint8Array(byteString.length)
+  for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i)
+  const blob = new Blob([bytes], { type: mimeType })
+
+  const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || (type === 'audio' ? 'mp3' : 'png')
+  const form = new FormData()
+  form.append('file', blob, `upload.${ext}`)
+
+  const resp = await postFormData<any>('https://imageproxy.zhongzhuan.chat/api/upload', form, { authMode: 'bearer', timeoutMs: 120000 })
+  const url = String(resp?.url || resp?.data?.url || resp?.data?.link || '').trim()
+  if (url && /^https?:\/\//i.test(url)) return url
+  throw new Error('文件上传失败，无法获取 URL')
 }
 
 async function pollKlingTask(statusUrl: string, maxAttempts: number, intervalMs: number): Promise<any> {
@@ -59,8 +89,8 @@ export async function generateAvatarVideo(params: {
   const cfg = getToolConfig('kling-digital-human')
   const endpoint = String(cfg?.endpoint || `${getKlingOrigin()}/kling/v1/videos/avatar/image2video`)
 
-  // Kling accepts raw base64 or HTTP URL — strip data:// prefix if present
-  const image = /^https?:\/\//i.test(params.image) ? params.image : stripDataUrlPrefix(params.image)
+  // Upload image and audio to CDN — Kling API rejects large base64 in JSON body
+  const image = await ensureHttpUrl(params.image, 'image')
 
   const body: Record<string, string> = {
     image,
@@ -70,7 +100,7 @@ export async function generateAvatarVideo(params: {
   if (params.audioId) {
     body.audio_id = params.audioId
   } else if (params.soundFile) {
-    body.sound_file = /^https?:\/\//i.test(params.soundFile) ? params.soundFile : stripDataUrlPrefix(params.soundFile)
+    body.sound_file = await ensureHttpUrl(params.soundFile, 'audio')
   }
 
   const resp = await postJson<any>(endpoint, body, { authMode: 'bearer' })
@@ -102,7 +132,7 @@ export async function generateMotionControlVideo(params: {
   const endpoint = String(cfg?.endpoint || `${getKlingOrigin()}/kling/v1/videos/motion-control`)
 
   const body: Record<string, any> = {
-    image_url: /^https?:\/\//i.test(params.imageUrl) ? params.imageUrl : stripDataUrlPrefix(params.imageUrl),
+    image_url: await ensureHttpUrl(params.imageUrl, 'image'),
     video_url: params.videoUrl,
     mode: params.mode || 'std',
     character_orientation: params.characterOrientation || 'image',

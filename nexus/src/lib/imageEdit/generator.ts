@@ -106,7 +106,7 @@ Keep it under 60 words, in English.`
 
   try {
     const result = await chatCompletions({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [{
         role: 'user',
         content: [
