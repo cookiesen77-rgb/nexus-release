@@ -34,6 +34,12 @@ interface Props {
 const makeId = () => globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Math.random().toString(16).slice(2)}`
 
 const isHttp = (v: string) => /^https?:\/\//i.test(v)
+const isApiRelativeUrl = (v: string) => {
+  const u = String(v || '').trim()
+  if (!u) return false
+  return u.startsWith('/v1/') || u.startsWith('/v1beta') || u.startsWith('/kling') || u.startsWith('/tencent-vod') || u.startsWith('/video')
+}
+const isRecoverableSourceUrl = (v: string) => isHttp(v) || isApiRelativeUrl(v)
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
 const SUPPORTED_VIDEO_FORMATS = new Set<string>([
@@ -461,7 +467,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         url,
       }
       const src = String(variant.sourceUrl || '').trim()
-      if (src && isHttp(src)) data.sourceUrl = src
+      if (src && isRecoverableSourceUrl(src)) data.sourceUrl = src
       if (variant.mediaId) data.mediaId = variant.mediaId
       if (variant.modelKey) data.model = variant.modelKey
 
@@ -1128,6 +1134,16 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     }
   }, [buildVideoPrompt, collectRefImagesForShot, draft.shots, getSelectedVariant, resolveVariantInput, runGenerateSlotVideo])
 
+  const runBatchGenerateAll = useCallback(async () => {
+    try {
+      await runBatchGenerateKeyframes()
+      await runBatchGenerateVideos()
+      window.$message?.success?.('一键批量生成完成')
+    } catch (err: any) {
+      window.$message?.error?.(err?.message || '批量生成失败')
+    }
+  }, [runBatchGenerateKeyframes, runBatchGenerateVideos])
+
   const onImportFile = useCallback(async (file: File) => {
     try {
       const imported = await importShortDramaScriptFile(file)
@@ -1589,6 +1605,30 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                       onClick={() => void runBatchGenerateVideos()}
                     >
                       批量生成视频
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Step 4: One-click all */}
+                <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/10 text-[11px] font-bold text-[var(--text-secondary)]">
+                        4
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-[var(--text-primary)]">一键生成全部</div>
+                        <div className="mt-0.5 text-xs text-[var(--text-secondary)]">先批量生成首/尾帧，完成后自动批量生成视频。</div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="shrink-0 whitespace-nowrap"
+                      disabled={analysisBusy || prepBusy || keyframesBusy || videosBusy}
+                      onClick={() => void runBatchGenerateAll()}
+                    >
+                      一键生成全部（首帧+视频）
                     </Button>
                   </div>
                 </div>
@@ -2169,4 +2209,3 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     </div>
   )
 }
-

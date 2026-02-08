@@ -57,6 +57,13 @@ const makeId = () => globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Ma
 
 // 检测 Tauri 环境（用于更稳定的视频预览/导出等能力）
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
+const isHttpUrl = (v: string) => /^https?:\/\//i.test(String(v || '').trim())
+const isApiRelativeUrl = (v: string) => {
+  const u = String(v || '').trim()
+  if (!u) return false
+  return u.startsWith('/v1/') || u.startsWith('/v1beta') || u.startsWith('/kling') || u.startsWith('/tencent-vod') || u.startsWith('/video')
+}
+const isRecoverableSourceUrl = (v: string) => isHttpUrl(v) || isApiRelativeUrl(v)
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -291,7 +298,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
   const resolveVariantInput = useCallback(async (variant: ShortDramaMediaVariant | undefined): Promise<string> => {
     if (!variant) return ''
     const s = String(variant.sourceUrl || '').trim()
-    if (s && /^https?:\/\//i.test(s)) return s
+    if (s && isHttpUrl(s)) return s
     if (variant.mediaId) {
       try {
         const rec = await getMedia(variant.mediaId)
@@ -329,7 +336,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         url,
       }
       const src = String(variant.sourceUrl || '').trim()
-      if (src && /^https?:\/\//i.test(src)) data.sourceUrl = src
+      if (src && isRecoverableSourceUrl(src)) data.sourceUrl = src
       if (variant.mediaId) data.mediaId = variant.mediaId
       if (variant.modelKey) data.model = variant.modelKey
 
@@ -2659,4 +2666,3 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
     </>
   )
 }
-

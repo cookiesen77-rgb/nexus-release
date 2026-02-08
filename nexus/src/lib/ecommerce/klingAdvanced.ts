@@ -223,3 +223,76 @@ export async function generateMultiElementsVideo(params: {
   const data = await pollKlingTask(queryUrl, 120, 5000)
   return { taskId: runTaskId, videoUrl: extractVideoUrl(data) }
 }
+
+// ===== 口型同步 (Lip Sync) =====
+// Step 1: POST /kling/v1/videos/identify-face { video_url } → session_id + face_list
+// Step 2: POST /kling/v1/videos/advanced-lip-sync { session_id, face_choose: [{face_id, sound_file}] } → task_id
+// Step 3: Poll GET /kling/v1/videos/advanced-lip-sync/{task_id}
+export async function generateLipSync(params: {
+  videoUrl: string
+  soundFile?: string
+  audioId?: string
+  faceIndex?: number
+}): Promise<{ taskId: string; videoUrl: string }> {
+  if (!params.soundFile && !params.audioId) throw new Error('口型同步需要音频')
+
+  const cfg = getToolConfig('kling-lip-sync')
+  const origin = getKlingOrigin()
+  const endpoints = cfg?.endpoints || {
+    identifyFace: `${origin}/kling/v1/videos/identify-face`,
+    lipSync: `${origin}/kling/v1/videos/advanced-lip-sync`,
+    query: (id: string) => `${origin}/kling/v1/videos/advanced-lip-sync/${id}`,
+  }
+
+  // Step 1: Identify face
+  const faceResp = await postJson<any>(endpoints.identifyFace, { video_url: params.videoUrl }, { authMode: 'bearer' })
+  const sessionId = String(faceResp?.data?.session_id || '').trim()
+  const faceList = faceResp?.data?.face_list || []
+  if (!sessionId) throw new Error('人脸识别失败：未返回 session_id')
+
+  const faceId = faceList[params.faceIndex || 0]?.face_id
+  if (!faceId) throw new Error(`未检测到人脸（共检测到 ${faceList.length} 张）`)
+
+  // Step 2: Submit lip sync
+  let audioSource: string
+  if (params.audioId) {
+    audioSource = params.audioId
+  } else {
+    audioSource = await ensureHttpUrl(params.soundFile!, 'audio')
+  }
+
+  const lipSyncBody: Record<string, any> = {
+    session_id: sessionId,
+    face_choose: [{
+      face_id: faceId,
+      ...(params.audioId ? { audio_id: audioSource } : { sound_file: audioSource }),
+    }],
+  }
+
+  const lipResp = await postJson<any>(endpoints.lipSync, lipSyncBody, { authMode: 'bearer' })
+  const taskId = String(lipResp?.data?.task_id || lipResp?.task_id || '').trim()
+  if (!taskId) throw new Error('口型同步任务创建失败')
+
+  // Step 3: Poll
+  const queryUrl = typeof endpoints.query === 'function'
+    ? endpoints.query(taskId)
+    : `${origin}/kling/v1/videos/advanced-lip-sync/${taskId}`
+
+  const data = await pollKlingTask(queryUrl, 120, 5000)
+  return { taskId, videoUrl: extractVideoUrl(data) }
+}
+
+// ===== 视频画质增强 =====
+export async function upscaleVideo(params: {
+  videoUrl: string
+}): Promise<{ taskId: string; videoUrl: string }> {
+  const origin = getKlingOrigin()
+  const endpoint = `${origin}/kling/v1/videos/upscale`
+
+  const resp = await postJson<any>(endpoint, { video_url: params.videoUrl }, { authMode: 'bearer' })
+  const taskId = String(resp?.data?.task_id || resp?.task_id || '').trim()
+  if (!taskId) throw new Error('画质增强任务创建失败')
+
+  const data = await pollKlingTask(`${origin}/kling/v1/videos/upscale/${taskId}`, 120, 5000)
+  return { taskId, videoUrl: extractVideoUrl(data) }
+}

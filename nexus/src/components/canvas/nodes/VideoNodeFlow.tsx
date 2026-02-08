@@ -15,6 +15,15 @@ import { resolveCachedMediaUrl } from '@/lib/workflow/cache'
 import { useInView } from '@/hooks/useInView'
 import MediaPreviewModal from '@/components/canvas/MediaPreviewModal'
 
+// URL 工具
+const isHttpUrl = (v: string) => /^https?:\/\//i.test(String(v || '').trim())
+const isApiRelativeUrl = (v: string) => {
+  const u = String(v || '').trim()
+  if (!u) return false
+  return u.startsWith('/v1/') || u.startsWith('/v1beta') || u.startsWith('/kling') || u.startsWith('/tencent-vod') || u.startsWith('/video')
+}
+const isRecoverableSourceUrl = (v: string) => isHttpUrl(v) || isApiRelativeUrl(v)
+
 // 检测 Tauri 环境
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
@@ -118,11 +127,14 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
           return
         }
         
-        // 3. 如果有 sourceUrl（HTTPS URL），直接使用
-        if (nodeData?.sourceUrl && nodeData.sourceUrl.startsWith('http')) {
-          console.log('[VideoNode] 使用 sourceUrl:', nodeData.sourceUrl.slice(0, 50))
+        // 3. 尝试通过 sourceUrl 恢复（支持 http(s) 与 /v1/... 相对 API 路径）
+        const sourceUrl = String(nodeData?.sourceUrl || '').trim()
+        if (isRecoverableSourceUrl(sourceUrl)) {
+          console.log('[VideoNode] 尝试恢复 sourceUrl:', sourceUrl.slice(0, 60))
+          const cached = await resolveCachedMediaUrl(sourceUrl)
+          const nextUrl = String(cached?.displayUrl || '').trim() || sourceUrl
           useGraphStore.getState().updateNode(id, {
-            data: { url: nodeData.sourceUrl, loading: false }
+            data: { url: nextUrl, sourceUrl, localPath: cached?.localPath || '', loading: false }
           } as any)
           return
         }
@@ -159,7 +171,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
           projectId,
           type: 'video',
           data: url,
-          sourceUrl: typeof nodeData?.sourceUrl === 'string' && /^https?:\/\//i.test(nodeData.sourceUrl) ? nodeData.sourceUrl : undefined,
+          sourceUrl: typeof nodeData?.sourceUrl === 'string' && isRecoverableSourceUrl(nodeData.sourceUrl) ? nodeData.sourceUrl : undefined,
           model: typeof nodeData?.model === 'string' ? nodeData.model : undefined,
         })
         if (mediaId) store.patchNodeDataSilent(id, { mediaId })
@@ -354,7 +366,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       return
     }
 
-    const downloadUrl = (nodeData?.sourceUrl && nodeData.sourceUrl.startsWith('http'))
+    const downloadUrl = (nodeData?.sourceUrl && isRecoverableSourceUrl(nodeData.sourceUrl))
       ? nodeData.sourceUrl
       : displayUrl
 
@@ -442,7 +454,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     }
     // Tauri：若直链播放失败，尝试用 cache_remote_media 下载到本地后再播放
     const sourceUrl = String(nodeData?.sourceUrl || '').trim()
-    if (isTauri && sourceUrl && /^https?:\/\//i.test(sourceUrl) && loadErrorFallbackRef.current !== sourceUrl) {
+    if (isTauri && sourceUrl && isRecoverableSourceUrl(sourceUrl) && loadErrorFallbackRef.current !== sourceUrl) {
       loadErrorFallbackRef.current = sourceUrl
       void (async () => {
         try {

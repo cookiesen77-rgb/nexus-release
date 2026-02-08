@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { Image, LayoutGrid, Shirt, Megaphone, Video, Layers, Upload, X, Wand2, Move3D, Clapperboard, UserRound } from 'lucide-react'
+import { Image, LayoutGrid, Shirt, Megaphone, Video, Layers, Upload, X, Wand2, Move3D, Clapperboard, UserRound, Mic2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { EcomDraftV1, EcomSceneType } from '@/lib/ecommerce/types'
 import type { EcomTemplate } from '@/lib/ecommerce/templates'
@@ -28,6 +28,7 @@ const SCENE_TABS: { type: EcomSceneType; label: string; icon: React.ComponentTyp
   { type: 'motion_control', label: '动作控制', icon: Move3D },
   { type: 'multi_elements', label: '多模态编辑', icon: Clapperboard },
   { type: 'digital_human', label: '数字人', icon: UserRound },
+  { type: 'lip_sync', label: '口型同步', icon: Mic2 },
 ]
 
 const CATEGORIES = ['服饰', '数码', '美妆', '食品', '珠宝', '家居', '母婴', '其他']

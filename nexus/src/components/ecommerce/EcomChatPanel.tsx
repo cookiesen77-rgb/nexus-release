@@ -25,6 +25,7 @@ const SCENE_PROMPT_PATH: Record<EcomSceneType, (d: EcomDraftV1) => string> = {
   motion_control: d => d.motionControlScenes[0]?.prompt ?? '',
   multi_elements: d => d.multiElementsScenes[0]?.prompt ?? '',
   digital_human: d => d.digitalHumanScenes[0]?.prompt ?? '',
+  lip_sync: d => d.lipSyncScenes[0]?.prompt ?? '',
 }
 
 function applyPromptToScene(prev: EcomDraftV1, scene: EcomSceneType, text: string): EcomDraftV1 {
@@ -55,6 +56,10 @@ function applyPromptToScene(prev: EcomDraftV1, scene: EcomSceneType, text: strin
     case 'digital_human': {
       if (!prev.digitalHumanScenes.length) return prev
       const s = [...prev.digitalHumanScenes]; s[0] = { ...s[0], prompt: text }; return { ...prev, digitalHumanScenes: s }
+    }
+    case 'lip_sync': {
+      if (!prev.lipSyncScenes.length) return prev
+      const s = [...prev.lipSyncScenes]; s[0] = { ...s[0], prompt: text }; return { ...prev, lipSyncScenes: s }
     }
     default: return prev
   }

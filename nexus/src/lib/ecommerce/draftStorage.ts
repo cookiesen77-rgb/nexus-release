@@ -69,6 +69,7 @@ export const createDefaultDraft = (pid: string): EcomDraftV1 => ({
   motionControlScenes: [],
   multiElementsScenes: [],
   digitalHumanScenes: [],
+  lipSyncScenes: [],
   chatHistory: [],
   activeScene: 'hero',
 })
@@ -153,6 +154,18 @@ const migrateDigitalHumanScene = (raw: any): any => {
   }
 }
 
+const migrateLipSyncScene = (raw: any): any => {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    id: raw.id || makeId(),
+    videoSlot: migrateSlot(raw.videoSlot, '源视频'),
+    audioSlot: migrateSlot(raw.audioSlot, '音频'),
+    resultSlot: migrateSlot(raw.resultSlot, '生成结果'),
+    prompt: raw.prompt || '',
+    faceIndex: raw.faceIndex || 0,
+  }
+}
+
 const migrateBatchItem = (raw: any): any => {
   if (!raw || typeof raw !== 'object') return null
   return {
@@ -187,6 +200,7 @@ export const loadDraft = (pid: string): EcomDraftV1 => {
       motionControlScenes: Array.isArray(parsed.motionControlScenes) ? parsed.motionControlScenes.map(migrateMotionControlScene).filter(Boolean) : [],
       multiElementsScenes: Array.isArray(parsed.multiElementsScenes) ? parsed.multiElementsScenes.map(migrateMultiElementsScene).filter(Boolean) : [],
       digitalHumanScenes: Array.isArray(parsed.digitalHumanScenes) ? parsed.digitalHumanScenes.map(migrateDigitalHumanScene).filter(Boolean) : [],
+      lipSyncScenes: Array.isArray(parsed.lipSyncScenes) ? parsed.lipSyncScenes.map(migrateLipSyncScene).filter(Boolean) : [],
       batchScene: {
         ...defaults.batchScene,
         ...parsed.batchScene,
@@ -257,6 +271,7 @@ function stripLargeDataUrls(draft: EcomDraftV1): EcomDraftV1 {
     for (const s of d.motionControlScenes || []) { applyPersistedMediaIds(s.sourceImageSlot); applyPersistedMediaIds(s.referenceVideoSlot); applyPersistedMediaIds(s.resultSlot) }
     for (const s of d.multiElementsScenes || []) { applyPersistedMediaIds(s.sourceVideoSlot); applyPersistedMediaIds(s.resultSlot) }
     for (const s of d.digitalHumanScenes || []) { applyPersistedMediaIds(s.imageSlot); applyPersistedMediaIds(s.audioSlot); applyPersistedMediaIds(s.resultSlot) }
+    for (const s of d.lipSyncScenes || []) { applyPersistedMediaIds(s.videoSlot); applyPersistedMediaIds(s.audioSlot); applyPersistedMediaIds(s.resultSlot) }
     for (const item of d.batchScene?.items || []) { applyPersistedMediaIds(item.refSlot); applyPersistedMediaIds(item.resultSlot) }
     for (const ref of d.productRefs || []) applyPersistedMediaIds(ref.slot)
   }
@@ -283,6 +298,7 @@ function stripLargeDataUrls(draft: EcomDraftV1): EcomDraftV1 {
   for (const s of clone.motionControlScenes || []) { stripSlot(s.sourceImageSlot); stripSlot(s.referenceVideoSlot); stripSlot(s.resultSlot) }
   for (const s of clone.multiElementsScenes || []) { stripSlot(s.sourceVideoSlot); stripSlot(s.resultSlot) }
   for (const s of clone.digitalHumanScenes || []) { stripSlot(s.imageSlot); stripSlot(s.audioSlot); stripSlot(s.resultSlot) }
+  for (const s of clone.lipSyncScenes || []) { stripSlot(s.videoSlot); stripSlot(s.audioSlot); stripSlot(s.resultSlot) }
   for (const item of clone.batchScene?.items || []) { stripSlot(item.refSlot); stripSlot(item.resultSlot); for (const ss of item.secondaryRefSlots || []) stripSlot(ss) }
   for (const ref of clone.productRefs || []) stripSlot(ref.slot)
   for (const msg of clone.chatHistory || []) {
@@ -405,6 +421,7 @@ export const recoverMediaUrls = async (draft: EcomDraftV1): Promise<{ changed: b
   for (const s of draft.motionControlScenes || []) { await recoverSlot(s.sourceImageSlot); await recoverSlot(s.referenceVideoSlot); await recoverSlot(s.resultSlot) }
   for (const s of draft.multiElementsScenes || []) { await recoverSlot(s.sourceVideoSlot); await recoverSlot(s.resultSlot) }
   for (const s of draft.digitalHumanScenes || []) { await recoverSlot(s.imageSlot); await recoverSlot(s.audioSlot); await recoverSlot(s.resultSlot) }
+  for (const s of draft.lipSyncScenes || []) { await recoverSlot(s.videoSlot); await recoverSlot(s.audioSlot); await recoverSlot(s.resultSlot) }
   for (const item of draft.batchScene?.items || []) { await recoverSlot(item.refSlot); await recoverSlot(item.resultSlot) }
   for (const ref of draft.productRefs || []) await recoverSlot(ref.slot)
 

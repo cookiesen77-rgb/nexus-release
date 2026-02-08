@@ -97,6 +97,12 @@ if (typeof window !== 'undefined') {
 const normalizeText = (text: unknown) => String(text || '').replace(/\r\n/g, '\n').trim()
 
 const isHttpUrl = (v: string) => /^https?:\/\//i.test(v)
+const isApiRelativeUrl = (v: string) => {
+  const u = String(v || '').trim()
+  if (!u) return false
+  return u.startsWith('/v1/') || u.startsWith('/v1beta') || u.startsWith('/kling') || u.startsWith('/tencent-vod') || u.startsWith('/video')
+}
+const isPersistableSourceUrl = (v: string) => isHttpUrl(v) || isApiRelativeUrl(v)
 
 /**
  * Build ordered video images:
@@ -2256,7 +2262,7 @@ export const generateVideoFromConfigNode = async (
           projectId,
           type: 'video',
           data: displayUrl,
-          sourceUrl: videoUrl !== displayUrl ? videoUrl : undefined,
+          sourceUrl: isPersistableSourceUrl(videoUrl) && videoUrl !== displayUrl ? videoUrl : undefined,
           model: modelKey,
         })
         console.log('[generateVideo] 视频已保存到 IndexedDB, mediaId:', mediaId)
@@ -2269,8 +2275,8 @@ export const generateVideoFromConfigNode = async (
       data: {
         url: displayUrl,
         localPath: cached.localPath,
-        // 如果是 HTTPS URL，保存原始 URL；否则保存 mediaId
-        sourceUrl: isHttpUrl(videoUrl) ? videoUrl : undefined,
+        // 记录可恢复的原始地址（http(s) 或 /v1/... 相对 API 路径）
+        sourceUrl: isPersistableSourceUrl(videoUrl) ? videoUrl : undefined,
         mediaId, // IndexedDB 媒体 ID
         loading: false,
         error: '',

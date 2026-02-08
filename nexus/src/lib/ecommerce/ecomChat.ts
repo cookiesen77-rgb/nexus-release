@@ -14,6 +14,7 @@ const SCENE_LABELS: Record<EcomSceneType, string> = {
   motion_control: '动作控制',
   multi_elements: '多模态编辑',
   digital_human: '数字人口播',
+  lip_sync: '口型同步',
 }
 
 const BRAND_TONE_MAP: Record<string, string> = {
