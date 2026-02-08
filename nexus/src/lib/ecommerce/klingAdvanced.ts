@@ -52,7 +52,12 @@ export async function generateAvatarVideo(params: {
     mode: params.mode || 'std',
   }
   if (params.audioId) body.audio_id = params.audioId
-  else if (params.soundFile) body.sound_file = params.soundFile
+  else if (params.soundFile) {
+    let audio = params.soundFile
+    const commaIdx = audio.indexOf(',')
+    if (audio.startsWith('data:') && commaIdx > 0) audio = audio.slice(commaIdx + 1)
+    body.sound_file = audio
+  }
   if (params.prompt) body.prompt = params.prompt
 
   const resp = await postJson<any>(endpoint, body, { authMode: 'bearer' })

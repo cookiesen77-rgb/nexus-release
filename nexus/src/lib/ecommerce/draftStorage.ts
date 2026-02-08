@@ -198,11 +198,46 @@ export const loadDraft = (pid: string): EcomDraftV1 => {
   }
 }
 
+function stripLargeDataUrls(draft: EcomDraftV1): EcomDraftV1 {
+  const clone = JSON.parse(JSON.stringify(draft))
+  const stripSlot = (slot: any) => {
+    if (!slot?.variants) return
+    for (const v of slot.variants) {
+      if (typeof v.displayUrl === 'string' && v.displayUrl.startsWith('data:') && v.displayUrl.length > 50000) {
+        v.displayUrl = ''
+      }
+    }
+  }
+  stripSlot(clone.heroScene?.slot)
+  for (const img of clone.detailPageScene?.images || []) stripSlot(img.slot)
+  for (const s of clone.tryOnScenes || []) { stripSlot(s.modelImageSlot); stripSlot(s.productImageSlot); stripSlot(s.resultSlot) }
+  for (const s of clone.posterScenes || []) stripSlot(s.slot)
+  for (const s of clone.videoScenes || []) { stripSlot(s.firstFrameSlot); stripSlot(s.videoSlot) }
+  for (const s of clone.motionControlScenes || []) { stripSlot(s.sourceImageSlot); stripSlot(s.referenceVideoSlot); stripSlot(s.resultSlot) }
+  for (const s of clone.multiElementsScenes || []) { stripSlot(s.sourceVideoSlot); stripSlot(s.resultSlot) }
+  for (const s of clone.digitalHumanScenes || []) { stripSlot(s.imageSlot); stripSlot(s.audioSlot); stripSlot(s.resultSlot) }
+  for (const item of clone.batchScene?.items || []) { stripSlot(item.refSlot); stripSlot(item.resultSlot); for (const ss of item.secondaryRefSlots || []) stripSlot(ss) }
+  for (const ref of clone.productRefs || []) stripSlot(ref.slot)
+  for (const msg of clone.chatHistory || []) {
+    if (Array.isArray(msg.content)) {
+      msg.content = msg.content.map((p: any) => {
+        if (p.type === 'image_url' && p.image_url?.url?.length > 50000) return { type: 'text', text: '[图片]' }
+        return p
+      })
+    }
+    if (Array.isArray(msg.images)) msg.images = msg.images.filter((u: string) => !u.startsWith('data:') || u.length < 50000)
+  }
+  return clone
+}
+
 export const saveDraft = (pid: string, draft: EcomDraftV1): boolean => {
   try {
-    localStorage.setItem(`${DRAFT_PREFIX}:${pid}`, JSON.stringify({ ...draft, updatedAt: Date.now() }))
+    const cleaned = stripLargeDataUrls(draft)
+    localStorage.setItem(`${DRAFT_PREFIX}:${pid}`, JSON.stringify({ ...cleaned, updatedAt: Date.now() }))
     return true
-  } catch {
+  } catch (err) {
+    console.error('[EcomDraft] saveDraft failed (likely quota exceeded):', err)
+    window.$message?.error?.('项目数据过大，部分图片数据未能保存。建议减少上传图片数量。')
     return false
   }
 }

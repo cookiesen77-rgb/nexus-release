@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react'
-import { Plus, Trash2, Loader2, Upload, Play, Video, Mic } from 'lucide-react'
+import { Plus, Trash2, Loader2, Upload, Play, Video, Mic, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { EcomDraftV1, EcomVideoType, EcomMediaVariant } from '@/lib/ecommerce/types'
@@ -45,6 +45,13 @@ const getVideoModelConfig = (key: string) => (VIDEO_MODELS as any[]).find(m => m
 export default function EcomVideoScene({ draft, setDraftSafe }: SceneProps) {
   const [generating, setGenerating] = useState(false)
   const [ttsGenerating, setTtsGenerating] = useState<string | null>(null)
+
+  const handleDownload = useCallback((url: string, filename: string) => {
+    if (!url) return
+    import('@/lib/download').then(({ downloadFile }) => {
+      downloadFile({ url, filename }).catch((err: any) => window.$message?.error?.(err?.message || '下载失败'))
+    })
+  }, [])
 
   const patchScene = useCallback((idx: number, patch: Partial<EcomDraftV1['videoScenes'][0]>) => {
     setDraftSafe(prev => {
@@ -354,10 +361,16 @@ export default function EcomVideoScene({ draft, setDraftSafe }: SceneProps) {
                 </div>
                 <div>
                   <div className="text-[10px] text-[var(--text-secondary)] mb-1">生成结果</div>
-                  <div className="aspect-video rounded-lg bg-[var(--bg-tertiary)] overflow-hidden flex items-center justify-center">
+                  <div className="relative aspect-video rounded-lg bg-[var(--bg-tertiary)] overflow-hidden flex items-center justify-center">
                     {videoV ? (
                       videoV.status === 'success' && videoV.sourceUrl ? (
-                        <video src={videoV.sourceUrl} className="h-full w-full object-cover" controls />
+                        <>
+                          <video src={videoV.sourceUrl} className="h-full w-full object-cover" controls />
+                          <button onClick={() => handleDownload(videoV.sourceUrl!, `video_${idx}_${Date.now()}.mp4`)}
+                            className="absolute right-2 top-2 rounded-lg bg-black/50 p-1.5 text-white hover:bg-black/70" title="下载">
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </>
                       ) : (
                         <VariantThumb variant={videoV} className="h-full w-full" />
                       )

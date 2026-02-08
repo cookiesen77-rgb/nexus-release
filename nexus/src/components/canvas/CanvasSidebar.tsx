@@ -80,7 +80,7 @@ export default function CanvasSidebar({
   canRedo
 }: Props) {
   return (
-    <div className="pointer-events-auto absolute left-4 top-56 z-30 w-14 rounded-[14px] border border-[var(--border-color)] bg-[var(--bg-secondary)] p-2">
+    <div className="pointer-events-auto absolute left-4 top-56 z-30 w-14 max-h-[calc(100vh-240px)] overflow-y-auto scrollbar-thin rounded-[14px] border border-[var(--border-color)] bg-[var(--bg-secondary)] p-2">
       <button
         className={[
           'flex h-10 w-10 items-center justify-center rounded-xl transition-colors',
