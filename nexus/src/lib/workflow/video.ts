@@ -1659,7 +1659,7 @@ export const generateVideoFromConfigNode = async (
           model_name: modelName,
           image,
           mode,
-          duration: durValue,
+          duration: String(durValue),
         }
         // API 约束：image_tail 不能为空字符串，仅在有尾帧时才传入
         if (tail) payload.image_tail = tail
@@ -1991,7 +1991,7 @@ export const generateVideoFromConfigNode = async (
       payload = {
         model: modelCfg.key,
         prompt: prompt || '',
-        duration: dur,
+        duration: String(dur),
         size: size,
         aspect_ratio: aspectRatio
       }

@@ -742,7 +742,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
       prompt,
       orientation,
       size: size || modelCfg.defaultParams?.size || 'large',
-      duration: dur,
+      duration: String(dur),
     }
     if (images.length > 0) payload.images = images.slice(0, Number(modelCfg.maxImages || 2))
     const watermark = modelCfg.defaultParams?.watermark
@@ -974,7 +974,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
         model_name: modelName,
         image: first,
         mode,
-        duration: durValue,
+        duration: String(durValue),
       }
       // API 约束：image_tail 不能为空字符串，仅在有尾帧时才传入
       if (tail) payload.image_tail = tail
@@ -1406,7 +1406,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
       },
     }
 
-    // 参考图（file_infos，格式：{ Type: "Url", Url: "http://..." }）
+    // 参考图（file_infos，格式：{ Type: 'Url', Url: "http://..." }）
     if (images.length > 0) {
       const fileInfos: any[] = []
       for (const raw of images.slice(0, Number(modelCfg.maxImages || 3))) {
@@ -1430,7 +1430,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
           imgUrl = await uploadImageToYunwu(compressed)
         }
         if (isHttpUrl(imgUrl)) {
-          fileInfos.push({ type: 'Url', url: imgUrl })
+          fileInfos.push({ Type: 'Url', Url: imgUrl })
         }
       }
       if (fileInfos.length > 0) (payload as any).file_infos = fileInfos
