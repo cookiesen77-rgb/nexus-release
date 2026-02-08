@@ -36,7 +36,10 @@ function extractVideoUrl(data: any): string {
   return url
 }
 
-// Kling 数字人: image + audio → video
+// ===== 数字人口播 =====
+// POST /kling/v1/videos/avatar/image2video
+// Params: image(required), audio_id|sound_file(one required), prompt(required), mode(required: std|pro)
+// Query: GET /kling/v1/videos/avatar/image2video/{id}
 export async function generateAvatarVideo(params: {
   image: string
   audioId?: string
@@ -44,21 +47,27 @@ export async function generateAvatarVideo(params: {
   prompt?: string
   mode?: 'std' | 'pro'
 }): Promise<{ taskId: string; videoUrl: string }> {
+  if (!params.audioId && !params.soundFile) throw new Error('数字人需要音频：请提供 audio_id 或上传音频文件')
+
   const cfg = getToolConfig('kling-digital-human')
   const endpoint = String(cfg?.endpoint || `${getKlingOrigin()}/kling/v1/videos/avatar/image2video`)
 
   const body: Record<string, string> = {
     image: params.image,
     mode: params.mode || 'std',
+    prompt: params.prompt || '',
   }
-  if (params.audioId) body.audio_id = params.audioId
-  else if (params.soundFile) {
+  if (params.audioId) {
+    body.audio_id = params.audioId
+  } else if (params.soundFile) {
     let audio = params.soundFile
-    const commaIdx = audio.indexOf(',')
-    if (audio.startsWith('data:') && commaIdx > 0) audio = audio.slice(commaIdx + 1)
+    // Kling API expects raw base64 or URL, not data:// URI
+    if (audio.startsWith('data:')) {
+      const commaIdx = audio.indexOf(',')
+      if (commaIdx > 0) audio = audio.slice(commaIdx + 1)
+    }
     body.sound_file = audio
   }
-  if (params.prompt) body.prompt = params.prompt
 
   const resp = await postJson<any>(endpoint, body, { authMode: 'bearer' })
   const taskId = String(resp?.data?.task_id || resp?.task_id || '').trim()
@@ -72,14 +81,18 @@ export async function generateAvatarVideo(params: {
   return { taskId, videoUrl: extractVideoUrl(data) }
 }
 
-// Kling 动作控制: image + reference video → video
+// ===== 动作控制 =====
+// POST /kling/v1/videos/motion-control
+// Params: image_url(required), video_url(required), character_orientation(required: "image"|"video"),
+//         mode(required: "std"|"pro"), prompt(optional), keep_original_sound(optional: "yes"|"no")
+// Query: GET /kling/v1/videos/motion-control/{id}
 export async function generateMotionControlVideo(params: {
   imageUrl: string
   videoUrl: string
   prompt?: string
-  mode?: string
+  mode?: 'std' | 'pro'
   keepOriginalSound?: boolean
-  characterOrientation?: 'up' | 'down' | 'left' | 'right'
+  characterOrientation?: 'image' | 'video'
 }): Promise<{ taskId: string; videoUrl: string }> {
   const cfg = getToolConfig('kling-motion-control')
   const endpoint = String(cfg?.endpoint || `${getKlingOrigin()}/kling/v1/videos/motion-control`)
@@ -87,11 +100,11 @@ export async function generateMotionControlVideo(params: {
   const body: Record<string, any> = {
     image_url: params.imageUrl,
     video_url: params.videoUrl,
+    mode: params.mode || 'std',
+    character_orientation: params.characterOrientation || 'image',
   }
   if (params.prompt) body.prompt = params.prompt
-  if (params.mode) body.mode = params.mode
-  if (params.keepOriginalSound !== undefined) body.keep_original_sound = params.keepOriginalSound
-  if (params.characterOrientation) body.character_orientation = params.characterOrientation
+  if (params.keepOriginalSound !== undefined) body.keep_original_sound = params.keepOriginalSound ? 'yes' : 'no'
 
   const resp = await postJson<any>(endpoint, body, { authMode: 'bearer' })
   const taskId = String(resp?.data?.task_id || resp?.task_id || '').trim()
@@ -105,45 +118,67 @@ export async function generateMotionControlVideo(params: {
   return { taskId, videoUrl: extractVideoUrl(data) }
 }
 
-// Kling 多模态视频编辑: init selection → add segments → run → poll
+// ===== 多模态视频编辑 =====
+// Workflow: init-selection → add-selection (with frame coords) → run multi-elements → poll
+// init: POST /kling/v1/videos/multi-elements/init-selection  body: { video_url } → returns session_id
+// add:  POST /kling/v1/videos/multi-elements/add-selection   body: { session_id, frame_index, points: [{x,y}] }
+// run:  POST /kling/v1/videos/multi-elements                 body: { model_name, session_id, edit_mode, prompt, mode, duration }
+// query: GET /kling/v1/videos/multi-elements/{id}
+export interface MultiElementsSegment {
+  frameIndex: number
+  points: { x: number; y: number }[]
+}
+
 export async function generateMultiElementsVideo(params: {
-  initVideoUrl: string
-  segments: { prompt: string }[]
-  prompt?: string
+  videoUrl: string
+  segments: MultiElementsSegment[]
+  editMode?: 'addition' | 'swap' | 'removal'
+  prompt: string
+  negativePrompt?: string
+  imageList?: string[]
+  mode?: 'std' | 'pro'
+  duration?: number
 }): Promise<{ taskId: string; videoUrl: string }> {
   const cfg = getToolConfig('kling-multi-elements-video-edit')
   const origin = getKlingOrigin()
   const endpoints = cfg?.endpoints || {
     initSelection: `${origin}/kling/v1/videos/multi-elements/init-selection`,
     addSelection: `${origin}/kling/v1/videos/multi-elements/add-selection`,
-    deleteSelection: `${origin}/kling/v1/videos/multi-elements/delete-selection`,
-    previewSelection: `${origin}/kling/v1/videos/multi-elements/preview-selection`,
     run: `${origin}/kling/v1/videos/multi-elements`,
     query: (id: string) => `${origin}/kling/v1/videos/multi-elements/${id}`,
   }
 
-  // Step 1: init selection
-  const initResp = await postJson<any>(endpoints.initSelection, { video_url: params.initVideoUrl }, { authMode: 'bearer' })
-  const initTaskId = String(initResp?.data?.task_id || initResp?.task_id || '').trim()
-  if (!initTaskId) throw new Error('多模态编辑初始化失败')
+  // Step 1: init — get session_id
+  const initResp = await postJson<any>(endpoints.initSelection, { video_url: params.videoUrl }, { authMode: 'bearer' })
+  const sessionId = String(initResp?.data?.session_id || initResp?.data?.task_id || '').trim()
+  if (!sessionId) throw new Error('多模态编辑初始化失败：未返回 session_id')
 
-  // Step 2: add selections for each segment
+  // Step 2: add selection markers for each segment
   for (const seg of params.segments) {
     await postJson<any>(endpoints.addSelection, {
-      task_id: initTaskId,
-      prompt: seg.prompt,
+      session_id: sessionId,
+      frame_index: seg.frameIndex,
+      points: seg.points,
     }, { authMode: 'bearer' })
   }
 
   // Step 3: run generation
-  const runResp = await postJson<any>(endpoints.run, {
-    task_id: initTaskId,
-    prompt: params.prompt || '',
-  }, { authMode: 'bearer' })
+  const runBody: Record<string, any> = {
+    model_name: 'kling-v1-6',
+    session_id: sessionId,
+    edit_mode: params.editMode || 'addition',
+    prompt: params.prompt,
+    mode: params.mode || 'std',
+    duration: String(params.duration || 5),
+  }
+  if (params.negativePrompt) runBody.negative_prompt = params.negativePrompt
+  if (params.imageList?.length) runBody.image_list = params.imageList
+
+  const runResp = await postJson<any>(endpoints.run, runBody, { authMode: 'bearer' })
   const runTaskId = String(runResp?.data?.task_id || runResp?.task_id || '').trim()
   if (!runTaskId) throw new Error('多模态编辑运行失败')
 
-  // Step 4: poll for result
+  // Step 4: poll
   const queryUrl = typeof endpoints.query === 'function'
     ? endpoints.query(runTaskId)
     : `${origin}/kling/v1/videos/multi-elements/${runTaskId}`

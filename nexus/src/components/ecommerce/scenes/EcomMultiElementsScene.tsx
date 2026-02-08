@@ -49,7 +49,10 @@ export default function EcomMultiElementsScene({ draft, setDraftSafe }: ScenePro
         sourceVideoSlot: createEmptySlot('待编辑视频'),
         resultSlot: createEmptySlot('生成结果'),
         prompt: '',
-        editPrompt: '',
+        editMode: 'addition' as const,
+        segments: [],
+        mode: 'std' as const,
+        duration: 5,
       }],
     }))
   }, [setDraftSafe])
@@ -79,7 +82,6 @@ export default function EcomMultiElementsScene({ draft, setDraftSafe }: ScenePro
     const scene = draft.multiElementsScenes[idx]
     const videoUrl = getSlotUrl(scene.sourceVideoSlot)
     if (!videoUrl) { window.$message?.warning?.('请上传待编辑视频'); return }
-    if (!scene.editPrompt) { window.$message?.warning?.('请输入编辑描述'); return }
 
     setGenerating(true)
     const variantId = makeVariantId()
@@ -99,16 +101,19 @@ export default function EcomMultiElementsScene({ draft, setDraftSafe }: ScenePro
 
     try {
       const result = await generateMultiElementsVideo({
-        initVideoUrl: videoUrl,
-        segments: [{ prompt: scene.editPrompt }],
-        prompt: scene.prompt || undefined,
+        videoUrl,
+        segments: scene.segments || [],
+        editMode: scene.editMode || 'addition',
+        prompt: scene.prompt,
+        mode: scene.mode || 'std',
+        duration: scene.duration || 5,
       })
 
       setDraftSafe(prev => {
         const scenes = [...prev.multiElementsScenes]
         scenes[idx] = {
           ...scenes[idx],
-          taskId: result.taskId,
+          sessionId: result.taskId,
           resultSlot: {
             ...scenes[idx].resultSlot,
             variants: scenes[idx].resultSlot.variants.map(v =>
@@ -201,21 +206,45 @@ export default function EcomMultiElementsScene({ draft, setDraftSafe }: ScenePro
               </div>
             </div>
 
-            <textarea
-              value={scene.editPrompt}
-              onChange={e => patchScene(idx, { editPrompt: e.target.value })}
-              placeholder="编辑描述：描述要增加/替换/删除的元素..."
-              rows={2}
-              className="mt-3 w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs resize-none focus:border-[var(--accent-color)] focus:outline-none"
-            />
+            <div className="mt-3 flex items-center gap-3 flex-wrap">
+              <select
+                value={scene.editMode || 'addition'}
+                onChange={e => patchScene(idx, { editMode: e.target.value as 'addition' | 'swap' | 'removal' })}
+                className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1 text-[11px]"
+              >
+                <option value="addition">增加元素</option>
+                <option value="swap">替换元素</option>
+                <option value="removal">删除元素</option>
+              </select>
+              <select
+                value={scene.mode || 'std'}
+                onChange={e => patchScene(idx, { mode: e.target.value as 'std' | 'pro' })}
+                className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1 text-[11px]"
+              >
+                <option value="std">标准模式</option>
+                <option value="pro">专业模式</option>
+              </select>
+              <select
+                value={scene.duration || 5}
+                onChange={e => patchScene(idx, { duration: Number(e.target.value) })}
+                className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1 text-[11px]"
+              >
+                <option value={5}>5 秒</option>
+                <option value={10}>10 秒</option>
+              </select>
+            </div>
 
             <textarea
               value={scene.prompt}
               onChange={e => patchScene(idx, { prompt: e.target.value })}
-              placeholder="整体描述（可选）..."
+              placeholder="描述要编辑的内容..."
               rows={2}
-              className="mt-2 w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs resize-none focus:border-[var(--accent-color)] focus:outline-none"
+              className="mt-3 w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs resize-none focus:border-[var(--accent-color)] focus:outline-none"
             />
+
+            <div className="mt-2 text-[10px] text-[var(--text-secondary)] opacity-60">
+              选区标记功能开发中，当前默认全画面编辑
+            </div>
 
             <VariantHistoryStrip
               variants={scene.resultSlot?.variants || []}

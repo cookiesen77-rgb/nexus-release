@@ -121,7 +121,7 @@ const migrateMotionControlScene = (raw: any): any => {
     prompt: raw.prompt || '',
     mode: raw.mode || 'std',
     keepOriginalSound: !!raw.keepOriginalSound,
-    characterOrientation: raw.characterOrientation || 'up',
+    characterOrientation: raw.characterOrientation || 'image',
   }
 }
 
@@ -131,9 +131,12 @@ const migrateMultiElementsScene = (raw: any): any => {
     id: raw.id || makeId(),
     sourceVideoSlot: migrateSlot(raw.sourceVideoSlot, '待编辑视频'),
     resultSlot: migrateSlot(raw.resultSlot, '生成结果'),
-    prompt: raw.prompt || '',
-    editPrompt: raw.editPrompt || '',
-    taskId: raw.taskId,
+    prompt: raw.prompt || raw.editPrompt || '',
+    editMode: raw.editMode || 'addition',
+    segments: Array.isArray(raw.segments) ? raw.segments : [],
+    mode: raw.mode || 'std',
+    duration: raw.duration || 5,
+    sessionId: raw.sessionId || raw.taskId,
   }
 }
 

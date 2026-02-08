@@ -95,7 +95,7 @@ export interface EcomMotionControlScene {
   prompt: string
   mode: 'std' | 'pro'
   keepOriginalSound: boolean
-  characterOrientation: 'up' | 'down' | 'left' | 'right'
+  characterOrientation: 'image' | 'video'
 }
 
 export interface EcomMultiElementsScene {
@@ -103,8 +103,12 @@ export interface EcomMultiElementsScene {
   sourceVideoSlot: EcomMediaSlot
   resultSlot: EcomMediaSlot
   prompt: string
-  editPrompt: string
-  taskId?: string
+  editMode: 'addition' | 'swap' | 'removal'
+  segments: { frameIndex: number; points: { x: number; y: number }[] }[]
+  negativePrompt?: string
+  mode?: 'std' | 'pro'
+  duration?: number
+  sessionId?: string
 }
 
 export type EcomPosterCampaign = 'double_11' | '618' | 'new_year' | 'black_friday' | 'custom'

@@ -52,7 +52,7 @@ export default function EcomMotionControlScene({ draft, setDraftSafe }: ScenePro
         prompt: '',
         mode: 'std' as const,
         keepOriginalSound: false,
-        characterOrientation: 'up' as const,
+        characterOrientation: 'image' as const,
       }],
     }))
   }, [setDraftSafe])
@@ -255,13 +255,11 @@ export default function EcomMotionControlScene({ draft, setDraftSafe }: ScenePro
               </label>
               <select
                 value={scene.characterOrientation}
-                onChange={e => patchScene(idx, { characterOrientation: e.target.value as 'up' | 'down' | 'left' | 'right' })}
+                onChange={e => patchScene(idx, { characterOrientation: e.target.value as 'image' | 'video' })}
                 className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1 text-[11px]"
               >
-                <option value="up">朝上</option>
-                <option value="down">朝下</option>
-                <option value="left">朝左</option>
-                <option value="right">朝右</option>
+                <option value="image">跟随人像朝向 (最长10秒)</option>
+                <option value="video">跟随视频朝向 (最长30秒)</option>
               </select>
             </div>
 

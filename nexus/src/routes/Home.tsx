@@ -422,7 +422,7 @@ export default function Home() {
       )}
 
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <div className="fixed bottom-3 right-4 text-[11px] text-[var(--text-secondary)] opacity-40 select-none">v1.58.7</div>
+      <div className="fixed bottom-3 right-4 text-[11px] text-[var(--text-secondary)] opacity-40 select-none">v1.58.8</div>
     </div>
   )
 }
