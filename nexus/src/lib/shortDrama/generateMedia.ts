@@ -1430,7 +1430,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
           imgUrl = await uploadImageToYunwu(compressed)
         }
         if (isHttpUrl(imgUrl)) {
-          fileInfos.push({ Type: 'Url', Url: imgUrl })
+          fileInfos.push({ type: 'Url', url: imgUrl })
         }
       }
       if (fileInfos.length > 0) (payload as any).file_infos = fileInfos
@@ -1523,4 +1523,3 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
     localPath: cached.localPath || '',
   }
 }
-

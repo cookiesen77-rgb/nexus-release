@@ -2052,35 +2052,55 @@ export const generateVideoFromConfigNode = async (
         },
       }
 
-      // 参考图（需要 HTTP URL，data: URL 需要先上传到 CDN）
+      // 参考图（需要公网可达的 HTTP URL，imageproxy CDN 可能被腾讯拒绝）
+      // 优先从图片节点的 sourceUrl 取原始 HTTP URL
       if (firstFrame || refImages.length > 0) {
-        const allImages = firstFrame ? [firstFrame, ...refImages] : refImages
         const fileInfos: any[] = []
-        for (const img of allImages.slice(0, 3)) {
-          const url = String(img || '').trim()
-          if (!url) continue
-          if (/^https?:\/\//i.test(url)) {
-            fileInfos.push({ Type: 'Url', Url: url })
-          } else if (url.startsWith('data:') && url.length > 100) {
-            // 上传 data URL 到 CDN
-            try {
-              const m = url.match(/^data:([^;]+);base64,(.*)$/)
-              if (m) {
-                const byteString = atob(m[2])
-                const bytes = new Uint8Array(byteString.length)
-                for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i)
-                const blob = new Blob([bytes], { type: m[1] })
-                const fd = new FormData()
-                fd.append('file', blob, `image.${m[1].split('/')[1] || 'png'}`)
-                const uploadResp = await postFormData<any>('https://imageproxy.zhongzhuan.chat/api/upload', fd, { authMode: 'bearer', timeoutMs: 60000 })
-                const httpUrl = String(uploadResp?.url || uploadResp?.data?.url || '').trim()
-                if (httpUrl && /^https?:\/\//i.test(httpUrl)) fileInfos.push({ Type: 'Url', Url: httpUrl })
+
+        // 尝试从连接的图片节点获取原始 sourceUrl
+        const store = useGraphStore.getState()
+        const configNode = store.nodes.find(n => n.id === configNodeId)
+        const connectedImageNodes = store.edges
+          .filter(e => e.target === configNodeId)
+          .map(e => store.nodes.find(n => n.id === e.source))
+          .filter((n): n is any => n?.type === 'image' && !!(n.data as any)?.sourceUrl)
+
+        for (const imgNode of connectedImageNodes.slice(0, 3)) {
+          const srcUrl = String((imgNode.data as any).sourceUrl || '').trim()
+          if (srcUrl && /^https?:\/\//i.test(srcUrl)) {
+            fileInfos.push({ Type: 'Url', Url: srcUrl })
+          }
+        }
+
+        // 如果没有 sourceUrl，尝试上传 data URL 到 CDN（可能被拒绝）
+        if (fileInfos.length === 0) {
+          const allImages = firstFrame ? [firstFrame, ...refImages] : refImages
+          for (const img of allImages.slice(0, 3)) {
+            const url = String(img || '').trim()
+            if (!url) continue
+            if (/^https?:\/\//i.test(url)) {
+              fileInfos.push({ Type: 'Url', Url: url })
+            } else if (url.startsWith('data:') && url.length > 100) {
+              try {
+                const m = url.match(/^data:([^;]+);base64,(.*)$/)
+                if (m) {
+                  const byteString = atob(m[2])
+                  const bytes = new Uint8Array(byteString.length)
+                  for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i)
+                  const blob = new Blob([bytes], { type: m[1] })
+                  const fd = new FormData()
+                  fd.append('file', blob, `image.${m[1].split('/')[1] || 'png'}`)
+                  const uploadResp = await postFormData<any>('https://imageproxy.zhongzhuan.chat/api/upload', fd, { authMode: 'bearer', timeoutMs: 60000 })
+                  const httpUrl = String(uploadResp?.url || uploadResp?.data?.url || '').trim()
+                  if (httpUrl && /^https?:\/\//i.test(httpUrl)) fileInfos.push({ Type: 'Url', Url: httpUrl })
+                }
+              } catch (e) {
+                console.warn('[video] tencent-aigc 参考图上传失败:', e)
               }
-            } catch (e) {
-              console.warn('[video] 参考图上传失败:', e)
             }
           }
         }
+
         if (fileInfos.length > 0) (payload as any).file_infos = fileInfos
       }
 
