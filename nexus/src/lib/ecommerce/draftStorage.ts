@@ -202,29 +202,66 @@ export const loadDraft = (pid: string): EcomDraftV1 => {
   }
 }
 
-// Persist large data URLs to IndexedDB before stripping from draft
-// This runs async in background — the draft save happens synchronously with stripped data
-let pendingPersists = 0
+// Track mediaIds that have been persisted to IndexedDB (survives across saves)
+const persistedMediaIds = new Map<string, string>() // displayUrl hash → mediaId
+
+function hashUrl(url: string): string {
+  let h = 0
+  const s = url.slice(0, 200) + url.length // Sample start + length for fast hash
+  for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0 }
+  return String(Math.abs(h))
+}
 
 function persistSlotToIndexedDb(slot: any, projectId: string) {
   if (!slot?.variants) return
   for (const v of slot.variants) {
     const url = v.displayUrl || v.sourceUrl || ''
     if (typeof url === 'string' && url.startsWith('data:') && url.length > 50000 && !v.mediaId) {
-      pendingPersists++
+      const hash = hashUrl(url)
+      // Already persisted in a previous save cycle?
+      const cached = persistedMediaIds.get(hash)
+      if (cached) { v.mediaId = cached; continue }
+
       saveMedia({
         nodeId: `ecom_${v.id || Date.now()}`,
         projectId,
         type: url.startsWith('data:video') ? 'video' : url.startsWith('data:audio') ? 'audio' : 'image',
         data: url,
       }).then(mediaId => {
-        if (mediaId) v.mediaId = mediaId
-      }).catch(() => {}).finally(() => { pendingPersists-- })
+        if (mediaId) persistedMediaIds.set(hash, mediaId)
+      }).catch(() => {})
+    }
+  }
+}
+
+function applyPersistedMediaIds(slot: any) {
+  if (!slot?.variants) return
+  for (const v of slot.variants) {
+    if (v.mediaId) continue
+    const url = v.displayUrl || v.sourceUrl || ''
+    if (typeof url === 'string' && url.startsWith('data:') && url.length > 50000) {
+      const cached = persistedMediaIds.get(hashUrl(url))
+      if (cached) v.mediaId = cached
     }
   }
 }
 
 function stripLargeDataUrls(draft: EcomDraftV1): EcomDraftV1 {
+  // First pass on LIVE draft: apply any previously persisted mediaIds
+  const applyAll = (d: EcomDraftV1) => {
+    applyPersistedMediaIds(d.heroScene?.slot)
+    for (const img of d.detailPageScene?.images || []) applyPersistedMediaIds(img.slot)
+    for (const s of d.tryOnScenes || []) { applyPersistedMediaIds(s.modelImageSlot); applyPersistedMediaIds(s.productImageSlot); applyPersistedMediaIds(s.resultSlot) }
+    for (const s of d.posterScenes || []) applyPersistedMediaIds(s.slot)
+    for (const s of d.videoScenes || []) { applyPersistedMediaIds(s.firstFrameSlot); applyPersistedMediaIds(s.videoSlot) }
+    for (const s of d.motionControlScenes || []) { applyPersistedMediaIds(s.sourceImageSlot); applyPersistedMediaIds(s.referenceVideoSlot); applyPersistedMediaIds(s.resultSlot) }
+    for (const s of d.multiElementsScenes || []) { applyPersistedMediaIds(s.sourceVideoSlot); applyPersistedMediaIds(s.resultSlot) }
+    for (const s of d.digitalHumanScenes || []) { applyPersistedMediaIds(s.imageSlot); applyPersistedMediaIds(s.audioSlot); applyPersistedMediaIds(s.resultSlot) }
+    for (const item of d.batchScene?.items || []) { applyPersistedMediaIds(item.refSlot); applyPersistedMediaIds(item.resultSlot) }
+    for (const ref of d.productRefs || []) applyPersistedMediaIds(ref.slot)
+  }
+  applyAll(draft) // Apply to LIVE draft so mediaIds propagate
+
   const clone = JSON.parse(JSON.stringify(draft))
   const pid = clone.projectId || 'default'
 
@@ -233,7 +270,6 @@ function stripLargeDataUrls(draft: EcomDraftV1): EcomDraftV1 {
     persistSlotToIndexedDb(slot, pid)
     for (const v of slot.variants) {
       if (typeof v.displayUrl === 'string' && v.displayUrl.startsWith('data:') && v.displayUrl.length > 50000) {
-        // Keep sourceUrl if it's an HTTP URL (for recovery)
         if (!v.sourceUrl || v.sourceUrl.startsWith('data:')) v.sourceUrl = ''
         v.displayUrl = ''
       }
