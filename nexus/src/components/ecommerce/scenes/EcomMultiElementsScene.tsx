@@ -80,8 +80,13 @@ export default function EcomMultiElementsScene({ draft, setDraftSafe }: ScenePro
   const handleGenerate = useCallback(async (idx: number) => {
     if (generating) return
     const scene = draft.multiElementsScenes[idx]
-    const videoUrl = getSlotUrl(scene.sourceVideoSlot)
+    const videoV = scene.sourceVideoSlot?.variants?.[0]
+    const videoUrl = videoV?.sourceUrl || videoV?.displayUrl || ''
     if (!videoUrl) { window.$message?.warning?.('请上传待编辑视频'); return }
+    if (!videoUrl.startsWith('http')) {
+      window.$message?.warning?.('视频需要是 HTTP URL（请从画布/历史素材中选择已生成的视频，或提供在线视频链接）')
+      return
+    }
 
     setGenerating(true)
     const variantId = makeVariantId()
@@ -187,6 +192,17 @@ export default function EcomMultiElementsScene({ draft, setDraftSafe }: ScenePro
                   ) : <Upload className="h-6 w-6 text-[var(--text-secondary)] opacity-30" />}
                   <input type="file" accept="video/*" className="hidden" onChange={e => handleUploadVideo(idx, e)} />
                 </label>
+                <input
+                  placeholder="或粘贴视频 URL..."
+                  className="mt-1 w-full rounded border border-[var(--border-color)] bg-[var(--bg-primary)] px-1.5 py-1 text-[10px] focus:border-[var(--accent-color)] focus:outline-none"
+                  onBlur={e => {
+                    const url = e.target.value.trim()
+                    if (!url || !url.startsWith('http')) return
+                    const vid = `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+                    patchScene(idx, { sourceVideoSlot: { ...scene.sourceVideoSlot, variants: [{ id: vid, status: 'success' as const, createdAt: Date.now(), createdBy: 'manual' as const, sourceUrl: url, displayUrl: url }], selectedVariantId: vid } })
+                    e.target.value = ''
+                  }}
+                />
               </div>
               <div>
                 <div className="text-[10px] text-[var(--text-secondary)] mb-1">生成结果</div>
