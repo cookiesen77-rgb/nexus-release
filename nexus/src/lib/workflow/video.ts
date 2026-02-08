@@ -2211,7 +2211,7 @@ export const generateVideoFromConfigNode = async (
     let videoUrl = normalizeMediaUrl(directRaw)
 
     if (!videoUrl) {
-      const id = task?.id || task?.task_id || task?.taskId || task?.data?.id || task?.data?.task_id || task?.data?.taskId
+      const id = task?.id || task?.task_id || task?.taskId || task?.data?.id || task?.data?.task_id || task?.data?.taskId || task?.Response?.TaskId || task?.response?.TaskId || task?.response?.task_id
       if (!id) throw new Error('视频返回异常：未获取到任务 ID')
       errorStage = 'poll'
       try {

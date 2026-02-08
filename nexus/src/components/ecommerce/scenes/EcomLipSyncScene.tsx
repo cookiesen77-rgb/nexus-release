@@ -26,7 +26,7 @@ const pickVariant = (slot: { variants: EcomMediaVariant[]; selectedVariantId?: s
 
 const getSlotUrl = (slot: { variants: EcomMediaVariant[]; selectedVariantId?: string }): string => {
   const v = pickVariant(slot)
-  return v?.displayUrl || v?.sourceUrl || ''
+  return v?.sourceUrl || v?.displayUrl || ''
 }
 
 export default function EcomLipSyncScene({ draft, setDraftSafe }: SceneProps) {
