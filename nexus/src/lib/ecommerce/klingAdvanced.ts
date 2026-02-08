@@ -140,7 +140,10 @@ export async function generateMotionControlVideo(params: {
   if (params.prompt) body.prompt = params.prompt
   if (params.keepOriginalSound !== undefined) body.keep_original_sound = params.keepOriginalSound ? 'yes' : 'no'
 
+  console.log('[MotionControl] body:', JSON.stringify({ ...body, image_url: String(body.image_url).slice(0, 80), video_url: String(body.video_url).slice(0, 80) }))
+
   const resp = await postJson<any>(endpoint, body, { authMode: 'bearer' })
+  console.log('[MotionControl] resp:', JSON.stringify(resp).slice(0, 300))
   const taskId = String(resp?.data?.task_id || resp?.task_id || '').trim()
   if (!taskId) throw new Error('动作控制任务创建失败')
 

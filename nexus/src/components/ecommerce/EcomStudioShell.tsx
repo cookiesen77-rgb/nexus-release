@@ -4,7 +4,7 @@
  */
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import type { EcomDraftV1, EcomSceneType, EcomMediaVariant } from '@/lib/ecommerce/types'
-import { loadDraft, saveDraft, createDefaultDraft, listProjects, createProject, deleteProject, duplicateProject, touchProject } from '@/lib/ecommerce/draftStorage'
+import { loadDraft, saveDraft, createDefaultDraft, listProjects, createProject, deleteProject, duplicateProject, touchProject, recoverMediaUrls } from '@/lib/ecommerce/draftStorage'
 import type { EcomProjectMeta } from '@/lib/ecommerce/draftStorage'
 import type { EcomStudioPrefsV1 } from '@/lib/ecommerce/uiPrefs'
 import { loadPrefs, savePrefs } from '@/lib/ecommerce/uiPrefs'
@@ -87,6 +87,18 @@ export default function EcomStudioShell({ projectId, onRequestClose }: Props) {
   }, [draft, prefs, flushNow])
 
   useEffect(() => { return () => { flushNow() } }, [flushNow])
+
+  // ===== Recover media from IndexedDB (images stripped during save) =====
+  useEffect(() => {
+    let cancelled = false
+    recoverMediaUrls(draftRef.current).then(({ changed, draft: recovered }) => {
+      if (!cancelled && changed) {
+        draftRef.current = recovered
+        setDraft({ ...recovered })
+      }
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [pid])
 
   // ===== Project switching =====
   const prevPidRef = useRef(pid)

@@ -1,6 +1,7 @@
 import type { EcomDraftV1, EcomMediaSlot, EcomDetailImage, EcomDetailRole, EcomSceneType, EcomBatchItem } from './types'
 import { ECOM_DETAIL_ROLES } from './types'
 import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, DEFAULT_CHAT_MODEL } from '@/config/models'
+import { saveMedia, getMedia } from '@/lib/mediaStorage'
 
 const makeId = () => `ecom_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
@@ -201,12 +202,39 @@ export const loadDraft = (pid: string): EcomDraftV1 => {
   }
 }
 
+// Persist large data URLs to IndexedDB before stripping from draft
+// This runs async in background — the draft save happens synchronously with stripped data
+let pendingPersists = 0
+
+function persistSlotToIndexedDb(slot: any, projectId: string) {
+  if (!slot?.variants) return
+  for (const v of slot.variants) {
+    const url = v.displayUrl || v.sourceUrl || ''
+    if (typeof url === 'string' && url.startsWith('data:') && url.length > 50000 && !v.mediaId) {
+      pendingPersists++
+      saveMedia({
+        nodeId: `ecom_${v.id || Date.now()}`,
+        projectId,
+        type: url.startsWith('data:video') ? 'video' : url.startsWith('data:audio') ? 'audio' : 'image',
+        data: url,
+      }).then(mediaId => {
+        if (mediaId) v.mediaId = mediaId
+      }).catch(() => {}).finally(() => { pendingPersists-- })
+    }
+  }
+}
+
 function stripLargeDataUrls(draft: EcomDraftV1): EcomDraftV1 {
   const clone = JSON.parse(JSON.stringify(draft))
+  const pid = clone.projectId || 'default'
+
   const stripSlot = (slot: any) => {
     if (!slot?.variants) return
+    persistSlotToIndexedDb(slot, pid)
     for (const v of slot.variants) {
       if (typeof v.displayUrl === 'string' && v.displayUrl.startsWith('data:') && v.displayUrl.length > 50000) {
+        // Keep sourceUrl if it's an HTTP URL (for recovery)
+        if (!v.sourceUrl || v.sourceUrl.startsWith('data:')) v.sourceUrl = ''
         v.displayUrl = ''
       }
     }
@@ -310,4 +338,39 @@ export const touchProject = (pid: string, draft: EcomDraftV1) => {
     list.unshift({ id: pid, title: draft.title, productName: draft.product.name, updatedAt: Date.now(), createdAt: Date.now() })
   }
   writeProjects(list)
+}
+
+/**
+ * Recover media URLs from IndexedDB for variants that have mediaId but no displayUrl.
+ * Call this after loadDraft to restore images that were stripped during save.
+ */
+export const recoverMediaUrls = async (draft: EcomDraftV1): Promise<{ changed: boolean; draft: EcomDraftV1 }> => {
+  let changed = false
+  const recoverSlot = async (slot: any) => {
+    if (!slot?.variants) return
+    for (const v of slot.variants) {
+      if (v.mediaId && !v.displayUrl) {
+        try {
+          const rec = await getMedia(v.mediaId)
+          if (rec?.data) {
+            v.displayUrl = rec.data
+            changed = true
+          }
+        } catch { /* ignore */ }
+      }
+    }
+  }
+
+  await recoverSlot(draft.heroScene?.slot)
+  for (const img of draft.detailPageScene?.images || []) await recoverSlot(img.slot)
+  for (const s of draft.tryOnScenes || []) { await recoverSlot(s.modelImageSlot); await recoverSlot(s.productImageSlot); await recoverSlot(s.resultSlot) }
+  for (const s of draft.posterScenes || []) await recoverSlot(s.slot)
+  for (const s of draft.videoScenes || []) { await recoverSlot(s.firstFrameSlot); await recoverSlot(s.videoSlot) }
+  for (const s of draft.motionControlScenes || []) { await recoverSlot(s.sourceImageSlot); await recoverSlot(s.referenceVideoSlot); await recoverSlot(s.resultSlot) }
+  for (const s of draft.multiElementsScenes || []) { await recoverSlot(s.sourceVideoSlot); await recoverSlot(s.resultSlot) }
+  for (const s of draft.digitalHumanScenes || []) { await recoverSlot(s.imageSlot); await recoverSlot(s.audioSlot); await recoverSlot(s.resultSlot) }
+  for (const item of draft.batchScene?.items || []) { await recoverSlot(item.refSlot); await recoverSlot(item.resultSlot) }
+  for (const ref of draft.productRefs || []) await recoverSlot(ref.slot)
+
+  return { changed, draft }
 }
