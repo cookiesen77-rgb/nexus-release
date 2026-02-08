@@ -24,8 +24,8 @@ export const createDefaultShortDramaPrefs = (): ShortDramaStudioPrefsV1 => ({
   version: 1,
   mode: 'auto',
   autoStrategy: 'fill_only',
-  imageConcurrency: 3,
-  videoConcurrency: 1,
+  imageConcurrency: 4,
+  videoConcurrency: 2,
 })
 
 export const loadShortDramaPrefs = (projectId: string): ShortDramaStudioPrefsV1 => {
@@ -34,8 +34,8 @@ export const loadShortDramaPrefs = (projectId: string): ShortDramaStudioPrefsV1 
   if (parsed && parsed.version === 1) {
     const mode: ShortDramaStudioMode = parsed.mode === 'manual' ? 'manual' : 'auto'
     const autoStrategy: ShortDramaAutoStrategy = parsed.autoStrategy === 'full_auto' ? 'full_auto' : 'fill_only'
-    const imageConcurrency = Math.max(1, Math.min(6, Number(parsed.imageConcurrency || 3)))
-    const videoConcurrency = Math.max(1, Math.min(3, Number(parsed.videoConcurrency || 1)))
+    const imageConcurrency = Math.max(1, Math.min(12, Number(parsed.imageConcurrency || 4)))
+    const videoConcurrency = Math.max(1, Math.min(6, Number(parsed.videoConcurrency || 2)))
     return { version: 1, mode, autoStrategy, imageConcurrency, videoConcurrency }
   }
   return createDefaultShortDramaPrefs()

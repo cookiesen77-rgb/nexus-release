@@ -53,11 +53,18 @@ export const setSlotSelectionLocked = (draft: ShortDramaDraftV2, slotId: string,
 export const setSlotSelectedVariant = (draft: ShortDramaDraftV2, slotId: string, variantId: string | undefined) =>
   updateSlotById(draft, slotId, (s) => ({ ...s, selectedVariantId: variantId, selectionLockedByUser: true }))
 
+export const clearSlotSelectedVariant = (draft: ShortDramaDraftV2, slotId: string) =>
+  updateSlotById(draft, slotId, (s) => ({ ...s, selectedVariantId: undefined }))
+
 const shouldAutoSelect = (slot: ShortDramaMediaSlot, createdBy: ShortDramaCreatedBy) => {
   if (slot.selectionLockedByUser) return false
   // Manual action should usually adopt the newest result by default.
   if (createdBy === 'manual') return true
-  // Auto mode: only select if not locked.
+
+  // Auto mode: do not auto-adopt keyframes or videos. User should decide.
+  if (slot.kind === 'video') return false
+  const label = String(slot.label || '')
+  if (/首帧|尾帧/.test(label)) return false
   return true
 }
 
@@ -92,4 +99,3 @@ export const removeVariantFromSlot = (draft: ShortDramaDraftV2, slotId: string, 
     return { ...slot, variants, selectedVariantId }
   })
 }
-

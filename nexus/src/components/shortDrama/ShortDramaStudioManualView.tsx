@@ -12,6 +12,7 @@ import { generateShortDramaImage, generateShortDramaVideo } from '@/lib/shortDra
 import { buildEffectiveStyle, getShortDramaStylePresetById, SHORT_DRAMA_STYLE_PRESETS } from '@/lib/shortDrama/stylePresets'
 import {
   appendVariantToSlot,
+  clearSlotSelectedVariant,
   removeVariantFromSlot,
   setSlotSelectionLocked,
   setSlotSelectedVariant,
@@ -23,7 +24,7 @@ import ShortDramaMediaPickerModal, { type ShortDramaPickKind, type ShortDramaPic
 import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
 import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1 } from '@/lib/shortDrama/uiPrefs'
 import { cn } from '@/lib/utils'
-import { Check, Eye, Image as ImageIcon, Layers, Loader2, Plus, Sword, Trash2, Upload, Video as VideoIcon } from 'lucide-react'
+import { Check, Eye, Image as ImageIcon, Layers, Loader2, Plus, Sword, Trash2, Upload, Video as VideoIcon, X } from 'lucide-react'
 import ShortDramaBlendPanel from '@/components/shortDrama/ShortDramaBlendPanel'
 import { createEmptyAsset } from '@/lib/shortDrama/draftStorage'
 
@@ -134,6 +135,7 @@ function SlotVersions({
   onRemove,
   onPreview,
   onSendToCanvas,
+  onClearAdopt,
   disabled,
 }: {
   slot: ShortDramaMediaSlot
@@ -141,6 +143,7 @@ function SlotVersions({
   onRemove: (variantId: string) => void
   onPreview?: (variant: ShortDramaMediaVariant) => void
   onSendToCanvas?: (slot: ShortDramaMediaSlot, variant: ShortDramaMediaVariant) => void
+  onClearAdopt?: () => void
   disabled?: boolean
 }) {
   if (!slot.variants || slot.variants.length === 0) {
@@ -191,10 +194,17 @@ function SlotVersions({
                 <Button size="sm" variant="ghost" disabled={!canSend || disabled} onClick={() => onSendToCanvas?.(slot, v)}>
                   上板
                 </Button>
-                <Button size="sm" variant="ghost" disabled={disabled || adopted || v.status !== 'success'} onClick={() => onAdopt(v.id)}>
-                  <Check className="mr-1 h-4 w-4" />
-                  采用
-                </Button>
+                {adopted ? (
+                  <Button size="sm" variant="ghost" disabled={disabled || v.status === 'running'} onClick={() => onClearAdopt?.()}>
+                    <X className="mr-1 h-4 w-4" />
+                    取消采用
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="ghost" disabled={disabled || v.status !== 'success'} onClick={() => onAdopt(v.id)}>
+                    <Check className="mr-1 h-4 w-4" />
+                    采用
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" disabled={disabled || v.status === 'running'} onClick={() => onRemove(v.id)} className="text-red-500">
                   <Trash2 className="mr-1 h-4 w-4" />
                   删除
@@ -591,6 +601,54 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
     return (slot.variants || []).find((v) => v.id === id) || null
   }, [])
 
+  const collectRefImagesForCharacter = useCallback(
+    async (characterId: string) => {
+      const c = draft.characters.find((x) => x.id === characterId)
+      if (!c) return []
+      const inputs: string[] = []
+      if (c.sheet) {
+        const v = getSelectedVariant(c.sheet)
+        const input = await resolveVariantInput(v || undefined)
+        if (input) inputs.push(input)
+      }
+      for (const slot of c.refs || []) {
+        const v = getSelectedVariant(slot)
+        const input = await resolveVariantInput(v || undefined)
+        if (input) inputs.push(input)
+      }
+      return Array.from(new Set(inputs)).filter(Boolean)
+    },
+    [draft.characters, getSelectedVariant, resolveVariantInput]
+  )
+
+
+
+  const collectRefImagesForAsset = useCallback(
+    async (assetId: string) => {
+      const a = (draft.assets || []).find((x) => x.id === assetId)
+      if (!a) return []
+      const inputs: string[] = []
+      // 资产自身参考图
+      if (a.ref) {
+        const v = getSelectedVariant(a.ref)
+        const input = await resolveVariantInput(v || undefined)
+        if (input) inputs.push(input)
+      }
+      for (const slot of a.refs || []) {
+        const v = getSelectedVariant(slot)
+        const input = await resolveVariantInput(v || undefined)
+        if (input) inputs.push(input)
+      }
+      // 资产所属角色参考（风格/一致性）
+      for (const cid of a.ownerCharacterIds || []) {
+        const refs = await collectRefImagesForCharacter(cid)
+        inputs.push(...refs)
+      }
+      return Array.from(new Set(inputs)).filter(Boolean)
+    },
+    [collectRefImagesForCharacter, draft.assets, getSelectedVariant, resolveVariantInput]
+  )
+
   const collectRefImagesForShot = useCallback(
     async (shotId: string, role: 'start' | 'end') => {
       const shot = draft.shots.find((s) => s.id === shotId)
@@ -632,6 +690,12 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         }
       }
 
+      // Asset refs
+      for (const aid of shot.assetIds || []) {
+        const refs = await collectRefImagesForAsset(aid)
+        if (refs.length > 0) refInputs.push(...refs)
+      }
+
       // End frame can use start frame as extra ref (helps identity continuity)
       if (role === 'end') {
         const startV = getSelectedVariant(shot.frames.start.slot)
@@ -641,7 +705,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
 
       return Array.from(new Set(refInputs)).filter(Boolean)
     },
-    [draft, getSelectedVariant, resolveVariantInput]
+    [collectRefImagesForAsset, draft, getSelectedVariant, resolveVariantInput]
   )
 
   const buildFramePrompt = useCallback(
@@ -678,8 +742,20 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         parts.push(`出镜角色设定（保持同一张脸/发型/服装/体型的一致性）：\n${charBlock}`)
       }
 
+      const assets = (shot.assetIds || [])
+        .map((id) => (draft.assets || []).find((a) => a.id === id))
+        .filter(Boolean) as any[]
+      if (assets.length > 0) {
+        const assetBlock = assets
+          .map((a) => `- ${String(a.name || '').trim()}\n${String(a.description || '').trim()}`.trim())
+          .join('\n\n')
+        parts.push(`出镜资产设定（保持同一资产外观/材质/比例/纹理一致）：\n${assetBlock}`)
+      }
+
       const beat = String(shot.beat || '').trim()
       if (beat) parts.push(`本镜头意图/节拍：\n${beat}`)
+
+      parts.push('一致性要求：严格参考已上传的角色设定图、场景参考图、资产参考图，保持人物/场景/资产外观一致，不要随意更换。')
 
       const prompt = String(frame.prompt || '').trim()
       if (prompt) parts.push(prompt)
@@ -689,25 +765,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
     [draft]
   )
 
-  const collectRefImagesForCharacter = useCallback(
-    async (characterId: string) => {
-      const c = draft.characters.find((x) => x.id === characterId)
-      if (!c) return []
-      const inputs: string[] = []
-      if (c.sheet) {
-        const v = getSelectedVariant(c.sheet)
-        const input = await resolveVariantInput(v || undefined)
-        if (input) inputs.push(input)
-      }
-      for (const slot of c.refs || []) {
-        const v = getSelectedVariant(slot)
-        const input = await resolveVariantInput(v || undefined)
-        if (input) inputs.push(input)
-      }
-      return Array.from(new Set(inputs)).filter(Boolean)
-    },
-    [draft.characters, getSelectedVariant, resolveVariantInput]
-  )
+
 
   const buildCharacterSheetPrompt = useCallback(
     (characterId: string) => {
@@ -1237,6 +1295,13 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
     [setDraft]
   )
 
+  const clearAdoptVariant = useCallback(
+    (slotId: string) => {
+      setDraft((prev) => clearSlotSelectedVariant(prev, slotId))
+    },
+    [setDraft]
+  )
+
   const imageConcurrency = prefs.imageConcurrency
   const videoConcurrency = prefs.videoConcurrency
 
@@ -1499,9 +1564,9 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
               <input
                 type="number"
                 min={1}
-                max={6}
+                max={12}
                 value={imageConcurrency}
-                onChange={(e) => setPrefs((p) => ({ ...p, imageConcurrency: clampInt(e.target.value, 1, 6, 3) }))}
+                onChange={(e) => setPrefs((p) => ({ ...p, imageConcurrency: clampInt(e.target.value, 1, 12, 4) }))}
                 className="w-20 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1 text-sm text-[var(--text-primary)]"
               />
             </div>
@@ -1510,13 +1575,13 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
               <input
                 type="number"
                 min={1}
-                max={3}
+                max={6}
                 value={videoConcurrency}
-                onChange={(e) => setPrefs((p) => ({ ...p, videoConcurrency: clampInt(e.target.value, 1, 3, 1) }))}
+                onChange={(e) => setPrefs((p) => ({ ...p, videoConcurrency: clampInt(e.target.value, 1, 6, 2) }))}
                 className="w-20 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1 text-sm text-[var(--text-primary)]"
               />
             </div>
-            <div className="text-xs text-[var(--text-secondary)]">并发已生效（自动/手动通用）。</div>
+            <div className="text-xs text-[var(--text-secondary)]">并发已生效（自动/手动通用，队列会自动升降并发以抵御限流）。</div>
           </div>
         </div>
               </div>
@@ -1611,6 +1676,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                         <SlotVersions
                           slot={c.sheet}
                           onAdopt={(vid) => adoptVariant(c.sheet.id, vid)}
+                          onClearAdopt={() => clearAdoptVariant(c.sheet.id)}
                           onRemove={(vid) => removeVariant(c.sheet.id, vid)}
                           onPreview={(v) => void openPreview(v)}
                           onSendToCanvas={(slot, v) => void sendVariantToCanvas(slot, v)}
@@ -1749,6 +1815,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                                 <SlotVersions
                                   slot={slot}
                                   onAdopt={(vid) => adoptVariant(slot.id, vid)}
+                          onClearAdopt={() => clearAdoptVariant(slot.id)}
                                   onRemove={(vid) => removeVariant(slot.id, vid)}
                                   onPreview={(v) => void openPreview(v)}
                                   onSendToCanvas={(slot, v) => void sendVariantToCanvas(slot, v)}
@@ -1846,6 +1913,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                         <SlotVersions
                           slot={slot}
                           onAdopt={(vid) => adoptVariant(slot.id, vid)}
+                          onClearAdopt={() => clearAdoptVariant(slot.id)}
                           onRemove={(vid) => removeVariant(slot.id, vid)}
                           onPreview={(v) => void openPreview(v)}
                           onSendToCanvas={(slot, v) => void sendVariantToCanvas(slot, v)}
@@ -1974,6 +2042,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                               <SlotVersions
                                 slot={refSlot}
                                 onAdopt={(vid) => adoptVariant(refSlot.id, vid)}
+                          onClearAdopt={() => clearAdoptVariant(refSlot.id)}
                                 onRemove={(vid) => removeVariant(refSlot.id, vid)}
                                 onPreview={(v) => void openPreview(v)}
                                 onSendToCanvas={(slot, v) => void sendVariantToCanvas(slot, v)}
@@ -2073,6 +2142,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                         <SlotVersions
                           slot={slot}
                           onAdopt={(vid) => adoptVariant(slot.id, vid)}
+                          onClearAdopt={() => clearAdoptVariant(slot.id)}
                           onRemove={(vid) => removeVariant(slot.id, vid)}
                           onPreview={(v) => void openPreview(v)}
                           onSendToCanvas={(s, v) => void sendVariantToCanvas(s, v)}
@@ -2180,6 +2250,35 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                         })
                       )}
                     </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-col gap-2">
+                  <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">出镜资产</label>
+                  <div className="flex flex-wrap gap-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-2">
+                    {(draft.assets || []).length === 0 ? (
+                      <div className="text-xs text-[var(--text-secondary)]">暂无资产</div>
+                    ) : (
+                      (draft.assets || []).map((a) => {
+                        const checked = (shot.assetIds || []).includes(a.id)
+                        return (
+                          <label key={a.id} className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const current = shot.assetIds || []
+                                const next = e.target.checked
+                                  ? Array.from(new Set([...current, a.id]))
+                                  : current.filter((id) => id !== a.id)
+                                updateShot(shot.id, { assetIds: next })
+                              }}
+                            />
+                            {a.name}
+                          </label>
+                        )
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -2294,6 +2393,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                       <SlotVersions
                         slot={startSlot}
                         onAdopt={(vid) => adoptVariant(startSlot.id, vid)}
+                          onClearAdopt={() => clearAdoptVariant(startSlot.id)}
                         onRemove={(vid) => removeVariant(startSlot.id, vid)}
                         onPreview={(v) => void openPreview(v)}
                         onSendToCanvas={(slot, v) => void sendVariantToCanvas(slot, v)}
@@ -2378,6 +2478,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                       <SlotVersions
                         slot={endSlot}
                         onAdopt={(vid) => adoptVariant(endSlot.id, vid)}
+                          onClearAdopt={() => clearAdoptVariant(endSlot.id)}
                         onRemove={(vid) => removeVariant(endSlot.id, vid)}
                         onPreview={(v) => void openPreview(v)}
                         onSendToCanvas={(slot, v) => void sendVariantToCanvas(slot, v)}
@@ -2452,6 +2553,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                     <SlotVersions
                       slot={videoSlot}
                       onAdopt={(vid) => adoptVariant(videoSlot.id, vid)}
+                          onClearAdopt={() => clearAdoptVariant(videoSlot.id)}
                       onRemove={(vid) => removeVariant(videoSlot.id, vid)}
                       onPreview={(v) => void openPreview(v)}
                       onSendToCanvas={(slot, v) => void sendVariantToCanvas(slot, v)}

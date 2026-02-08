@@ -119,6 +119,13 @@ const get502BackoffMs = (attempt: number) => {
   return Math.min(15000, base + jitter) // 最多 15 秒
 }
 
+// 429/限流专用退避：优先尊重 Retry-After，再叠加指数退避
+const getRateLimitBackoffMs = (attempt: number, retryAfterMs: number) => {
+  const base = 1200 * Math.pow(2, Math.max(0, attempt))
+  const jitter = Math.floor(Math.random() * 500)
+  return Math.min(20000, Math.max(base + jitter, retryAfterMs || 0))
+}
+
 // ===== multipart/form-data (Tauri) =====
 // Tauri plugin-http 在部分平台（尤其 Windows）对 FormData 支持不稳定。
 // 这里在 Tauri 环境下手动把 FormData 编码成 multipart bytes，避免直接传 FormData 导致请求失败。
@@ -261,7 +268,7 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
   })
 
   // Tauri 环境下增加重试次数（502 错误在 Tauri 中更常见）
-  const maxRetries = isTauri ? 3 : 2
+  const maxRetries = isTauri ? 4 : 3
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     // Tauri HTTP 插件在某些平台（特别是 Windows）上对 AbortController 支持不完善
     // 因此只在非 Tauri 环境或明确设置超时时使用 signal
@@ -329,7 +336,11 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
         // 502 Bad Gateway 使用更长的退避时间
         let wait = res.status === 502 ? get502BackoffMs(attempt) : backoffMs(attempt)
         const retryAfter = getRetryAfterMs(res)
-        if (retryAfter > 0) wait = Math.max(wait, retryAfter)
+        if (res.status === 429) {
+          wait = getRateLimitBackoffMs(attempt, retryAfter)
+        } else if (retryAfter > 0) {
+          wait = Math.max(wait, retryAfter)
+        }
         console.warn('[postJson] 可重试失败，准备重试:', { 
           status: res.status, 
           attempt: attempt + 1, 
@@ -351,8 +362,10 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
       }
       const shouldRetry = attempt < maxRetries && name !== 'AbortError' && isRetryableError(err)
       if (shouldRetry) {
-        const wait = backoffMs(attempt)
-        console.warn('[postJson] 网络/代理错误，准备重试:', { attempt: attempt + 1, waitMs: wait, message: String(err?.message || err) })
+        const errMsg = String(err?.message || err || '')
+        const rateLimited = /429|rate limit|too many requests|限流|限速/i.test(errMsg)
+        const wait = rateLimited ? getRateLimitBackoffMs(attempt, 0) : backoffMs(attempt)
+        console.warn('[postJson] 网络/代理错误，准备重试:', { attempt: attempt + 1, waitMs: wait, message: errMsg })
         await sleep(wait)
         continue
       }
@@ -384,7 +397,7 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
   })
 
   // Tauri 环境下增加重试次数
-  const maxRetries = isTauri ? 3 : 2
+  const maxRetries = isTauri ? 4 : 3
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const timeoutMs = Number(opts?.timeoutMs || 0)
     const useSignal = !isTauri && timeoutMs > 0
@@ -450,7 +463,11 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
         // 502 Bad Gateway 使用更长的退避时间
         let wait = res.status === 502 ? get502BackoffMs(attempt) : backoffMs(attempt)
         const retryAfter = getRetryAfterMs(res)
-        if (retryAfter > 0) wait = Math.max(wait, retryAfter)
+        if (res.status === 429) {
+          wait = getRateLimitBackoffMs(attempt, retryAfter)
+        } else if (retryAfter > 0) {
+          wait = Math.max(wait, retryAfter)
+        }
         console.warn('[postFormData] 可重试失败，准备重试:', { 
           status: res.status, 
           attempt: attempt + 1, 
@@ -471,8 +488,10 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
       }
       const shouldRetry = attempt < maxRetries && name !== 'AbortError' && isRetryableError(err)
       if (shouldRetry) {
-        const wait = backoffMs(attempt)
-        console.warn('[postFormData] 网络/代理错误，准备重试:', { attempt: attempt + 1, waitMs: wait, message: String(err?.message || err) })
+        const errMsg = String(err?.message || err || '')
+        const rateLimited = /429|rate limit|too many requests|限流|限速/i.test(errMsg)
+        const wait = rateLimited ? getRateLimitBackoffMs(attempt, 0) : backoffMs(attempt)
+        console.warn('[postFormData] 网络/代理错误，准备重试:', { attempt: attempt + 1, waitMs: wait, message: errMsg })
         await sleep(wait)
         continue
       }
@@ -498,7 +517,7 @@ export const getJson = async <T,>(endpoint: string, query?: Record<string, any>,
   const url = qs.toString() ? `${url0}${url0.includes('?') ? '&' : '?'}${qs.toString()}` : url0
 
   // Tauri 环境下增加重试次数（轮询视频状态时 502 更常见）
-  const maxRetries = isTauri ? 3 : 2
+  const maxRetries = isTauri ? 4 : 3
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const timeoutMs = Number(opts?.timeoutMs || 0)
     const useSignal = !isTauri && timeoutMs > 0
@@ -561,7 +580,11 @@ export const getJson = async <T,>(endpoint: string, query?: Record<string, any>,
         // 502 Bad Gateway 使用更长的退避时间
         let wait = res.status === 502 ? get502BackoffMs(attempt) : backoffMs(attempt)
         const retryAfter = getRetryAfterMs(res)
-        if (retryAfter > 0) wait = Math.max(wait, retryAfter)
+        if (res.status === 429) {
+          wait = getRateLimitBackoffMs(attempt, retryAfter)
+        } else if (retryAfter > 0) {
+          wait = Math.max(wait, retryAfter)
+        }
         console.warn('[getJson] 可重试失败，准备重试:', { 
           url: url.slice(0, 100), 
           status: res.status, 
@@ -582,8 +605,10 @@ export const getJson = async <T,>(endpoint: string, query?: Record<string, any>,
       }
       const shouldRetry = attempt < maxRetries && name !== 'AbortError' && isRetryableError(err)
       if (shouldRetry) {
-        const wait = backoffMs(attempt)
-        console.warn('[getJson] 网络/代理错误，准备重试:', { attempt: attempt + 1, waitMs: wait, message: String(err?.message || err) })
+        const errMsg = String(err?.message || err || '')
+        const rateLimited = /429|rate limit|too many requests|限流|限速/i.test(errMsg)
+        const wait = rateLimited ? getRateLimitBackoffMs(attempt, 0) : backoffMs(attempt)
+        console.warn('[getJson] 网络/代理错误，准备重试:', { attempt: attempt + 1, waitMs: wait, message: errMsg })
         await sleep(wait)
         continue
       }

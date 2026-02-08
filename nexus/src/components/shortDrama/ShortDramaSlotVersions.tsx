@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getMedia } from '@/lib/mediaStorage'
 import type { ShortDramaMediaSlot, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
-import { Check, Eye, Image as ImageIcon, Trash2, Video as VideoIcon } from 'lucide-react'
+import { Check, Eye, Image as ImageIcon, Trash2, Video as VideoIcon, X } from 'lucide-react'
 
 function useMediaPreview(mediaId?: string) {
   const [url, setUrl] = useState<string>('')
@@ -47,12 +47,14 @@ export function ShortDramaSlotVersions({
   onAdopt,
   onRemove,
   onPreview,
+  onClearAdopt,
   disabled,
 }: {
   slot: ShortDramaMediaSlot
   onAdopt: (variantId: string) => void
   onRemove: (variantId: string) => void
   onPreview?: (variant: ShortDramaMediaVariant) => void
+  onClearAdopt?: () => void
   disabled?: boolean
 }) {
   if (!slot.variants || slot.variants.length === 0) {
@@ -101,10 +103,17 @@ export function ShortDramaSlotVersions({
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
-                <Button size="sm" variant="ghost" disabled={disabled || adopted || v.status !== 'success'} onClick={() => onAdopt(v.id)}>
-                  <Check className="mr-1 h-4 w-4" />
-                  采用
-                </Button>
+                {adopted ? (
+                  <Button size="sm" variant="ghost" disabled={disabled || v.status === 'running'} onClick={() => onClearAdopt?.()}>
+                    <X className="mr-1 h-4 w-4" />
+                    取消采用
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="ghost" disabled={disabled || v.status !== 'success'} onClick={() => onAdopt(v.id)}>
+                    <Check className="mr-1 h-4 w-4" />
+                    采用
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" disabled={disabled || v.status === 'running'} onClick={() => onRemove(v.id)} className="text-red-500">
                   <Trash2 className="mr-1 h-4 w-4" />
                   删除

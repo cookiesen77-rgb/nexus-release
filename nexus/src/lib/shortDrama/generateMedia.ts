@@ -434,6 +434,7 @@ const extractVideoUrlDeep = (payload: any) => {
 const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: any) => {
   const maxAttempts = 300
   const interval = 3000
+  let completedWithoutUrl = 0
 
   for (let i = 0; i < maxAttempts; i++) {
     const statusEndpoint = statusEndpointOverride
@@ -514,6 +515,7 @@ const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: 
 
     const isCompleted = /^(finish|finished|completed|complete|success|done|ready|succeeded)$/i.test(status)
     if (isCompleted && !videoUrl) {
+      completedWithoutUrl += 1
       // 对于 sora-openai 格式，视频 URL 是 /v1/videos/{id}/content
       if (modelCfg.format === 'sora-openai') {
         const contentUrl = `/v1/videos/${id}/content`
@@ -524,6 +526,10 @@ const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: 
       const errMsg = aigcTask?.Message || aigcTask?.message || aigcTask?.error_message || aigcTask?.error
       if (errCode || errMsg) {
         throw new Error(String(errMsg || errCode || '视频生成失败'))
+      }
+      // 成功状态但没有返回 URL，继续轮询一段时间
+      if (completedWithoutUrl >= 10) {
+        throw new Error('视频任务已完成但未返回下载地址，请稍后重试或联系后端')
       }
     }
     if (/^(failed|fail|error)$/i.test(status)) {
@@ -631,54 +637,62 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
     const priv = modelCfg.defaultParams?.private
     if (typeof priv === 'boolean') payload.private = priv
   } else if (modelCfg.format === 'sora-openai') {
-    // Sora OpenAI 官方视频格式：POST /v1/videos
+    // Sora OpenAI 官方视频格式：POST /v1/videos (multipart/form-data)
     // 查询：GET /v1/videos/{id}
     // 下载：GET /v1/videos/{id}/content
+    useFormData = true
     const sizeValue = size || modelCfg.defaultParams?.size || (ratio === '9:16' ? '720x1280' : '1280x720')
     const secondsValue = Number.isFinite(duration) && duration > 0 ? String(duration) : String(modelCfg.defaultParams?.duration || 10)
-    payload = {
-      model: modelCfg.key,
-      prompt: prompt || '',
-      size: sizeValue,
-      seconds: secondsValue
-    }
-    // 如果有首帧图片，需要上传到云雾获取 HTTP URL
+
+    const fd = new FormData()
+    fd.append('model', modelCfg.key)
+    fd.append('prompt', prompt || '')
+    fd.append('size', sizeValue)
+    fd.append('seconds', secondsValue)
+
+    const watermark2 = modelCfg.defaultParams?.watermark
+    if (typeof watermark2 === 'boolean') fd.append('watermark', String(watermark2))
+
+    // 首帧图片：转为 Blob 后以 binary 上传
     const firstFrameUrl = images[0] || ''
     if (firstFrameUrl) {
-      const ensureHttpImage = async (raw: string, label: string) => {
-        let v = String(raw || '').trim()
-        if (!v) return ''
-        if (v.startsWith('blob:')) {
-          const res = await (globalThis.fetch as any)(v, { method: 'GET' })
-          if (!res?.ok) throw new Error(`HTTP ${res?.status || 0}`)
-          const blob = await res.blob()
-          const dataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onerror = () => reject(new Error('read failed'))
-            reader.onload = () => resolve(String(reader.result || ''))
-            reader.readAsDataURL(blob)
-          })
-          v = dataUrl
-        }
-        if (isAssetUrl(v)) v = await resolveAssetToDataUrl(v)
-        if (isHttpUrl(v)) return v
-        if (isDataUrl(v)) {
-          const compressed = await compressImageBase64(v, 900 * 1024)
-          return await uploadImageToYunwu(compressed)
-        }
-        if (isBase64Like(v)) {
-          const dataUrl = `data:image/png;base64,${v}`
-          const compressed = await compressImageBase64(dataUrl, 900 * 1024)
-          return await uploadImageToYunwu(compressed)
-        }
-        throw new Error(`${label}需要公网可访问的图片 URL（http/https）或 dataURL/base64`)
+      let imgDataUrl = String(firstFrameUrl).trim()
+      if (imgDataUrl.startsWith('blob:')) {
+        const res = await fetch(imgDataUrl)
+        if (!res.ok) throw new Error('下载首帧图片失败')
+        const blob = await res.blob()
+        imgDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onerror = () => reject(new Error('读取失败'))
+          reader.onload = () => resolve(String(reader.result || ''))
+          reader.readAsDataURL(blob)
+        })
       }
-      const inputRef = await ensureHttpImage(firstFrameUrl, '首帧')
-      if (inputRef) payload.input_reference = inputRef
+      if (isAssetUrl(imgDataUrl)) imgDataUrl = await resolveAssetToDataUrl(imgDataUrl)
+      if (isHttpUrl(imgDataUrl)) {
+        // 下载 HTTP 图片转为 blob
+        try {
+          const res = await fetch(imgDataUrl)
+          if (res.ok) {
+            const blob = await res.blob()
+            fd.append('input_reference', blob, 'input.png')
+          }
+        } catch { /* skip image */ }
+      } else if (imgDataUrl.startsWith('data:')) {
+        const compressed = await compressImageBase64(imgDataUrl, 900 * 1024)
+        const match = compressed.match(/^data:([^;]+);base64,(.+)$/)
+        if (match) {
+          const byteString = atob(match[2])
+          const byteNumbers = new Array(byteString.length)
+          for (let i = 0; i < byteString.length; i++) byteNumbers[i] = byteString.charCodeAt(i)
+          const blob = new Blob([new Uint8Array(byteNumbers)], { type: match[1] })
+          fd.append('input_reference', blob, 'input.png')
+        }
+      }
     }
-    const watermark2 = modelCfg.defaultParams?.watermark
-    if (typeof watermark2 === 'boolean') payload.watermark = watermark2
-    console.log('[generateShortDramaVideo] sora-openai payload:', JSON.stringify(payload, null, 2))
+
+    payload = fd
+    console.log('[generateShortDramaVideo] sora-openai FormData payload prepared, model:', modelCfg.key, 'seconds:', secondsValue, 'size:', sizeValue)
   } else if (modelCfg.format === 'unified-video') {
     const requiresImages = typeof modelCfg.requiresImages === 'boolean' ? modelCfg.requiresImages : false
     const imagesMustBeHttp = typeof modelCfg.imagesMustBeHttp === 'boolean' ? modelCfg.imagesMustBeHttp : false

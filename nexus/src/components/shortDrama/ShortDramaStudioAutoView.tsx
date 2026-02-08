@@ -9,7 +9,7 @@ import { analyzeShortDramaScriptToDraftV2 } from '@/lib/shortDrama/ai'
 import { getShortDramaTaskQueue } from '@/lib/shortDrama/taskQueue'
 import { buildEffectiveStyle, getShortDramaStylePresetById, SHORT_DRAMA_STYLE_PRESETS } from '@/lib/shortDrama/stylePresets'
 import { generateShortDramaImage, generateShortDramaVideo } from '@/lib/shortDrama/generateMedia'
-import { appendVariantToSlot, removeVariantFromSlot, setSlotSelectionLocked, setSlotSelectedVariant, updateSlotById, updateVariantInSlot } from '@/lib/shortDrama/draftOps'
+import { appendVariantToSlot, clearSlotSelectedVariant, removeVariantFromSlot, setSlotSelectionLocked, setSlotSelectedVariant, updateSlotById, updateVariantInSlot } from '@/lib/shortDrama/draftOps'
 import { saveShortDramaDraftV2, createEmptyAsset } from '@/lib/shortDrama/draftStorage'
 import { getMedia, saveMedia } from '@/lib/mediaStorage'
 import { resolveCachedMediaUrl } from '@/lib/workflow/cache'
@@ -476,6 +476,40 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     [resolveVariantInput]
   )
 
+  const updateShotMeta = useCallback(
+    (shotId: string, patch: Partial<ShortDramaDraftV2['shots'][number]>) => {
+      setDraft((prev) => ({
+        ...prev,
+        shots: prev.shots.map((shot) => (shot.id === shotId ? ({ ...shot, ...patch } as any) : shot)),
+        updatedAt: Date.now(),
+      }))
+    },
+    [setDraft]
+  )
+
+  const toggleShotCharacter = useCallback(
+    (shotId: string, characterId: string, checked: boolean) => {
+      const shot = draft.shots.find((s) => s.id === shotId)
+      if (!shot) return
+      const nextCharacterIds = checked
+        ? Array.from(new Set([...(shot.characterIds || []), characterId]))
+        : (shot.characterIds || []).filter((id) => id !== characterId)
+      updateShotMeta(shotId, { characterIds: nextCharacterIds })
+    },
+    [draft.shots, updateShotMeta]
+  )
+
+  const toggleShotAsset = useCallback(
+    (shotId: string, assetId: string, checked: boolean) => {
+      const shot = draft.shots.find((s) => s.id === shotId)
+      if (!shot) return
+      const current = shot.assetIds || []
+      const nextAssetIds = checked ? Array.from(new Set([...current, assetId])) : current.filter((id) => id !== assetId)
+      updateShotMeta(shotId, { assetIds: nextAssetIds })
+    },
+    [draft.shots, updateShotMeta]
+  )
+
   const buildCharacterSheetPrompt = useCallback(
     (characterId: string) => {
       const c = draft.characters.find((x) => x.id === characterId)
@@ -601,6 +635,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       if (!a) return []
       const inputs: string[] = []
       // 收集资产自身的参考图
+      if (a.ref) {
+        const v = getSelectedVariant(a.ref)
+        const input = await resolveVariantInput(v || undefined)
+        if (input) inputs.push(input)
+      }
       for (const slot of a.refs || []) {
         const v = getSelectedVariant(slot)
         const input = await resolveVariantInput(v || undefined)
@@ -647,8 +686,20 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         parts.push(`出镜角色设定（保持同一张脸/发型/服装/体型的一致性）：\n${charBlock}`)
       }
 
+      const assets = (shot.assetIds || [])
+        .map((id) => (draft.assets || []).find((a) => a.id === id))
+        .filter(Boolean) as any[]
+      if (assets.length > 0) {
+        const assetBlock = assets
+          .map((a) => `- ${String(a.name || '').trim()}\n${String(a.description || '').trim()}`.trim())
+          .join('\n\n')
+        parts.push(`出镜资产设定（保持同一资产外观/材质/比例/纹理一致）：\n${assetBlock}`)
+      }
+
       const beat = String(shot.beat || '').trim()
       if (beat) parts.push(`本镜头意图/节拍：\n${beat}`)
+
+      parts.push('一致性要求：严格参考已上传的角色设定图、场景参考图、资产参考图，保持人物/场景/资产外观一致，不要随意更换。')
 
       const prompt = String(frame.prompt || '').trim()
       if (prompt) parts.push(prompt)
@@ -684,6 +735,16 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         const names = chars.map((c) => String(c.name || '').trim()).filter(Boolean).join('、')
         parts.push(`出镜角色：${names}`)
       }
+
+      const assets = (shot.assetIds || [])
+        .map((id) => (draft.assets || []).find((a) => a.id === id))
+        .filter(Boolean) as any[]
+      if (assets.length > 0) {
+        const names = assets.map((a) => String(a.name || '').trim()).filter(Boolean).join('、')
+        if (names) parts.push(`出镜资产：${names}`)
+      }
+
+      parts.push('一致性要求：视频中的人物/场景/资产必须与首尾帧及参考图一致。')
 
       const v = String(shot.videoPrompt || '').trim() || String(shot.frames.start.prompt || '').trim()
       if (v) parts.push(`视频描述（动作/运镜/节奏）：\n${v}`)
@@ -725,6 +786,12 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         }
       }
 
+      // Asset refs
+      for (const aid of shot.assetIds || []) {
+        const refs = await collectRefImagesForAsset(aid)
+        if (refs.length > 0) refInputs.push(...refs)
+      }
+
       // End frame can use start frame as extra ref
       if (role === 'end') {
         const startV = getSelectedVariant(shot.frames.start.slot)
@@ -734,7 +801,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
 
       return Array.from(new Set(refInputs)).filter(Boolean)
     },
-    [draft, getSelectedVariant, resolveVariantInput]
+    [collectRefImagesForAsset, draft, getSelectedVariant, resolveVariantInput]
   )
 
   const runGenerateSlotImage = useCallback(
@@ -793,8 +860,8 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
           })
         }
 
-        setDraft((prev) =>
-          updateVariantInSlot(prev, slotId, running.id, {
+        setDraft((prev) => {
+          let next = updateVariantInSlot(prev, slotId, running.id, {
             status: 'success',
             sourceUrl: safeSourceUrl || undefined,
             // 仅当 displayUrl 本身是 dataURL 时才清空，避免把大串写进 localStorage；asset:// 可保留用于预览
@@ -802,7 +869,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
             localPath: result.localPath || '',
             mediaId,
           })
-        )
+          if (createdBy === 'manual') {
+            next = updateSlotById(next, slotId, (slot) => ({ ...slot, selectedVariantId: running.id }))
+          }
+          return next
+        })
 
         // 同步到历史素材（短剧自动模式）
         try {
@@ -857,15 +928,19 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
           })
         })
         const result = await task.promise
-        setDraft((prev) =>
-          updateVariantInSlot(prev, slotId, running.id, {
+        setDraft((prev) => {
+          let next = updateVariantInSlot(prev, slotId, running.id, {
             status: 'success',
             taskId: result.taskId,
             sourceUrl: result.videoUrl,
             displayUrl: result.displayUrl,
             localPath: result.localPath || '',
           })
-        )
+          if (createdBy === 'manual') {
+            next = updateSlotById(next, slotId, (slot) => ({ ...slot, selectedVariantId: running.id }))
+          }
+          return next
+        })
 
         // 同步到历史素材（短剧自动模式）
         try {
@@ -1519,7 +1594,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                 </div>
 
                 <div className="text-xs text-[var(--text-secondary)]">
-                  提示：建议先在首/尾帧中“采用”满意版本后再生成视频；需要更精细的参考图绑定可切换到“手动”模式。
+                  提示：建议先在首/尾帧中“采用”满意版本后再生成视频；需要更精细的参考图绑定可切换到“手动”模式。队列会根据成功率与限流信号自动升降并发。
                 </div>
               </div>
             </div>
@@ -1597,6 +1672,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                     <ShortDramaSlotVersions
                       slot={slot}
                       onAdopt={(vid) => setDraft((prev) => setSlotSelectedVariant(prev, slot.id, vid))}
+                      onClearAdopt={() => setDraft((prev) => clearSlotSelectedVariant(prev, slot.id))}
                       onRemove={(vid) => setDraft((prev) => removeVariantFromSlot(prev, slot.id, vid))}
                       onPreview={(v) => void openPreview(v)}
                       disabled={busy}
@@ -1657,6 +1733,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                     <ShortDramaSlotVersions
                       slot={slot}
                       onAdopt={(vid) => setDraft((prev) => setSlotSelectedVariant(prev, slot.id, vid))}
+                      onClearAdopt={() => setDraft((prev) => clearSlotSelectedVariant(prev, slot.id))}
                       onRemove={(vid) => setDraft((prev) => removeVariantFromSlot(prev, slot.id, vid))}
                       onPreview={(v) => void openPreview(v)}
                       disabled={busy}
@@ -1741,6 +1818,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                     <ShortDramaSlotVersions
                       slot={slot}
                       onAdopt={(vid) => setDraft((prev) => setSlotSelectedVariant(prev, slot.id, vid))}
+                      onClearAdopt={() => setDraft((prev) => clearSlotSelectedVariant(prev, slot.id))}
                       onRemove={(vid) => setDraft((prev) => removeVariantFromSlot(prev, slot.id, vid))}
                       onPreview={(v) => void openPreview(v)}
                       disabled={busy}
@@ -1784,6 +1862,62 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                   {sh.beat && !sh.scriptExcerpt && (
                     <div className="mt-1 text-[11px] text-[var(--text-secondary)] line-clamp-2">{sh.beat}</div>
                   )}
+
+                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                    <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-2">
+                      <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">场景</div>
+                      <select
+                        value={sh.sceneId || ''}
+                        onChange={(e) => updateShotMeta(sh.id, { sceneId: e.target.value || undefined })}
+                        className="mt-1 w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
+                      >
+                        <option value="">（不指定）</option>
+                        {draft.scenes.map((scene) => (
+                          <option key={scene.id} value={scene.id}>
+                            {scene.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-2">
+                      <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">出镜角色</div>
+                      <div className="mt-1 flex max-h-20 flex-wrap gap-2 overflow-y-auto">
+                        {draft.characters.length === 0 ? (
+                          <div className="text-xs text-[var(--text-secondary)]">暂无角色</div>
+                        ) : (
+                          draft.characters.map((c) => {
+                            const checked = (sh.characterIds || []).includes(c.id)
+                            return (
+                              <label key={c.id} className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                                <input type="checkbox" checked={checked} onChange={(e) => toggleShotCharacter(sh.id, c.id, e.target.checked)} />
+                                {c.name}
+                              </label>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-2">
+                      <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">出镜资产</div>
+                      <div className="mt-1 flex max-h-20 flex-wrap gap-2 overflow-y-auto">
+                        {!draft.assets || draft.assets.length === 0 ? (
+                          <div className="text-xs text-[var(--text-secondary)]">暂无资产</div>
+                        ) : (
+                          draft.assets.map((a) => {
+                            const checked = (sh.assetIds || []).includes(a.id)
+                            return (
+                              <label key={a.id} className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                                <input type="checkbox" checked={checked} onChange={(e) => toggleShotAsset(sh.id, a.id, e.target.checked)} />
+                                {a.name}
+                              </label>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="mt-2 grid gap-2 md:grid-cols-2">
                     <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-2">
@@ -1841,6 +1975,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                         <ShortDramaSlotVersions
                           slot={startSlot}
                           onAdopt={(vid) => setDraft((prev) => setSlotSelectedVariant(prev, startSlot.id, vid))}
+                          onClearAdopt={() => setDraft((prev) => clearSlotSelectedVariant(prev, startSlot.id))}
                           onRemove={(vid) => setDraft((prev) => removeVariantFromSlot(prev, startSlot.id, vid))}
                           onPreview={(v) => void openPreview(v)}
                           disabled={startBusy}
@@ -1898,6 +2033,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                         <ShortDramaSlotVersions
                           slot={endSlot}
                           onAdopt={(vid) => setDraft((prev) => setSlotSelectedVariant(prev, endSlot.id, vid))}
+                          onClearAdopt={() => setDraft((prev) => clearSlotSelectedVariant(prev, endSlot.id))}
                           onRemove={(vid) => setDraft((prev) => removeVariantFromSlot(prev, endSlot.id, vid))}
                           onPreview={(v) => void openPreview(v)}
                           disabled={endBusy}
@@ -1986,6 +2122,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                       <ShortDramaSlotVersions
                         slot={videoSlot}
                         onAdopt={(vid) => setDraft((prev) => setSlotSelectedVariant(prev, videoSlot.id, vid))}
+                        onClearAdopt={() => setDraft((prev) => clearSlotSelectedVariant(prev, videoSlot.id))}
                         onRemove={(vid) => setDraft((prev) => removeVariantFromSlot(prev, videoSlot.id, vid))}
                         onPreview={(v) => void openPreview(v)}
                         disabled={videoBusy}

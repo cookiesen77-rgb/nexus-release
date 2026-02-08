@@ -25,6 +25,8 @@ type InternalTask<T> = {
   reject: (e: any) => void
 }
 
+type AdaptiveKind = 'image' | 'video'
+
 const makeId = () => globalThis.crypto?.randomUUID?.() || `sd_task_${Date.now()}_${Math.random().toString(16).slice(2)}`
 
 const clampInt = (v: unknown, min: number, max: number, fallback: number) => {
@@ -33,8 +35,16 @@ const clampInt = (v: unknown, min: number, max: number, fallback: number) => {
   return Math.max(min, Math.min(max, Math.floor(n)))
 }
 
+const isRateLimitedError = (err: any) => {
+  const msg = String(err?.message || err || '').toLowerCase()
+  if (!msg) return false
+  return /429|rate\s*limit|too\s*many\s*requests|limit\s*exceeded|throttle|throttl|quota|server\s*busy|overload|service\s*unavailable|负载|限流|限速|拥塞/.test(msg)
+}
+
 export class ShortDramaTaskQueue {
-  private limits: ShortDramaQueueLimits = { imageConcurrency: 3, videoConcurrency: 1, analysisConcurrency: 1 }
+  private baseLimits: ShortDramaQueueLimits = { imageConcurrency: 4, videoConcurrency: 2, analysisConcurrency: 1 }
+  private limits: ShortDramaQueueLimits = { imageConcurrency: 4, videoConcurrency: 2, analysisConcurrency: 1 }
+
   private runningKeys = new Set<string>()
 
   private runningImage = 0
@@ -44,12 +54,32 @@ export class ShortDramaTaskQueue {
   private queue: InternalTask<any>[] = []
   private pumping = false
 
+  private successStreak: Record<AdaptiveKind, number> = { image: 0, video: 0 }
+  private failureStreak: Record<AdaptiveKind, number> = { image: 0, video: 0 }
+  private lastScaleAt: Record<AdaptiveKind, number> = { image: 0, video: 0 }
+  private scaleUpBlockedUntil: Record<AdaptiveKind, number> = { image: 0, video: 0 }
+
   setLimits(limits: Partial<ShortDramaQueueLimits>) {
-    this.limits = {
-      imageConcurrency: clampInt(limits.imageConcurrency ?? this.limits.imageConcurrency, 1, 6, this.limits.imageConcurrency),
-      videoConcurrency: clampInt(limits.videoConcurrency ?? this.limits.videoConcurrency, 1, 3, this.limits.videoConcurrency),
-      analysisConcurrency: clampInt(limits.analysisConcurrency ?? this.limits.analysisConcurrency, 1, 2, this.limits.analysisConcurrency),
+    this.baseLimits = {
+      imageConcurrency: clampInt(limits.imageConcurrency ?? this.baseLimits.imageConcurrency, 1, 12, this.baseLimits.imageConcurrency),
+      videoConcurrency: clampInt(limits.videoConcurrency ?? this.baseLimits.videoConcurrency, 1, 6, this.baseLimits.videoConcurrency),
+      analysisConcurrency: clampInt(limits.analysisConcurrency ?? this.baseLimits.analysisConcurrency, 1, 2, this.baseLimits.analysisConcurrency),
     }
+
+    this.limits = {
+      imageConcurrency: clampInt(this.limits.imageConcurrency, 1, this.getAdaptiveMax('image'), this.baseLimits.imageConcurrency),
+      videoConcurrency: clampInt(this.limits.videoConcurrency, 1, this.getAdaptiveMax('video'), this.baseLimits.videoConcurrency),
+      analysisConcurrency: this.baseLimits.analysisConcurrency,
+    }
+
+    // 用户主动提高基准并发时，立即跟随提升到基准值。
+    if (this.limits.imageConcurrency < this.baseLimits.imageConcurrency) {
+      this.limits.imageConcurrency = this.baseLimits.imageConcurrency
+    }
+    if (this.limits.videoConcurrency < this.baseLimits.videoConcurrency) {
+      this.limits.videoConcurrency = this.baseLimits.videoConcurrency
+    }
+
     this.pump()
   }
 
@@ -65,6 +95,7 @@ export class ShortDramaTaskQueue {
       runningAnalysis: this.runningAnalysis,
       runningKeys: this.runningKeys.size,
       limits: this.getLimits(),
+      baseLimits: { ...this.baseLimits },
     }
   }
 
@@ -86,7 +117,6 @@ export class ShortDramaTaskQueue {
         if (task.cancelled) return
         task.cancelled = true
         if (!task.started) {
-          // remove from queue
           this.queue = this.queue.filter((t) => t.id !== task.id)
           task.reject(new Error('已取消'))
         }
@@ -95,6 +125,99 @@ export class ShortDramaTaskQueue {
       this.pump()
     })
     return { id, kind, key: String(key || ''), promise, cancel: () => cancelFn?.() }
+  }
+
+  private getAdaptiveMax(kind: AdaptiveKind) {
+    if (kind === 'image') return Math.max(1, Math.min(16, this.baseLimits.imageConcurrency + 4))
+    return Math.max(1, Math.min(8, this.baseLimits.videoConcurrency + 2))
+  }
+
+  private pendingCount(kind: AdaptiveKind) {
+    return this.queue.filter((t) => t.kind === kind && !t.cancelled).length
+  }
+
+  private maybeScaleUpForPressure(kind: AdaptiveKind) {
+    const now = Date.now()
+    if (now < this.scaleUpBlockedUntil[kind]) return
+
+    const current = kind === 'image' ? this.limits.imageConcurrency : this.limits.videoConcurrency
+    const maxLimit = this.getAdaptiveMax(kind)
+    if (current >= maxLimit) return
+
+    const running = kind === 'image' ? this.runningImage : this.runningVideo
+    const pending = this.pendingCount(kind)
+    if (pending <= 0) return
+    if (running < current) return
+    if (pending < Math.max(2, current)) return
+    if (now - this.lastScaleAt[kind] < 2000) return
+
+    const step = kind === 'image' && pending >= 10 ? 2 : 1
+    const next = Math.min(maxLimit, current + step)
+    this.setKindLimit(kind, next, 'pressure')
+  }
+
+  private onTaskSuccess(kind: AdaptiveKind, durationMs: number) {
+    this.successStreak[kind] += 1
+    this.failureStreak[kind] = 0
+
+    const now = Date.now()
+    if (now < this.scaleUpBlockedUntil[kind]) return
+
+    const current = kind === 'image' ? this.limits.imageConcurrency : this.limits.videoConcurrency
+    const maxLimit = this.getAdaptiveMax(kind)
+    if (current >= maxLimit) return
+    if (now - this.lastScaleAt[kind] < 1200) return
+
+    const pending = this.pendingCount(kind)
+    const fastEnough = kind === 'image' ? durationMs < 20000 : durationMs < 90000
+    if (this.successStreak[kind] >= 2 && pending > 0 && fastEnough) {
+      const step = kind === 'image' && pending >= 8 ? 2 : 1
+      const next = Math.min(maxLimit, current + step)
+      this.setKindLimit(kind, next, 'success')
+      this.successStreak[kind] = 0
+    }
+  }
+
+  private onTaskFailure(kind: AdaptiveKind, err: any) {
+    this.successStreak[kind] = 0
+    this.failureStreak[kind] += 1
+
+    const current = kind === 'image' ? this.limits.imageConcurrency : this.limits.videoConcurrency
+    if (current <= 1) return
+
+    if (isRateLimitedError(err)) {
+      const next = Math.max(1, Math.ceil(current * 0.5))
+      this.scaleUpBlockedUntil[kind] = Date.now() + (kind === 'image' ? 10000 : 14000)
+      this.failureStreak[kind] = 0
+      this.setKindLimit(kind, next, 'rate_limit')
+      return
+    }
+
+    // 持续失败时温和降并发，避免短时抖动反复打满后端。
+    if (this.failureStreak[kind] >= 3) {
+      const next = Math.max(1, current - 1)
+      this.failureStreak[kind] = 0
+      this.scaleUpBlockedUntil[kind] = Date.now() + 5000
+      this.setKindLimit(kind, next, 'failure')
+    }
+  }
+
+  private setKindLimit(kind: AdaptiveKind, next: number, reason: 'pressure' | 'success' | 'rate_limit' | 'failure') {
+    const now = Date.now()
+    if (kind === 'image') {
+      const clamped = clampInt(next, 1, this.getAdaptiveMax('image'), this.limits.imageConcurrency)
+      if (clamped === this.limits.imageConcurrency) return
+      this.limits.imageConcurrency = clamped
+      this.lastScaleAt.image = now
+      console.info('[ShortDramaTaskQueue] adaptive image concurrency', { reason, next: clamped, base: this.baseLimits.imageConcurrency })
+    } else {
+      const clamped = clampInt(next, 1, this.getAdaptiveMax('video'), this.limits.videoConcurrency)
+      if (clamped === this.limits.videoConcurrency) return
+      this.limits.videoConcurrency = clamped
+      this.lastScaleAt.video = now
+      console.info('[ShortDramaTaskQueue] adaptive video concurrency', { reason, next: clamped, base: this.baseLimits.videoConcurrency })
+    }
+    this.pump()
   }
 
   private canStart(task: InternalTask<any>) {
@@ -113,6 +236,8 @@ export class ShortDramaTaskQueue {
     else if (task.kind === 'video') this.runningVideo++
     else this.runningAnalysis++
 
+    const startedAt = Date.now()
+
     const finish = () => {
       this.runningKeys.delete(task.key)
       if (task.kind === 'image') this.runningImage = Math.max(0, this.runningImage - 1)
@@ -128,12 +253,18 @@ export class ShortDramaTaskQueue {
           task.reject(new Error('已取消'))
           return
         }
+        if (task.kind === 'image' || task.kind === 'video') {
+          this.onTaskSuccess(task.kind, Math.max(0, Date.now() - startedAt))
+        }
         task.resolve(res)
       })
       .catch((err) => {
         if (task.cancelled) {
           task.reject(new Error('已取消'))
           return
+        }
+        if (task.kind === 'image' || task.kind === 'video') {
+          this.onTaskFailure(task.kind, err)
         }
         task.reject(err)
       })
@@ -144,6 +275,9 @@ export class ShortDramaTaskQueue {
     if (this.pumping) return
     this.pumping = true
     try {
+      this.maybeScaleUpForPressure('image')
+      this.maybeScaleUpForPressure('video')
+
       let started = true
       while (started) {
         started = false
@@ -173,4 +307,3 @@ export const getShortDramaTaskQueue = (projectId: string) => {
   queuesByProject.set(pid, q)
   return q
 }
-
