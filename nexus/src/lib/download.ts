@@ -112,7 +112,7 @@ const shouldAttachBearer = (u: string) => {
 const isCdnUrl = (u: string) => {
   const url = String(u || '').trim()
   if (!url) return false
-  return /\.(inkwai|douyin|toutiao|byteimg|ksyun|myqcloud|alicdn|aliyuncs)\./i.test(url)
+  return /\.(inkwai|douyin|toutiao|byteimg|ksyun|myqcloud|alicdn|aliyuncs|volces|volccdn|tos-cn)/i.test(url)
 }
 
 /**
@@ -187,7 +187,21 @@ async function fetchFileData(url: string): Promise<Uint8Array> {
         }
       }
     } else {
-      // Web mode: try fetch first, fallback to window.open for CORS issues
+      // Web mode
+      // CDN URLs (volces/aliyun/byteimg等) will always CORS-block fetch — skip directly to <a> download
+      if (isCdnUrl(url) && /^https?:\/\//i.test(url)) {
+        console.log('[download] CDN URL detected, using direct <a> download:', url.slice(0, 80))
+        const link = document.createElement('a')
+        link.href = url
+        link.download = ''
+        link.target = '_blank'
+        link.rel = 'noopener noreferrer'
+        document.body.appendChild(link)
+        link.click()
+        setTimeout(() => document.body.removeChild(link), 100)
+        return new Uint8Array(0) // Signal success via empty array
+      }
+
       const token = getApiKeySafe()
       const needsAuth = shouldAttachBearer(url) && !isCdnUrl(url) && token
       const headers = needsAuth ? { Authorization: `Bearer ${token}` } : undefined
@@ -308,6 +322,7 @@ export async function downloadFile(options: DownloadOptions): Promise<boolean> {
 
   try {
     const data = await fetchUrlAsBytes(url)
+    if (data.length === 0) return true // CDN direct <a> download already triggered
     return await saveBytesAsFile({ data, filename, mimeType: options.mimeType })
   } catch (err: any) {
     // Handle CORS error in web mode - open URL directly for browser download
