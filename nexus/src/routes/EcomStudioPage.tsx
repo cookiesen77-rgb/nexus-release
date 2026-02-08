@@ -38,6 +38,21 @@ export default function EcomStudioPage() {
     void useGraphStore.getState().setProjectId(projectId)
   }, [projectId])
 
+  // Block Cmd+Z/Ctrl+Z from triggering graph undo while in ecommerce studio
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+        const tag = (e.target as HTMLElement)?.tagName || ''
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !(e.target as any)?.isContentEditable) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [])
+
   return (
     <EcomErrorBoundary onReset={() => nav(`/canvas/${projectId}`)}>
       <div className="h-full min-h-screen w-full bg-[var(--bg-primary)] text-[var(--text-primary)]">
