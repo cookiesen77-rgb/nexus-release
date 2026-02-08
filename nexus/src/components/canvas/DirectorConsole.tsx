@@ -160,6 +160,35 @@ const normalizeSizeKeys = (sizes: any) => {
   return out.filter(Boolean)
 }
 
+const extractUrlsDeep = (payload: any) => {
+  const urls: string[] = []
+  const seen = new Set<string>()
+  const push = (val: any) => {
+    if (typeof val !== 'string') return
+    const v = val.trim()
+    if (!v) return
+    if (!v.startsWith('http') && !v.startsWith('data:')) return
+    if (seen.has(v)) return
+    seen.add(v)
+    urls.push(v)
+  }
+  const walk = (obj: any, depth = 0) => {
+    if (!obj || depth > 6) return
+    if (typeof obj === 'string') return push(obj)
+    if (Array.isArray(obj)) {
+      for (const item of obj) walk(item, depth + 1)
+      return
+    }
+    if (typeof obj !== 'object') return
+    for (const key of ['url', 'image_url', 'imageUrl', 'output_url', 'result_url']) {
+      if (typeof (obj as any)[key] === 'string') push((obj as any)[key])
+    }
+    for (const value of Object.values(obj)) walk(value, depth + 1)
+  }
+  walk(payload)
+  return urls
+}
+
 const pickBestSizeKeyForAspect = (modelCfg: any, desiredAspect: string) => {
   const keys = normalizeSizeKeys(modelCfg?.sizes)
   if (keys.length === 0) return String(modelCfg?.defaultParams?.size || desiredAspect || '').trim()
@@ -976,20 +1005,13 @@ Output STRICT JSON only (no markdown, no code fences):
             sequential_image_generation: 'disabled'
           }
 
-          const httpRefs = referenceImages
-            .map((v) => String(v || '').trim())
-            .filter((v) => /^https?:\/\//i.test(v))
-
-          if (referenceImages.length > 0 && httpRefs.length === 0) {
-            throw new Error('Seedream 参考图目前仅支持 http(s) URL，请先使用可公网访问的图片链接')
-          }
-
-          if (httpRefs.length > 0) {
-            payload.image = httpRefs.length === 1 ? httpRefs[0] : httpRefs
-            if (httpRefs.length > 1) {
-              payload.sequential_image_generation = 'auto'
-              payload.sequential_image_generation_options = { max_images: Math.min(3, httpRefs.length) }
+          const imageInputs = referenceImages.map((v) => String(v || '').trim()).filter(Boolean)
+          if (imageInputs.length > 0) {
+            const invalid = imageInputs.find((v) => !/^https?:\/\//i.test(v))
+            if (invalid) {
+              throw new Error('Seedream 参考图目前仅支持 http(s) URL，请先使用可公网访问的图片链接')
             }
+            payload.image = imageInputs
           }
 
           const rsp = await postJson<any>(modelCfg.endpoint || '/images/generations', payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })

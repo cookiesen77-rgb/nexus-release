@@ -1123,6 +1123,7 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '9:16', duration: 4, size: '720x1280' }
     },
     {
+        label: 'Grok Video 3 (6s)',
         // 文档模型名：grok-video-3（当前实测常见为 6 秒输出；接口不提供显式 duration 参数）
         // https://yunwu.apifox.cn/api-385288046
         key: 'grok-video-3',

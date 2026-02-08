@@ -1,4 +1,4 @@
-import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS } from '@/config/models'
+import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, SEEDREAM_SIZE_OPTIONS, SEEDREAM_4K_SIZE_OPTIONS, VIDEO_MODELS } from '@/config/models'
 import * as modelsConfig from '@/config/models'
 import { resolveCachedImageUrl, resolveCachedMediaUrl } from '@/lib/workflow/cache'
 import { getJson, postFormData, postJson } from '@/lib/workflow/request'
@@ -9,6 +9,45 @@ const isHttpUrl = (v: string) => /^https?:\/\//i.test(v)
 const isAssetUrl = (v: string) => /^asset:\/\//i.test(String(v || '').trim())
 const isDataUrl = (v: string) => /^data:image\/[a-z0-9.+-]+;base64,/i.test(String(v || '').trim())
 const isBase64Like = (v: string) => /^[A-Za-z0-9+/=]+$/.test(String(v || '').trim())
+
+const roundEvenInt = (n: number) => {
+  const v = Math.max(1, Math.round(n))
+  return v % 2 === 0 ? v : v + 1
+}
+
+// Seedream：将“分辨率(1K/2K/4K)+比例(16:9等)”映射为像素宽高（用于写入 size 字段）
+const seedreamSizeByRatioAndResolution = (ratio: string, resolution: string) => {
+  const r = String(ratio || '').trim()
+  if (/^\d{3,5}x\d{3,5}$/i.test(r)) return r
+
+  const res = String(resolution || '').trim().toUpperCase()
+  const lookup = (list: any[], label: string) => {
+    const hit = (Array.isArray(list) ? list : []).find((o: any) => String(o?.label || '').trim() === label)
+    const key = String(hit?.key || '').trim()
+    return /^\d{3,5}x\d{3,5}$/i.test(key) ? key : ''
+  }
+
+  if (res == '4K') return lookup(SEEDREAM_4K_SIZE_OPTIONS as any, r) || lookup(SEEDREAM_SIZE_OPTIONS as any, r) || '4096x4096'
+  if (res == '2K') return lookup(SEEDREAM_SIZE_OPTIONS as any, r) || '2048x2048'
+  if (res == '1K') {
+    const m = r.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/)
+    const a = Number(m?.[1] || 1)
+    const b = Number(m?.[2] || 1)
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return '1024x1024'
+    const base = 1024
+    if (a >= b) {
+      const h = base
+      const w = roundEvenInt((base * a) / b)
+      return `${w}x${h}`
+    }
+    const w = base
+    const h = roundEvenInt((base * b) / a)
+    return `${w}x${h}`
+  }
+
+  // fallback：按 2K 处理
+  return lookup(SEEDREAM_SIZE_OPTIONS as any, r) || '2048x2048'
+}
 
 const resolveAssetToDataUrl = async (assetUrl: string): Promise<string> => {
   const u = String(assetUrl || '').trim()
@@ -142,6 +181,45 @@ const uploadImageToYunwu = async (dataUrlOrBase64: string): Promise<string> => {
   const urlOut = String(resp?.url || resp?.data?.url || resp?.data?.link || '').trim()
   if (urlOut && /^https?:\/\//i.test(urlOut)) return urlOut
   throw new Error(String(resp?.error || resp?.message || resp?.data?.message || '云雾图床上传失败'))
+}
+
+const ensureSeedreamHttpImage = async (raw: string, label: string) => {
+  let v = String(raw || '').trim()
+  if (!v) return ''
+
+  if (v.startsWith('blob:')) {
+    try {
+      const res = await (globalThis.fetch as any)(v, { method: 'GET' })
+      if (!res?.ok) throw new Error(`HTTP ${res?.status || 0}`)
+      const blob = await res.blob()
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onerror = () => reject(new Error('read failed'))
+        reader.onload = () => resolve(String(reader.result || ''))
+        reader.readAsDataURL(blob)
+      })
+      if (dataUrl && dataUrl.startsWith('data:')) {
+        v = dataUrl
+      } else {
+        throw new Error('blob URL 转换失败')
+      }
+    } catch {
+      throw new Error(`${label}图片转换失败：请尝试重新导入该图片`)
+    }
+  }
+
+  if (isAssetUrl(v)) v = await resolveAssetToDataUrl(v)
+  if (isHttpUrl(v)) return v
+  if (isDataUrl(v)) {
+    const compressed = await compressImageBase64(v, 900 * 1024)
+    return await uploadImageToYunwu(compressed)
+  }
+  if (isBase64Like(v)) {
+    const dataUrl = `data:image/png;base64,${v}`
+    const compressed = await compressImageBase64(dataUrl, 900 * 1024)
+    return await uploadImageToYunwu(compressed)
+  }
+  throw new Error(`${label}需要公网可访问的图片 URL（http/https）或 dataURL/base64`)
 }
 
 const pickFirstHttpUrlFromText = (text: string) => {
@@ -337,6 +415,50 @@ export async function generateShortDramaImage(req: ShortDramaImageRequest): Prom
     if (quality) payload.quality = quality
     const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
     imageUrl = normalizeToImageUrl(rsp)
+  } else if (modelCfg.format === 'doubao-seedream') {
+    const ratioRaw = String(size || '').trim()
+    const resRaw = String(quality || '').trim()
+
+    // 兼容旧数据：早期把 1K/2K/4K 塞在 size 里
+    let ratio = ratioRaw
+    let resolution = resRaw
+    if (!resolution && /^(1k|2k|4k)$/i.test(ratio)) {
+      resolution = ratio.toUpperCase()
+      ratio = ''
+    }
+
+    if (!ratio) ratio = String(modelCfg.defaultParams?.size || '3:4')
+    if (!resolution) resolution = String(modelCfg.defaultParams?.quality || '2K')
+
+    const finalSize = seedreamSizeByRatioAndResolution(ratio, resolution)
+    const payload: any = {
+      model: modelCfg.key,
+      prompt,
+      size: finalSize,
+      response_format: 'url',
+      watermark: false,
+      sequential_image_generation: 'disabled',
+    }
+
+    const seedreamRefs: string[] = []
+    for (let i = 0; i < limitedRefImages.length; i++) {
+      const mapped = await ensureSeedreamHttpImage(limitedRefImages[i], `参考图${i + 1}`)
+      if (mapped) seedreamRefs.push(mapped)
+    }
+
+    if (seedreamRefs.length > 0) {
+      payload.image = seedreamRefs.length === 1 ? seedreamRefs[0] : seedreamRefs
+      if (seedreamRefs.length > 1) {
+        payload.sequential_image_generation = 'auto'
+        payload.sequential_image_generation_options = { max_images: Math.min(3, seedreamRefs.length) }
+      }
+    }
+
+    const rsp = await postJson<any>(modelCfg.endpoint, payload, {
+      authMode: modelCfg.authMode,
+      timeoutMs: modelCfg.timeout || 240000,
+    })
+    imageUrl = normalizeToImageUrl(rsp) || extractUrlsDeep(rsp)[0] || ''
   } else if (modelCfg.format === 'openai-chat-image') {
     const payload = { model: modelCfg.key, messages: [{ role: 'user', content: prompt }] }
     const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
