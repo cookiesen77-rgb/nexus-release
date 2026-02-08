@@ -637,26 +637,26 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
     const priv = modelCfg.defaultParams?.private
     if (typeof priv === 'boolean') payload.private = priv
   } else if (modelCfg.format === 'sora-openai') {
-    // Sora OpenAI 官方视频格式：POST /v1/videos (multipart/form-data)
-    // 查询：GET /v1/videos/{id}
-    // 下载：GET /v1/videos/{id}/content
-    useFormData = true
+    // Sora OpenAI 视频格式：POST /v1/videos
+    // 查询：GET /v1/videos/{id}, 下载：GET /v1/videos/{id}/content
+    // 有首帧图片时用 FormData (binary upload)，无图片时用 JSON
     const sizeValue = size || modelCfg.defaultParams?.size || (ratio === '9:16' ? '720x1280' : '1280x720')
     const secondsValue = Number.isFinite(duration) && duration > 0 ? String(duration) : String(modelCfg.defaultParams?.duration || 10)
 
-    const fd = new FormData()
-    fd.append('model', modelCfg.key)
-    fd.append('prompt', prompt || '')
-    fd.append('size', sizeValue)
-    fd.append('seconds', secondsValue)
+    const firstFrameUrl = String(images[0] || '').trim()
 
-    const watermark2 = modelCfg.defaultParams?.watermark
-    if (typeof watermark2 === 'boolean') fd.append('watermark', String(watermark2))
-
-    // 首帧图片：转为 Blob 后以 binary 上传
-    const firstFrameUrl = images[0] || ''
     if (firstFrameUrl) {
-      let imgDataUrl = String(firstFrameUrl).trim()
+      // 有首帧 → FormData (input_reference 需要 binary)
+      useFormData = true
+      const fd = new FormData()
+      fd.append('model', modelCfg.key)
+      fd.append('prompt', prompt || '')
+      fd.append('size', sizeValue)
+      fd.append('seconds', secondsValue)
+      const watermark2 = modelCfg.defaultParams?.watermark
+      if (typeof watermark2 === 'boolean') fd.append('watermark', String(watermark2))
+
+      let imgDataUrl = firstFrameUrl
       if (imgDataUrl.startsWith('blob:')) {
         const res = await fetch(imgDataUrl)
         if (!res.ok) throw new Error('下载首帧图片失败')
@@ -670,29 +670,33 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
       }
       if (isAssetUrl(imgDataUrl)) imgDataUrl = await resolveAssetToDataUrl(imgDataUrl)
       if (isHttpUrl(imgDataUrl)) {
-        // 下载 HTTP 图片转为 blob
         try {
           const res = await fetch(imgDataUrl)
-          if (res.ok) {
-            const blob = await res.blob()
-            fd.append('input_reference', blob, 'input.png')
-          }
+          if (res.ok) fd.append('input_reference', await res.blob(), 'input.png')
         } catch { /* skip image */ }
       } else if (imgDataUrl.startsWith('data:')) {
         const compressed = await compressImageBase64(imgDataUrl, 900 * 1024)
         const match = compressed.match(/^data:([^;]+);base64,(.+)$/)
         if (match) {
           const byteString = atob(match[2])
-          const byteNumbers = new Array(byteString.length)
-          for (let i = 0; i < byteString.length; i++) byteNumbers[i] = byteString.charCodeAt(i)
-          const blob = new Blob([new Uint8Array(byteNumbers)], { type: match[1] })
-          fd.append('input_reference', blob, 'input.png')
+          const bytes = new Uint8Array(byteString.length)
+          for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i)
+          fd.append('input_reference', new Blob([bytes], { type: match[1] }), 'input.png')
         }
       }
+      payload = fd
+    } else {
+      // 无首帧 → JSON
+      payload = {
+        model: modelCfg.key,
+        prompt: prompt || '',
+        size: sizeValue,
+        seconds: secondsValue,
+      }
+      const watermark2 = modelCfg.defaultParams?.watermark
+      if (typeof watermark2 === 'boolean') (payload as any).watermark = watermark2
     }
-
-    payload = fd
-    console.log('[generateShortDramaVideo] sora-openai FormData payload prepared, model:', modelCfg.key, 'seconds:', secondsValue, 'size:', sizeValue)
+    console.log('[generateShortDramaVideo] sora-openai prepared, model:', modelCfg.key, 'seconds:', secondsValue, 'hasImage:', !!firstFrameUrl, 'useFormData:', useFormData)
   } else if (modelCfg.format === 'unified-video') {
     const requiresImages = typeof modelCfg.requiresImages === 'boolean' ? modelCfg.requiresImages : false
     const imagesMustBeHttp = typeof modelCfg.imagesMustBeHttp === 'boolean' ? modelCfg.imagesMustBeHttp : false
