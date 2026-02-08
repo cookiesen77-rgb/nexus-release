@@ -2176,10 +2176,25 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             <div className="text-sm font-semibold text-[var(--text-primary)]">镜头列表</div>
             <div className="text-xs text-[var(--text-secondary)]">推荐流程：先生成首帧/尾帧满意后，再生成视频（新增版本不覆盖）。</div>
           </div>
+          <div className="flex items-center gap-2">
           <Button onClick={addShot} className="gap-1">
             <Plus className="h-4 w-4" />
             添加镜头
           </Button>
+          <Button size="sm" variant="secondary" onClick={async () => {
+            try {
+              const { exportStoryboardPdf } = await import('@/lib/shortDrama/storyboardExport')
+              const bytes = await exportStoryboardPdf(draft)
+              const { saveBytesAsFile } = await import('@/lib/download')
+              await saveBytesAsFile({ data: new Uint8Array(bytes), filename: `${draft.title || 'storyboard'}.pdf`, mimeType: 'application/pdf' })
+              window.$message?.success?.('分镜表已导出')
+            } catch (err: any) {
+              window.$message?.error?.(err?.message || '导出失败')
+            }
+          }} className="gap-1">
+            导出PDF
+          </Button>
+          </div>
         </div>
 
         {draft.shots.length === 0 ? (

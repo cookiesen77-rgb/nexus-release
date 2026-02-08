@@ -36,6 +36,9 @@ export interface Asset {
   createdAt: number
   localCacheUrl?: string
   localFilePath?: string
+  tags?: string[]
+  category?: string
+  favorite?: boolean
 }
 
 export type HistoryPerformanceMode = 'off' | 'normal' | 'ultra'
@@ -54,6 +57,8 @@ interface AssetsState {
   clearAssets: () => void
   updateAsset: (id: string, data: Partial<Asset>) => boolean
   getAssetsByType: (type: AssetType) => Asset[]
+  toggleFavorite: (id: string) => void
+  setTags: (id: string, tags: string[]) => void
   setHistoryPerformanceMode: (mode: HistoryPerformanceMode) => void
   setLocalCacheEnabled: (enabled: boolean) => void
   setLocalCacheBaseUrl: (url: string) => void
@@ -130,6 +135,9 @@ const sanitizeForIdb = (list: Asset[]): Asset[] => {
     createdAt: a.createdAt,
     localCacheUrl: a.localCacheUrl,
     localFilePath: a.localFilePath,
+    tags: a.tags,
+    category: a.category,
+    favorite: a.favorite,
   }))
 }
 
@@ -281,6 +289,28 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
   getAssetsByType: (type) => {
     return get().assets.filter((a) => a.type === type)
+  },
+
+  toggleFavorite: (id) => {
+    const idx = get().assets.findIndex(a => a.id === id)
+    if (idx === -1) return
+    set(state => {
+      const next = state.assets.slice()
+      next[idx] = { ...next[idx], favorite: !next[idx].favorite }
+      scheduleSave(next)
+      return { assets: next }
+    })
+  },
+
+  setTags: (id, tags) => {
+    const idx = get().assets.findIndex(a => a.id === id)
+    if (idx === -1) return
+    set(state => {
+      const next = state.assets.slice()
+      next[idx] = { ...next[idx], tags }
+      scheduleSave(next)
+      return { assets: next }
+    })
   },
 
   setHistoryPerformanceMode: (mode) => {
