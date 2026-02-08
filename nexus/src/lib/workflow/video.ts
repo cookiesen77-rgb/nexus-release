@@ -2072,30 +2072,21 @@ export const generateVideoFromConfigNode = async (
           }
         }
 
-        // 如果没有 sourceUrl，尝试上传 data URL 到 CDN（可能被拒绝）
+        // 如果没有 sourceUrl，上传 data URL 到 Supabase（腾讯信任的公共存储）
         if (fileInfos.length === 0) {
           const allImages = firstFrame ? [firstFrame, ...refImages] : refImages
           for (const img of allImages.slice(0, 3)) {
             const url = String(img || '').trim()
             if (!url) continue
-            if (/^https?:\/\//i.test(url)) {
+            if (/^https?:\/\//i.test(url) && !url.includes('imageproxy.zhongzhuan.chat') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
               fileInfos.push({ Type: 'Url', Url: url })
             } else if (url.startsWith('data:') && url.length > 100) {
               try {
-                const m = url.match(/^data:([^;]+);base64,(.*)$/)
-                if (m) {
-                  const byteString = atob(m[2])
-                  const bytes = new Uint8Array(byteString.length)
-                  for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i)
-                  const blob = new Blob([bytes], { type: m[1] })
-                  const fd = new FormData()
-                  fd.append('file', blob, `image.${m[1].split('/')[1] || 'png'}`)
-                  const uploadResp = await postFormData<any>('https://imageproxy.zhongzhuan.chat/api/upload', fd, { authMode: 'bearer', timeoutMs: 60000 })
-                  const httpUrl = String(uploadResp?.url || uploadResp?.data?.url || '').trim()
-                  if (httpUrl && /^https?:\/\//i.test(httpUrl)) fileInfos.push({ Type: 'Url', Url: httpUrl })
-                }
+                const { uploadToSupabase } = await import('@/lib/supabaseStorage')
+                const publicUrl = await uploadToSupabase(url)
+                if (publicUrl) fileInfos.push({ Type: 'Url', Url: publicUrl })
               } catch (e) {
-                console.warn('[video] tencent-aigc 参考图上传失败:', e)
+                console.warn('[video] tencent-aigc Supabase上传失败:', e)
               }
             }
           }
