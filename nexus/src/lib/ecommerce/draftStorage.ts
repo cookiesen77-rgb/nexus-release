@@ -219,6 +219,24 @@ export const loadDraft = (pid: string): EcomDraftV1 => {
 // Track mediaIds that have been persisted to IndexedDB (survives across saves)
 const persistedMediaIds = new Map<string, string>() // displayUrl hash → mediaId
 
+const isRecoverableSourceUrl = (url: unknown) => {
+  const u = String(url || '').trim()
+  if (!u) return false
+  if (/^https?:\/\//i.test(u)) return true
+  return [
+    '/v1',
+    'v1',
+    '/v1beta',
+    'v1beta',
+    '/kling',
+    'kling',
+    '/tencent-vod',
+    'tencent-vod',
+    '/video',
+    'video',
+  ].some(prefix => u.startsWith(prefix))
+}
+
 function hashUrl(url: string): string {
   let h = 0
   const s = url.slice(0, 200) + url.length // Sample start + length for fast hash
@@ -242,7 +260,11 @@ function persistSlotToIndexedDb(slot: any, projectId: string) {
         type: url.startsWith('data:video') ? 'video' : url.startsWith('data:audio') ? 'audio' : 'image',
         data: url,
       }).then(mediaId => {
-        if (mediaId) persistedMediaIds.set(hash, mediaId)
+        if (mediaId) {
+          persistedMediaIds.set(hash, mediaId)
+          // 下一次保存可直接复用 mediaId，避免刷新后丢失
+          v.mediaId = v.mediaId || mediaId
+        }
       }).catch(() => {})
     }
   }
@@ -284,10 +306,14 @@ function stripLargeDataUrls(draft: EcomDraftV1): EcomDraftV1 {
     if (!slot?.variants) return
     persistSlotToIndexedDb(slot, pid)
     for (const v of slot.variants) {
-      if (typeof v.displayUrl === 'string' && v.displayUrl.startsWith('data:') && v.displayUrl.length > 50000) {
-        if (!v.sourceUrl || v.sourceUrl.startsWith('data:')) v.sourceUrl = ''
-        v.displayUrl = ''
-      }
+      const isLargeData = typeof v.displayUrl === 'string' && v.displayUrl.startsWith('data:') && v.displayUrl.length > 50000
+      if (!isLargeData) continue
+
+      const canStripInline = !!String(v.mediaId || '').trim() || isRecoverableSourceUrl(v.sourceUrl)
+      if (!canStripInline) continue
+
+      if (!v.sourceUrl || v.sourceUrl.startsWith('data:')) v.sourceUrl = ''
+      v.displayUrl = ''
     }
   }
   stripSlot(clone.heroScene?.slot)

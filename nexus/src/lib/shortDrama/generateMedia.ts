@@ -1380,6 +1380,74 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
       resolution,
     }
     console.log('[generateShortDramaVideo] luma-video payload:', JSON.stringify(payload, null, 2))
+  } else if (modelCfg.format === 'tencent-aigc-video') {
+    // 腾讯 AIGC 视频：POST /tencent-vod/v1/aigc-video
+    // 查询：GET /tencent-vod/v1/query/{task_id}
+    // 响应：Response.AigcImageTask.Output.FileInfos[].FileUrl
+    const modelName = modelCfg.defaultParams?.model_name || 'Vidu'
+    const modelVersion = modelCfg.defaultParams?.model_version || 'q3-pro'
+    const durValue = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg.defaultParams?.duration || 5)
+    const aspectRatio = ratio || modelCfg.defaultParams?.ratio || '16:9'
+    const resolution = modelCfg.defaultParams?.resolution || '1080P'
+    const audioGen = modelCfg.defaultParams?.audio_generation || 'Enabled'
+    const enhancePrompt = modelCfg.defaultParams?.enhance_prompt || 'Enabled'
+
+    payload = {
+      model_name: modelName,
+      model_version: modelVersion,
+      prompt: prompt || '',
+      enhance_prompt: enhancePrompt,
+      output_config: {
+        storage_mode: 'Temporary',
+        duration: durValue,
+        resolution,
+        aspect_ratio: aspectRatio,
+        audio_generation: audioGen,
+      },
+    }
+
+    // 参考图（file_infos，格式：{ Type: "Url", Url: "http://..." }）
+    if (images.length > 0) {
+      const fileInfos: any[] = []
+      for (const raw of images.slice(0, Number(modelCfg.maxImages || 3))) {
+        let imgUrl = String(raw || '').trim()
+        if (!imgUrl) continue
+        if (imgUrl.startsWith('blob:')) {
+          try {
+            const res = await fetch(imgUrl)
+            const blob = await res.blob()
+            imgUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onerror = () => reject(new Error('read failed'))
+              reader.onload = () => resolve(String(reader.result || ''))
+              reader.readAsDataURL(blob)
+            })
+          } catch { continue }
+        }
+        if (isAssetUrl(imgUrl)) imgUrl = await resolveAssetToDataUrl(imgUrl)
+        if (isDataUrl(imgUrl) || isBase64Like(imgUrl)) {
+          const compressed = await compressImageBase64(imgUrl.startsWith('data:') ? imgUrl : `data:image/png;base64,${imgUrl}`, 900 * 1024)
+          imgUrl = await uploadImageToYunwu(compressed)
+        }
+        if (isHttpUrl(imgUrl)) {
+          fileInfos.push({ Type: 'Url', Url: imgUrl })
+        }
+      }
+      if (fileInfos.length > 0) (payload as any).file_infos = fileInfos
+    }
+
+    // 尾帧（last_frame_url，Vidu q2-pro/q2-turbo/q3-pro 支持）
+    if (lastFrame) {
+      let tailUrl = String(lastFrame).trim()
+      if (isAssetUrl(tailUrl)) tailUrl = await resolveAssetToDataUrl(tailUrl)
+      if (isDataUrl(tailUrl) || isBase64Like(tailUrl)) {
+        const compressed = await compressImageBase64(tailUrl.startsWith('data:') ? tailUrl : `data:image/png;base64,${tailUrl}`, 900 * 1024)
+        tailUrl = await uploadImageToYunwu(compressed)
+      }
+      if (isHttpUrl(tailUrl)) (payload as any).last_frame_url = tailUrl
+    }
+
+    console.log('[generateShortDramaVideo] tencent-aigc-video payload:', JSON.stringify(payload, null, 2))
   } else {
     throw new Error(`工作台暂不支持该视频模型格式：${String(modelCfg.format || '')}`)
   }

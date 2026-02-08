@@ -1123,6 +1123,37 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '9:16', duration: 4, size: '720x1280' }
     },
     {
+        label: 'Vidu Q3 Pro（腾讯AIGC）',
+        key: 'vidu-q3-pro',
+        endpoint: '/tencent-vod/v1/aigc-video',
+        statusEndpoint: (id) => `/tencent-vod/v1/query/${id}`,
+        authMode: 'bearer',
+        format: 'tencent-aigc-video',
+        maxImages: 3,
+        tips: 'Vidu Q3 Pro；支持参考图（最多3张）+尾帧；时长1-10秒；720P/1080P；支持音频生成。',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: true,
+        supportsReferenceImages: true,
+        maxRefImages: 3,
+        ratios: ['16:9', '9:16', '1:1'],
+        durs: [
+            { label: '1 秒', key: 1 }, { label: '2 秒', key: 2 }, { label: '3 秒', key: 3 },
+            { label: '4 秒', key: 4 }, { label: '5 秒', key: 5 }, { label: '6 秒', key: 6 },
+            { label: '7 秒', key: 7 }, { label: '8 秒', key: 8 }, { label: '9 秒', key: 9 },
+            { label: '10 秒', key: 10 },
+        ],
+        defaultParams: {
+            model_name: 'Vidu',
+            model_version: 'q3-pro',
+            ratio: '16:9',
+            duration: 5,
+            resolution: '1080P',
+            audio_generation: 'Enabled',
+            enhance_prompt: 'Enabled',
+        }
+    },
+    {
         label: 'Grok Video 3 (6s)',
         // 文档模型名：grok-video-3（当前实测常见为 6 秒输出；接口不提供显式 duration 参数）
         // https://yunwu.apifox.cn/api-385288046
