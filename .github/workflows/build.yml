@@ -38,6 +38,19 @@ jobs:
         working-directory: nexus
         run: npm ci
 
+      - name: Prepare FFmpeg sidecar placeholder
+        working-directory: nexus/src-tauri
+        shell: bash
+        run: |
+          mkdir -p binaries
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            touch "binaries/ffmpeg-x86_64-pc-windows-msvc.exe"
+          else
+            touch "binaries/ffmpeg-aarch64-apple-darwin"
+            touch "binaries/ffmpeg-x86_64-apple-darwin"
+            touch "binaries/ffmpeg-universal-apple-darwin"
+          fi
+
       - name: Build Tauri (macOS)
         if: matrix.platform == 'macos-latest'
         working-directory: nexus
