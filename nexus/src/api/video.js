@@ -3,6 +3,10 @@
  */
 
 import { request, DEFAULT_API_BASE_URL } from '@/utils'
+import { getJson, postFormData, postJson } from '@/lib/workflow/request'
+
+// 检测 Tauri 环境
+const isTauri = typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__
 
 // 不需要 /v1 前缀的路径
 const noV1Prefixes = ['/tencent-vod', '/kling', '/v1beta', '/v1/', '/video/']
@@ -14,9 +18,9 @@ const noV1Prefixes = ['/tencent-vod', '/kling', '/v1beta', '/v1/', '/video/']
 const buildUrl = (endpoint) => {
   if (!endpoint) return ''
   if (/^https?:\/\//i.test(endpoint)) return endpoint
-  
+
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
-  
+
   // 如果路径以特殊前缀开头，使用 origin 而不是带 /v1 的 base
   if (noV1Prefixes.some(p => path.startsWith(p))) {
     try {
@@ -26,22 +30,45 @@ const buildUrl = (endpoint) => {
       // fallback
     }
   }
-  
+
   // 其他路径：去掉开头的 /，让 axios 相对于 baseURL 拼接
   // 例如 '/videos' -> 'videos' -> axios 拼接为 https://nexusapi.cn/v1/videos
   return path.startsWith('/') ? path.slice(1) : path
+}
+
+const toFormData = (data) => {
+  if (typeof FormData !== 'undefined' && data instanceof FormData) return data
+  const fd = new FormData()
+  if (data && typeof data === 'object') {
+    Object.entries(data).forEach(([key, value]) => {
+      if (value === undefined || value === null) return
+      if (Array.isArray(value)) {
+        value.forEach((v) => fd.append(key, v))
+      } else {
+        fd.append(key, value)
+      }
+    })
+  }
+  return fd
 }
 
 // 创建视频任务
 export const createVideoTask = (data, options = {}) => {
   const { endpoint = '/videos', authMode, requestType = 'formdata' } = options
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData
+  const url = buildUrl(endpoint)
+
+  if (isTauri) {
+    if (requestType === 'formdata' || isFormData) {
+      const form = toFormData(data)
+      return postFormData(url, form, { authMode })
+    }
+    return postJson(url, data, { authMode })
+  }
 
   const headers = requestType === 'formdata' && !isFormData
     ? { 'Content-Type': 'multipart/form-data' }
     : {}
-
-  const url = buildUrl(endpoint)
 
   return request({
     url,
@@ -63,6 +90,11 @@ export const getVideoTaskStatus = (taskId, options = {}) => {
   if (statusEndpoint && typeof statusEndpoint === 'string' && query.id === undefined) {
     query.id = taskId
   }
+
+  if (isTauri) {
+    return getJson(url, Object.keys(query).length > 0 ? query : undefined, { authMode })
+  }
+
   return request({
     url,
     method: 'get',

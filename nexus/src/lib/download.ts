@@ -4,6 +4,9 @@
  * Web: 使用 blob URL + anchor 下载
  */
 
+import { safeFetch } from '@/lib/safeFetch'
+
+
 // 检测 Tauri 环境
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
@@ -138,7 +141,7 @@ async function fetchFileData(url: string): Promise<Uint8Array> {
     return base64ToUint8Array(base64Data)
   } else if (url.startsWith('blob:')) {
     // blob URL
-    const response = await fetch(url)
+    const response = await safeFetch(url)
     const arrayBuffer = await response.arrayBuffer()
     return new Uint8Array(arrayBuffer)
   } else if (isAssetProtocolUrl(url) && isTauri) {
@@ -170,7 +173,7 @@ async function fetchFileData(url: string): Promise<Uint8Array> {
         console.warn('[download] Tauri plugin-http 失败, 回退 WebView fetch:', String(tauriErr?.message || '').slice(0, 120))
         // 回退1: 带 headers
         try {
-          const response = await fetch(resolvedUrl, headers ? { headers, mode: 'cors' } : { mode: 'cors' })
+          const response = await safeFetch(resolvedUrl, headers ? { headers, mode: 'cors' } : { mode: 'cors' })
           if (!response.ok) throw new Error(`HTTP ${response.status}`)
           const arrayBuffer = await response.arrayBuffer()
           return new Uint8Array(arrayBuffer)
@@ -178,7 +181,7 @@ async function fetchFileData(url: string): Promise<Uint8Array> {
           // 回退2: 不带 auth 头（某些 CDN 会因为多余 headers 返回 400）
           if (needsAuth) {
             console.warn('[download] 带Auth失败, 尝试无Auth:', String(fetchErr?.message || '').slice(0, 80))
-            const response = await fetch(resolvedUrl, { mode: 'cors' })
+            const response = await safeFetch(resolvedUrl, { mode: 'cors' })
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
             const arrayBuffer = await response.arrayBuffer()
             return new Uint8Array(arrayBuffer)
@@ -206,11 +209,11 @@ async function fetchFileData(url: string): Promise<Uint8Array> {
       const needsAuth = shouldAttachBearer(url) && !isCdnUrl(url) && token
       const headers = needsAuth ? { Authorization: `Bearer ${token}` } : undefined
       try {
-        const response = await fetch(url, headers ? { headers, mode: 'cors' } : { mode: 'cors' })
+        const response = await safeFetch(url, headers ? { headers, mode: 'cors' } : { mode: 'cors' })
         if (!response.ok) {
           // 如果带auth返回400，尝试不带auth
           if (response.status === 400 && needsAuth) {
-            const retryResp = await fetch(url, { mode: 'cors' })
+            const retryResp = await safeFetch(url, { mode: 'cors' })
             if (!retryResp.ok) throw new Error(`HTTP ${retryResp.status}`)
             const arrayBuffer = await retryResp.arrayBuffer()
             return new Uint8Array(arrayBuffer)

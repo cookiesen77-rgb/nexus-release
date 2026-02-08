@@ -12,6 +12,7 @@ import type { GraphNode } from '@/graph/types'
 import { useAssetsStore } from '@/store/assets'
 import { postJson } from '@/lib/workflow/request'
 import { chatCompletions } from '@/lib/nexusApi'
+import { safeFetch } from '@/lib/safeFetch'
 
 interface Props {
   open: boolean
@@ -51,7 +52,7 @@ const extractBase64 = (input: string): string => {
 
 // 下载图片为 base64
 const downloadImageAsBase64 = async (url: string): Promise<string> => {
-  const response = await fetch(url)
+  const response = await safeFetch(url)
   const blob = await response.blob()
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

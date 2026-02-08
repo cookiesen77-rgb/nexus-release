@@ -13,6 +13,7 @@ import { chatCompletions } from '@/lib/nexusApi'
 import { useAssetsStore } from '@/store/assets'
 import { useGraphStore } from '@/graph/store'
 import { getMedia } from '@/lib/mediaStorage'
+import { safeFetch } from '@/lib/safeFetch'
 import type { ShortDramaDraftV2, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
 
 interface Props {
@@ -33,7 +34,7 @@ const extractBase64 = (input: string): string => {
 }
 
 const downloadImageAsBase64 = async (url: string): Promise<string> => {
-  const response = await fetch(url)
+  const response = await safeFetch(url)
   const blob = await response.blob()
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

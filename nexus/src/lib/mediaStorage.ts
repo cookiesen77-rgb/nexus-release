@@ -8,6 +8,9 @@
  * - 配额管理：防止存储空间耗尽
  */
 
+import { safeFetch } from '@/lib/safeFetch'
+
+
 const DB_NAME = 'nexus-media-storage'
 const DB_VERSION = 2  // 升级版本以添加 lastAccessedAt 索引
 const STORE_NAME = 'media'
@@ -329,7 +332,7 @@ export const cacheRemoteMedia = async (opts: {
     const headers: Record<string, string> = {}
     if (needsAuth && token) headers.Authorization = `Bearer ${token}`
 
-    const resp = await fetch(url, Object.keys(headers).length > 0 ? { headers } : undefined)
+    const resp = await safeFetch(url, Object.keys(headers).length > 0 ? { headers } : undefined)
     if (!resp.ok) return null
 
     const blob = await resp.blob()

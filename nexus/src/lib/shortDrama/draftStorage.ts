@@ -9,6 +9,7 @@ import type {
   ShortDramaStyle,
   ShortDramaAsset,
   ShortDramaAssetCategory,
+  ShotFrameMode,
 } from '@/lib/shortDrama/types'
 
 const DRAFT_KEY_PREFIX_V2 = 'nexus-short-drama-studio:draft:v2'
@@ -78,12 +79,14 @@ export const createEmptyShot = (title?: string): ShortDramaShot => {
     title: title || '镜头',
     sceneId: undefined,
     characterIds: [],
+    frameMode: 'first_last',
     beat: '',
     videoPrompt: '',
     frames: {
       start: mkFrame('start', startSlot),
       end: mkFrame('end', endSlot),
     },
+    gridPrompts: [],
     video: createEmptyVideoSlot('视频'),
   }
 }
@@ -284,8 +287,14 @@ export const loadShortDramaDraftV2 = (projectId: string): ShortDramaDraftV2 => {
   const rawV2 = localStorage.getItem(keyV2)
   const parsedV2 = rawV2 ? safeJsonParse(rawV2) : null
   if (parsedV2 && parsedV2.version === 2) {
-    // Ensure projectId consistency
-    return { ...parsedV2, projectId: pid, updatedAt: Date.now() } as ShortDramaDraftV2
+    const draft = { ...parsedV2, projectId: pid, updatedAt: Date.now() } as ShortDramaDraftV2
+    draft.shots = draft.shots.map(s => ({
+      ...s,
+      frameMode: s.frameMode || ('first_last' as ShotFrameMode),
+      gridPrompts: s.gridPrompts || [],
+      gridSlot: s.gridSlot ?? undefined,
+    }))
+    return draft
   }
 
   // Try legacy v1 and migrate

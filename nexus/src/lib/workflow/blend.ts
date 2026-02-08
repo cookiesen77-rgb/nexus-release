@@ -16,6 +16,7 @@
 import { useGraphStore } from '@/graph/store'
 import { postJson } from '@/lib/workflow/request'
 import { saveMedia } from '@/lib/mediaStorage'
+import { safeFetch } from '@/lib/safeFetch'
 import { useSettingsStore } from '@/store/settings'
 import type { GraphNode } from '@/graph/types'
 
@@ -547,7 +548,7 @@ function extractBase64(input: string): string {
  */
 async function downloadImageAsBase64(url: string): Promise<string> {
   try {
-    const response = await fetch(url)
+    const response = await safeFetch(url)
     const blob = await response.blob()
     return new Promise((resolve, reject) => {
       const reader = new FileReader()

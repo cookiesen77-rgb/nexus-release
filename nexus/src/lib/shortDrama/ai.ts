@@ -4,6 +4,8 @@ import { SHORT_DRAMA_STYLE_PRESETS, getShortDramaStylePresetById } from '@/lib/s
 import { createEmptyImageSlot, createEmptyShot, createEmptyAsset } from '@/lib/shortDrama/draftStorage'
 import type { ShortDramaDraftV2, ShortDramaAssetCategory } from '@/lib/shortDrama/types'
 
+const DEFAULT_ANALYSIS_MODEL = 'gemini-3-pro-preview-thinking'
+
 type ChatRole = 'system' | 'user' | 'assistant'
 type ChatMessage = { role: ChatRole; content: string }
 
@@ -189,6 +191,7 @@ export type ShortDramaScriptAnalysis = {
     assets?: string[]
     startPrompt: string
     endPrompt: string
+    gridPrompts?: string[]
     videoPrompt?: string
   }[]
 }
@@ -270,6 +273,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     '    "assets": ["string"],',
     '    "startPrompt": "string",',
     '    "endPrompt": "string",',
+    '    "gridPrompts": ["string"],  // 宫格模式下每格的提示词（与frameMode对应的数量）',
     '    "videoPrompt": "string"',
     '  }]',
     '}',
@@ -308,6 +312,23 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     '=== 镜头帧描述规范 (shots.startPrompt / endPrompt) — 极其重要 ===',
     '这是直接送入AI绘图模型的提示词，必须是一段完整的、极致详细的画面描述，至少80字。',
     '必须包含以下全部要素：',
+    '',
+    '## 帧模式与宫格生成',
+    '',
+    '镜头支持多种帧模式，根据选定模式生成不同数量的提示词：',
+    '- first_only: 仅生成 startPrompt（1张首帧）',
+    '- first_last: 生成 startPrompt + endPrompt（首帧+尾帧，默认模式）',
+    '- grid_4: 生成 4 格提示词（起-承-转-合），格式为 gridPrompts 数组',
+    '- grid_6: 生成 6 格提示词（引入-发展-高潮前-高潮-回落-结尾）',
+    '- grid_9: 生成 9 格提示词（3×3叙事网格，按从左到右、从上到下的阅读顺序）',
+    '- grid_25: 生成 25 格提示词（5×5细粒度分镜）',
+    '',
+    '宫格模式规则：',
+    '1. 每格提示词必须重复角色核心外貌特征（视觉锚点），确保一致性',
+    '2. 每格标注景别变化（从全景到特写的递进，或根据叙事需要调整）',
+    '3. 同组宫格内光影方向、色温保持统一',
+    '4. 格间动势衔接：前格结束状态与后格起始状态逻辑连续',
+    '5. 四宫格结构：Panel 1(起) → Panel 2(承) → Panel 3(转) → Panel 4(合)',
     '',
     '1. 【景别与镜头】明确指定：',
     '   - 景别：大特写/特写/近景/中近景/中景/中全景/全景/大全景',
@@ -399,7 +420,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     script,
   ].join('\n')
 
-  const modelKey = String(opts.modelKey || opts.draft.models.analysisModelKey || DEFAULT_CHAT_MODEL).trim()
+  const modelKey = String(opts.modelKey || opts.draft.models.analysisModelKey || DEFAULT_ANALYSIS_MODEL).trim()
   let rawText = await callChatModel(modelKey, [
     { role: 'system', content: system },
     { role: 'user', content: user },
@@ -571,6 +592,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     const endPrompt = normalizeText(ai?.endPrompt)
     const videoPrompt = normalizeText(ai?.videoPrompt)
     const scriptExcerpt = normalizeText(ai?.scriptExcerpt)
+    const gridPrompts = Array.isArray(ai?.gridPrompts) ? ai.gridPrompts.map((x: any) => normalizeText(x)).filter(Boolean) : []
 
     const existing = mergedShots[i]
     if (existing) {
@@ -588,6 +610,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
       }
       if (!nextShot.frames.start.prompt && startPrompt) nextShot.frames.start.prompt = startPrompt
       if (!nextShot.frames.end.prompt && endPrompt) nextShot.frames.end.prompt = endPrompt
+      if ((!nextShot.gridPrompts || nextShot.gridPrompts.length === 0) && gridPrompts.length > 0) nextShot.gridPrompts = gridPrompts
       mergedShots[i] = nextShot
     } else {
       const shot = createEmptyShot(title)
@@ -599,6 +622,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
       shot.assetIds = assetNames.map((n: string) => assetIdByName.get(n)).filter(Boolean) as string[]
       shot.frames.start.prompt = startPrompt
       shot.frames.end.prompt = endPrompt
+      if (gridPrompts.length > 0) shot.gridPrompts = gridPrompts
       mergedShots.push(shot)
     }
   }

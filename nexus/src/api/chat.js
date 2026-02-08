@@ -8,8 +8,83 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 // 检测 Tauri 环境
 const isTauri = typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__
 
-// 根据环境选择 fetch 实现（Windows Tauri 必须用插件 fetch）
-const safeFetch = isTauri ? tauriFetch : globalThis.fetch
+// 根据环境选择 fetch 实现（带兜底）
+// 说明：部分 Tauri 用户环境（常见于 Windows 代理/证书链）下，plugin-http 会偶发抛错，
+// 这里在抛错时自动回退到 WebView fetch，降低 "Failed to fetch" 概率。
+const webFetch = globalThis.fetch ? globalThis.fetch.bind(globalThis) : (async () => { throw new Error('fetch is not available') })
+const safeFetch = async (input, init) => {
+  if (!isTauri) return await webFetch(input, init)
+  try {
+    return await tauriFetch(input, init)
+  } catch (err) {
+    const message = String(err?.message || err || '')
+    console.warn('[api/chat.safeFetch] tauriFetch failed, fallback to web fetch:', {
+      url: String(input || '').slice(0, 120),
+      message: message.slice(0, 220)
+    })
+    return await webFetch(input, init)
+  }
+}
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+const isRetryableStatus = (status) => status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+
+const isRetryableFetchError = (err) => {
+  const msg = String(err?.message || err || '')
+  return /Failed to fetch|NetworkError|socket|TLS|ECONNRESET|EPIPE|ETIMEDOUT|timed out|502|Bad Gateway|did not match|expected pattern|error sending request|request error/i.test(msg)
+}
+
+const backoffMs = (attempt) => {
+  const base = 600 * Math.pow(2, Math.max(0, attempt))
+  const jitter = Math.floor(Math.random() * 250)
+  return Math.min(6000, base + jitter)
+}
+
+const fetchWithRetry = async (url, options, { signal, maxRetries } = {}) => {
+  const retryTimes = Number.isFinite(Number(maxRetries)) ? Number(maxRetries) : (isTauri ? 2 : 1)
+
+  for (let attempt = 0; attempt <= retryTimes; attempt++) {
+    if (signal?.aborted) {
+      const abortErr = new Error('Aborted')
+      abortErr.name = 'AbortError'
+      throw abortErr
+    }
+
+    try {
+      const res = await safeFetch(url, options)
+      if (attempt < retryTimes && isRetryableStatus(res?.status || 0)) {
+        const wait = backoffMs(attempt)
+        console.warn('[api/chat.fetchWithRetry] retryable response status, retrying:', {
+          status: res?.status,
+          attempt: attempt + 1,
+          waitMs: wait
+        })
+        await sleep(wait)
+        continue
+      }
+      return res
+    } catch (err) {
+      const name = String(err?.name || '')
+      if (name === 'AbortError' || signal?.aborted) throw err
+
+      if (attempt < retryTimes && isRetryableFetchError(err)) {
+        const wait = backoffMs(attempt)
+        console.warn('[api/chat.fetchWithRetry] retryable fetch error, retrying:', {
+          attempt: attempt + 1,
+          waitMs: wait,
+          message: String(err?.message || err || '').slice(0, 160)
+        })
+        await sleep(wait)
+        continue
+      }
+
+      throw err
+    }
+  }
+
+  throw new Error('fetchWithRetry failed')
+}
 
 // 对话补全
 export const chatCompletions = (data) =>
@@ -101,7 +176,7 @@ export const streamResponses = async function* (data, signal) {
   if (!isTauri && signal) {
     fetchOptions.signal = signal
   }
-  const response = await safeFetch(`${baseUrl}/responses`, fetchOptions)
+  const response = await fetchWithRetry(`${baseUrl}/responses`, fetchOptions, { signal })
 
   if (!response.ok) {
     const error = await response.json().catch(() => null)
@@ -116,6 +191,11 @@ export const streamResponses = async function* (data, signal) {
   const MAX_ITERATIONS = 10000
 
   while (true) {
+    if (signal?.aborted) {
+      const abortErr = new Error('Aborted')
+      abortErr.name = 'AbortError'
+      throw abortErr
+    }
     if (iterations++ > MAX_ITERATIONS) {
       throw new Error('Stream timeout: exceeded maximum iterations')
     }
@@ -178,7 +258,7 @@ export const streamChatCompletions = async function* (data, signal) {
   if (!isTauri && signal) {
     fetchOptions.signal = signal
   }
-  const response = await safeFetch(`${baseUrl}/chat/completions`, fetchOptions)
+  const response = await fetchWithRetry(`${baseUrl}/chat/completions`, fetchOptions, { signal })
 
   if (!response.ok) {
     let errorText = ''
@@ -212,6 +292,11 @@ export const streamChatCompletions = async function* (data, signal) {
   const MAX_ITERATIONS = 10000
 
   while (true) {
+    if (signal?.aborted) {
+      const abortErr = new Error('Aborted')
+      abortErr.name = 'AbortError'
+      throw abortErr
+    }
     if (iterations++ > MAX_ITERATIONS) {
       throw new Error('Stream timeout: exceeded maximum iterations')
     }

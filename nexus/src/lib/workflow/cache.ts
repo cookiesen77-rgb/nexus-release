@@ -7,6 +7,7 @@
  */
 import { getTauri, tauriInvoke } from '@/lib/tauri'
 import { LocalCacheManager, type CacheEntry } from '@/lib/indexedDB'
+import { safeFetch } from '@/lib/safeFetch'
 
 // 缓存结果类型
 export interface CacheResult {
@@ -272,7 +273,7 @@ const cacheWeb = async (
       }
       
       console.log(`[Cache:Web] 下载需要鉴权的媒体:`, fetchUrl.slice(0, 80))
-      const response = await fetch(fetchUrl, {
+      const response = await safeFetch(fetchUrl, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
       
@@ -441,7 +442,7 @@ export const resolveCachedMediaUrl = async (url: string) => {
         }
       }
       console.log('[resolveCachedMediaUrl] Web 环境下载需要鉴权的视频:', fetchUrl.slice(0, 80))
-      const response = await fetch(fetchUrl, {
+      const response = await safeFetch(fetchUrl, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
       if (!response.ok) {

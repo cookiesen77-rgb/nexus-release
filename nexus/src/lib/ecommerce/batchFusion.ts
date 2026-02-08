@@ -1,6 +1,7 @@
 import { chatCompletions } from '@/lib/nexusApi'
 import { postJson } from '@/lib/workflow/request'
 import { useSettingsStore } from '@/store/settings'
+import { safeFetch } from '@/lib/safeFetch'
 
 const ANALYZE_PROMPT = `Analyze this image for e-commerce product fusion. Output in English, max 80 words:
 **SUBJECT**: Main subject, material, color, shape
@@ -31,7 +32,7 @@ function stripThinkingProcess(text: string): string {
 
 function ensureBase64(url: string): Promise<string> {
   if (url.startsWith('data:')) return Promise.resolve(extractBase64(url))
-  return fetch(url)
+  return safeFetch(url)
     .then(r => r.blob())
     .then(blob => new Promise<string>((resolve, reject) => {
       const reader = new FileReader()

@@ -2,6 +2,7 @@ import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, SEEDREAM_SIZE_O
 import * as modelsConfig from '@/config/models'
 import { resolveCachedImageUrl, resolveCachedMediaUrl } from '@/lib/workflow/cache'
 import { getJson, postFormData, postJson } from '@/lib/workflow/request'
+import { safeFetch } from '@/lib/safeFetch'
 
 const normalizeText = (text: unknown) => String(text || '').replace(/\r\n/g, '\n').trim()
 const toDataUrl = (b64: string, mime = 'image/png') => `data:${mime};base64,${b64}`
@@ -275,12 +276,6 @@ const normalizeToImageUrl = (resp: any) => {
 
 // 检测是否在 Tauri 环境中（用于 fetch 参考图；主请求走 postJson 已经 Tauri-safe）
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
-
-const safeFetch: typeof fetch = async (...args: any[]) => {
-  if (!isTauri) return (globalThis.fetch as any)(...args)
-  const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
-  return (tauriFetch as any)(...args)
-}
 
 const resolveImageToInlineData = async (input: string) => {
   const v = String(input || '').trim()
@@ -714,7 +709,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
       let imgDataUrl = firstRaw
       if (isAssetUrl(firstRaw)) imgDataUrl = await resolveAssetToDataUrl(firstRaw)
       else if (isHttpUrl(firstRaw)) {
-        const res = await fetch(firstRaw)
+        const res = await safeFetch(firstRaw)
         if (!res.ok) throw new Error('下载首帧图片失败')
         const blob = await res.blob()
         imgDataUrl = await new Promise<string>((resolve, reject) => {
@@ -776,7 +771,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
 
       let imgDataUrl = firstFrameUrl
       if (imgDataUrl.startsWith('blob:')) {
-        const res = await fetch(imgDataUrl)
+        const res = await safeFetch(imgDataUrl)
         if (!res.ok) throw new Error('下载首帧图片失败')
         const blob = await res.blob()
         imgDataUrl = await new Promise<string>((resolve, reject) => {
@@ -789,7 +784,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
       if (isAssetUrl(imgDataUrl)) imgDataUrl = await resolveAssetToDataUrl(imgDataUrl)
       if (isHttpUrl(imgDataUrl)) {
         try {
-          const res = await fetch(imgDataUrl)
+          const res = await safeFetch(imgDataUrl)
           if (res.ok) fd.append('input_reference', await res.blob(), 'input.png')
         } catch { /* skip image */ }
       } else if (imgDataUrl.startsWith('data:')) {

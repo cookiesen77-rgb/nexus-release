@@ -5,6 +5,9 @@
  * Tauri 环境使用 Rust 后端，此模块仅用于纯 Web 环境
  */
 
+import { safeFetch } from '@/lib/safeFetch'
+
+
 const DB_NAME = 'nexus-cache'
 const DB_VERSION = 1
 const STORE_NAME = 'media'
@@ -349,7 +352,7 @@ export const cacheFromUrl = async (
   } = {}
 ): Promise<string | null> => {
   try {
-    const response = await fetch(url)
+    const response = await safeFetch(url)
     if (!response.ok) {
       console.warn('[IndexedDB] 下载失败:', url, response.status)
       return null

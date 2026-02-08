@@ -21,7 +21,8 @@ import {
 import { createEmptyImageSlot, createEmptyShot, saveShortDramaDraftV2 } from '@/lib/shortDrama/draftStorage'
 import { getShortDramaTaskQueue } from '@/lib/shortDrama/taskQueue'
 import ShortDramaMediaPickerModal, { type ShortDramaPickKind, type ShortDramaPickedMedia, type ShortDramaPickedImage } from '@/components/shortDrama/ShortDramaMediaPickerModal'
-import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
+import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, ShotFrameMode } from '@/lib/shortDrama/types'
+import { SHOT_FRAME_MODES } from '@/lib/shortDrama/types'
 import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1 } from '@/lib/shortDrama/uiPrefs'
 import { cn } from '@/lib/utils'
 import { Check, Eye, Image as ImageIcon, Layers, Loader2, Plus, Sword, Trash2, Upload, Video as VideoIcon, X } from 'lucide-react'
@@ -2282,6 +2283,23 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                   </div>
                 </div>
 
+                <div className="mt-3 flex items-center gap-3">
+                  <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">帧模式</label>
+                  <select
+                    value={shot.frameMode || 'first_last'}
+                    onChange={e => updateShot(shot.id, { frameMode: e.target.value as ShotFrameMode })}
+                    className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs"
+                  >
+                    <option value="first_only">仅首帧</option>
+                    <option value="first_last">首尾帧</option>
+                    <option value="grid_4">四宫格 (起承转合)</option>
+                    <option value="grid_6">六宫格</option>
+                    <option value="grid_9">九宫格 (3×3)</option>
+                    <option value="grid_25">二十五宫格 (5×5)</option>
+                  </select>
+                </div>
+
+                {(!shot.frameMode || shot.frameMode === 'first_only' || shot.frameMode === 'first_last') && (
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div className="flex flex-col gap-2">
                     <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">首帧提示词</label>
@@ -2300,6 +2318,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                       placeholder="描述首帧画面：人物动作、表情、构图、镜头、光线…"
                     />
                   </div>
+                  {shot.frameMode !== 'first_only' && (
                   <div className="flex flex-col gap-2">
                     <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">尾帧提示词</label>
                     <textarea
@@ -2317,8 +2336,37 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                       placeholder="描述尾帧画面：最终姿态/走位/镜头结束构图…"
                     />
                   </div>
+                  )}
                 </div>
+                )}
 
+                {(shot.frameMode === 'grid_4' || shot.frameMode === 'grid_6' || shot.frameMode === 'grid_9' || shot.frameMode === 'grid_25') && (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-xs font-medium text-[var(--text-secondary)]">宫格提示词</div>
+                    <div className={cn('grid gap-2',
+                      shot.frameMode === 'grid_4' ? 'grid-cols-2' :
+                      shot.frameMode === 'grid_6' ? 'grid-cols-3' :
+                      shot.frameMode === 'grid_9' ? 'grid-cols-3' : 'grid-cols-5'
+                    )}>
+                      {Array.from({ length: SHOT_FRAME_MODES.find(m => m.value === shot.frameMode)?.count || 4 }).map((_, i) => (
+                        <textarea
+                          key={i}
+                          value={(shot.gridPrompts || [])[i] || ''}
+                          onChange={e => {
+                            const prompts = [...(shot.gridPrompts || [])]
+                            prompts[i] = e.target.value
+                            updateShot(shot.id, { gridPrompts: prompts })
+                          }}
+                          placeholder={`Panel ${i + 1}`}
+                          rows={2}
+                          className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1 text-[10px] resize-none focus:border-[var(--accent-color)] focus:outline-none"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!shot.frameMode || shot.frameMode === 'first_only' || shot.frameMode === 'first_last') && (
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
                     <div className="flex items-center justify-between">
@@ -2402,6 +2450,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                     </div>
                   </div>
 
+                  {shot.frameMode !== 'first_only' && (
                   <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
@@ -2486,7 +2535,9 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                       />
                     </div>
                   </div>
+                  )}
                 </div>
+                )}
 
                 <div className="mt-3 rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
                   <div className="flex items-center justify-between">

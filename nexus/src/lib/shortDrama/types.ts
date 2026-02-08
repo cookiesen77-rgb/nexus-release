@@ -12,6 +12,17 @@ export type ShortDramaCreatedBy = 'auto' | 'manual'
 
 export type ShortDramaFrameRole = 'start' | 'end'
 
+export type ShotFrameMode = 'first_only' | 'first_last' | 'grid_4' | 'grid_6' | 'grid_9' | 'grid_25'
+
+export const SHOT_FRAME_MODES: { value: ShotFrameMode; label: string; cols: number; rows: number; count: number }[] = [
+  { value: 'first_only', label: '仅首帧', cols: 1, rows: 1, count: 1 },
+  { value: 'first_last', label: '首尾帧', cols: 2, rows: 1, count: 2 },
+  { value: 'grid_4', label: '四宫格', cols: 2, rows: 2, count: 4 },
+  { value: 'grid_6', label: '六宫格', cols: 3, rows: 2, count: 6 },
+  { value: 'grid_9', label: '九宫格', cols: 3, rows: 3, count: 9 },
+  { value: 'grid_25', label: '二十五宫格', cols: 5, rows: 5, count: 25 },
+]
+
 export interface ShortDramaStyleSnapshot {
   presetId: string
   customText: string
@@ -168,6 +179,11 @@ export interface ShortDramaShot {
   assetIds?: string[]
 
   /**
+   * Frame generation mode: first frame only, first+last, or grid layouts
+   */
+  frameMode: ShotFrameMode
+
+  /**
    * Optional beat/intent summary (emotion/action/dialogue)
    */
   beat?: string
@@ -186,6 +202,16 @@ export interface ShortDramaShot {
     start: ShortDramaShotFrame
     end: ShortDramaShotFrame
   }
+
+  /**
+   * Grid mode prompts (one per panel, used when frameMode is grid_4/6/9/25)
+   */
+  gridPrompts?: string[]
+
+  /**
+   * Grid mode generated image slot (single composite image)
+   */
+  gridSlot?: ShortDramaMediaSlot
 
   /**
    * Video versions slot. selectedVariantId is the "adopted" video.
