@@ -3,7 +3,7 @@ name: Build Tauri App
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -12,15 +12,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest'
-            args: '--target x86_64-apple-darwin'
-            rust_targets: 'x86_64-apple-darwin'
-          - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
-            rust_targets: 'aarch64-apple-darwin'
-          - platform: 'windows-latest'
-            args: ''
-            rust_targets: ''
+          - platform: "macos-latest"
+            args: "--target x86_64-apple-darwin"
+            rust_targets: "x86_64-apple-darwin"
+            name: "macOS-Intel"
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+            rust_targets: "aarch64-apple-darwin"
+            name: "macOS-ARM"
+          - platform: "windows-latest"
+            args: ""
+            rust_targets: ""
+            name: "Windows"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -37,13 +40,47 @@ jobs:
           targets: ${{ matrix.rust_targets }}
 
       - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == ubuntu-22.04
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install frontend dependencies
         run: npm install
+
+      - name: Prepare FFmpeg sidecar (macOS Intel)
+        if: matrix.name == macOS-Intel
+        run: |
+          mkdir -p src-tauri/binaries
+          curl -L --retry 3 --retry-delay 2 -o ffmpeg.zip "https://ffmpeg.martin-riedl.de/download/macos/amd64/1767299902_N-122320-g38e89fe502/ffmpeg.zip"
+          rm -rf ffmpeg-bin && mkdir -p ffmpeg-bin
+          unzip -q ffmpeg.zip -d ffmpeg-bin
+          mv ffmpeg-bin/ffmpeg "src-tauri/binaries/ffmpeg-x86_64-apple-darwin"
+          chmod +x "src-tauri/binaries/ffmpeg-x86_64-apple-darwin"
+
+      - name: Prepare FFmpeg sidecar (macOS ARM)
+        if: matrix.name == macOS-ARM
+        run: |
+          mkdir -p src-tauri/binaries
+          curl -L --retry 3 --retry-delay 2 -o ffmpeg.zip "https://ffmpeg.martin-riedl.de/download/macos/arm64/1769883472_N-122609-g364d5dda91/ffmpeg.zip"
+          rm -rf ffmpeg-bin && mkdir -p ffmpeg-bin
+          unzip -q ffmpeg.zip -d ffmpeg-bin
+          mv ffmpeg-bin/ffmpeg "src-tauri/binaries/ffmpeg-aarch64-apple-darwin"
+          chmod +x "src-tauri/binaries/ffmpeg-aarch64-apple-darwin"
+
+      - name: Prepare FFmpeg sidecar (Windows)
+        if: matrix.name == Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri\binaries | Out-Null
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          $zip = "ffmpeg.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          if (Test-Path ffmpeg-bin) { Remove-Item ffmpeg-bin -Recurse -Force }
+          Expand-Archive -Path $zip -DestinationPath ffmpeg-bin -Force
+          $ff = Get-ChildItem -Path ffmpeg-bin -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $ff) { throw "ffmpeg.exe not found in zip" }
+          Copy-Item $ff.FullName -Destination src-tauri\binaries\ffmpeg-x86_64-pc-windows-msvc.exe -Force
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -56,7 +93,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nexus-${{ matrix.platform }}-${{ matrix.rust_targets || 'default' }}
+          name: nexus-${{ matrix.platform }}-${{ matrix.rust_targets || default }}
           path: |
             src-tauri/target/*/release/bundle/dmg/*.dmg
             src-tauri/target/*/release/bundle/macos/*.app

@@ -26,6 +26,7 @@
     {
       "identifier": "shell:allow-execute",
       "allow": [
+        { "name": "ffmpeg", "sidecar": true, "args": true },
         { "name": "ffmpeg", "cmd": "ffmpeg", "args": true }
       ]
     }

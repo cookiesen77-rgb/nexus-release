@@ -132,7 +132,18 @@ fn save_project_canvas_to_disk_blocking(app: &tauri::AppHandle, project_id: Stri
   let bytes = serde_json::to_vec(&canvas).map_err(|e| e.to_string())?;
   let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
   std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-  std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+  if let Err(err) = std::fs::rename(&tmp, &path) {
+    if path.exists() {
+      let _ = std::fs::remove_file(&path);
+      if let Err(err2) = std::fs::rename(&tmp, &path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(err2.to_string());
+      }
+    } else {
+      let _ = std::fs::remove_file(&tmp);
+      return Err(err.to_string());
+    }
+  }
   Ok(())
 }
 
@@ -905,15 +916,30 @@ fn sanitize_seconds(v: f64) -> f64 {
 }
 
 async fn run_ffmpeg_sidecar(app: &tauri::AppHandle, job: &EditorExportJobState, args: Vec<String>) -> Result<(), String> {
-  // 使用系统PATH中的ffmpeg（用户需自行安装FFmpeg）
-  let command = app
-    .shell()
-    .command("ffmpeg");
-
-  // spawn and keep child handle for cancellation
-  let (mut rx, child) = command.args(args).spawn().map_err(|e| {
-    format!("未找到 FFmpeg，请先安装FFmpeg并确保在系统PATH中：{e}")
-  })?;
+  // 优先使用 Tauri sidecar（打包自带），失败时回退到系统 PATH
+  let (mut rx, child) = match app.shell().sidecar("ffmpeg") {
+    Ok(cmd) => match cmd.args(args.clone()).spawn() {
+      Ok(res) => res,
+      Err(err) => {
+        log::warn!("[editor_export] sidecar ffmpeg 启动失败，回退系统 PATH: {err}");
+        app
+          .shell()
+          .command("ffmpeg")
+          .args(args)
+          .spawn()
+          .map_err(|e| format!("未找到 FFmpeg（已尝试 sidecar 与系统 PATH）：{e}"))?
+      }
+    },
+    Err(err) => {
+      log::warn!("[editor_export] sidecar ffmpeg 不可用，回退系统 PATH: {err}");
+      app
+        .shell()
+        .command("ffmpeg")
+        .args(args)
+        .spawn()
+        .map_err(|e| format!("未找到 FFmpeg（已尝试 sidecar 与系统 PATH）：{e}"))?
+    }
+  };
   {
     let mut guard = job.child.lock().map_err(|_| "导出任务锁异常".to_string())?;
     *guard = Some(child);

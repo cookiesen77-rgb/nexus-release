@@ -10,11 +10,13 @@
     "dev": "vite",
     "dev:electron": "concurrently -k \"vite --mode electron\" \"wait-on http://localhost:5173 && electron .\"",
     "dev:tauri": "tauri dev",
+    "predev:tauri": "node scripts/prepare-ffmpeg-sidecar.mjs",
     "build": "vite build",
     "build:electron": "vite build --mode electron && electron-builder",
     "build:electron:local": "vite build --mode electron && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never --config.mac.hardenedRuntime=false",
     "build:electron:local:dir": "vite build --mode electron && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir --publish never --config.mac.hardenedRuntime=false",
     "build:tauri": "tauri build",
+    "prebuild:tauri": "node scripts/prepare-ffmpeg-sidecar.mjs --required",
     "tauri": "tauri",
     "preview": "vite preview"
   },

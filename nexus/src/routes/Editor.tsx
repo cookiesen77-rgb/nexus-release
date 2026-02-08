@@ -20,8 +20,8 @@ function extractLocalPathFromAssetUrl(assetUrl: string): string | null {
   try {
     const parsed = new URL(u)
     const p = decodeURIComponent(parsed.pathname || '')
-    // Windows: asset://localhost/C:/Users/... -> /C:/Users/...（去掉前导斜杠）
-    if (/^\/[A-Za-z]:\//.test(p)) return p.slice(1)
+    // Windows: asset://localhost/C:/Users/... 或 /C:\Users\... -> 去掉前导斜杠
+    if (/^\/[A-Za-z]:[\\/]/.test(p)) return p.slice(1)
     return p
   } catch {
     return null
@@ -1010,4 +1010,3 @@ export default function Editor() {
     </div>
   )
 }
-

@@ -5,6 +5,7 @@
 - Vite + router now support a `tauri` mode for relative base paths and hash routing.
 - Tauri scripts wired into `package.json`.
 - Native image cache command for bypassing CORS/CORP image blocks.
+- FFmpeg sidecar 打包与本地预处理脚本（`scripts/prepare-ffmpeg-sidecar.mjs`）。
 
 ## Scripts
 - Tauri dev: `npm run dev:tauri`

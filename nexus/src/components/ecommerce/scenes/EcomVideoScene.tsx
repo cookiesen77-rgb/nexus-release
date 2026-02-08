@@ -30,14 +30,46 @@ const VIDEO_TYPE_OPTIONS: { value: EcomVideoType; label: string }[] = [
 ]
 
 const VIDEO_STYLE_PRESETS = [
-  { label: '真实产品展示', hint: '真实产品在纯色背景下缓慢旋转，自然光照，保持产品原始外观和材质细节' },
-  { label: '电影级质感', hint: '电影级画面，浅景深，慢速推镜头，戏剧性光影，产品居中' },
-  { label: '生活场景', hint: '产品在温馨的日常生活场景中被自然使用，暖色调，自然光' },
-  { label: '开箱展示', hint: '俯拍角度，双手拆开精美包装，逐一展示产品和配件' },
-  { label: '微距特写', hint: '极近距离拍摄产品材质纹理，缓慢平移，展现工艺细节' },
-  { label: '模特展示', hint: '模特自然展示产品，自信微笑，柔和的棚拍灯光，干净背景' },
-  { label: '对比展示', hint: '产品使用前后对比，分屏或过渡效果，突出产品效果' },
-  { label: '节日促销', hint: '喜庆氛围，产品搭配节日装饰，动感文字叠加区域' },
+  {
+    label: '白底旋转',
+    hint: 'Product slowly rotating 360 degrees on a pure white seamless background, soft even studio lighting from three sides eliminating harsh shadows, the product is perfectly centered and fills 70% of the frame, camera stays static at eye level, smooth continuous rotation revealing all angles and details, photorealistic, commercial product photography quality, 4K sharp focus on material textures',
+  },
+  {
+    label: '推镜特写',
+    hint: 'Camera starts with a wide shot of the product on a clean surface, then slowly dollies in to an extreme close-up revealing material texture and craftsmanship details, shallow depth of field with creamy bokeh background, warm key light from 45 degrees above, subtle rim light separating product from background, cinematic color grading, professional commercial video',
+  },
+  {
+    label: '使用场景',
+    hint: 'Real person naturally using the product in an everyday setting, warm natural window light, slightly warm color temperature, handheld camera feel with gentle movement, lifestyle environment matching the product category, the product is clearly visible and in focus while the background has pleasant bokeh, authentic and relatable mood',
+  },
+  {
+    label: '开箱体验',
+    hint: 'Top-down overhead camera angle, hands carefully opening premium packaging, revealing the product step by step, ASMR-style smooth movements, each accessory and component displayed neatly, clean white or marble surface, soft diffused lighting, satisfying unboxing experience, close-up details of packaging quality',
+  },
+  {
+    label: '场景氛围',
+    hint: 'Product placed in a carefully styled scene that matches its brand identity, atmospheric lighting with warm tones, shallow depth of field, subtle camera orbit movement around the product, lifestyle props complementing the product, Instagram-worthy composition, premium brand feel',
+  },
+  {
+    label: '对比演示',
+    hint: 'Split screen or before-after transition showing the product effect, clear visual comparison, clean simple background, even lighting, the product transformation or improvement is immediately obvious, informative yet visually appealing, text overlay area reserved at top and bottom',
+  },
+  {
+    label: '模特种草',
+    hint: 'Attractive model confidently presenting the product to camera, warm studio lighting, clean neutral background, model makes eye contact and shows genuine enthusiasm, product held at optimal viewing angle, professional yet approachable vibe, suitable for social media short video, vertical 9:16 format',
+  },
+  {
+    label: '高级感',
+    hint: 'Dark moody background with dramatic single spotlight on the product, slow elegant camera movement, product appears to float or rest on reflective black surface, golden rim light accenting edges, luxury brand aesthetic, minimal and sophisticated, emphasizing premium quality and exclusivity',
+  },
+  {
+    label: '动感节奏',
+    hint: 'Fast-paced dynamic cuts between multiple angles of the product, energetic camera movements with zoom and pan, vibrant saturated colors, modern trendy aesthetic, quick transitions synced to an upbeat rhythm, bold graphic elements and text overlay zones, suitable for social media ads and promotional clips',
+  },
+  {
+    label: '食品诱惑',
+    hint: 'Extreme close-up of food product with steam or moisture visible, warm appetizing lighting, slow motion pour or drizzle effect, rich saturated warm colors enhancing appetite appeal, macro detail of texture and ingredients, professional food photography cinematography, mouth-watering presentation',
+  },
 ]
 
 const getVideoModelConfig = (key: string) => (VIDEO_MODELS as any[]).find(m => m.key === key)
@@ -281,7 +313,11 @@ export default function EcomVideoScene({ draft, setDraftSafe }: SceneProps) {
                 {VIDEO_STYLE_PRESETS.map(p => (
                   <button
                     key={p.label}
-                    onClick={() => patchScene(idx, { prompt: p.hint })}
+                    onClick={() => {
+                      const product = draft.product.name || 'the product'
+                      const brand = draft.product.brand ? ` by ${draft.product.brand}` : ''
+                      patchScene(idx, { prompt: `${product}${brand}: ${p.hint}` })
+                    }}
                     className="rounded-full border border-[var(--border-color)] px-2 py-0.5 text-[10px] text-[var(--text-secondary)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)]"
                   >
                     {p.label}
