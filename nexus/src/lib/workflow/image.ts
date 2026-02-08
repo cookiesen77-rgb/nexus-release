@@ -552,13 +552,18 @@ export const generateImageFromConfigNode = async (
         sequential_image_generation: 'disabled',
       }
 
-      const imageInput = String(limitedRefImages[0] || '').trim()
-      if (imageInput) {
+      const imageInputs = limitedRefImages.map((v) => String(v || '').trim()).filter(Boolean)
+      if (imageInputs.length > 0) {
         // 该接口需要“外网可访问的图片 URL”（data:/asset:// 等无法直接使用）
-        if (!isHttpUrl(imageInput)) {
+        const invalid = imageInputs.find((v) => !isHttpUrl(v))
+        if (invalid) {
           throw new Error('该模型的参考图必须是 http(s) URL（建议先用画布生成的图片，或将本地图片上传到图床后再用）')
         }
-        payload.image = imageInput
+        payload.image = imageInputs.length === 1 ? imageInputs[0] : imageInputs
+        if (imageInputs.length > 1) {
+          payload.sequential_image_generation = 'auto'
+          payload.sequential_image_generation_options = { max_images: Math.min(3, imageInputs.length) }
+        }
       }
 
       const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })

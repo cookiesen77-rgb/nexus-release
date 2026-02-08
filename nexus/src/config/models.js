@@ -119,6 +119,31 @@ export const IMAGE_MODELS = [
         }
     },
     {
+        label: '豆包 Seedream 4.0（doubao-seedream-4-0-250828）',
+        key: 'doubao-seedream-4-0-250828',
+        endpoint: '/images/generations',
+        authMode: 'bearer',
+        format: 'doubao-seedream',
+        timeout: 240000,
+        tips: '支持文生图/图生图；参考图需 http(s) URL，当前最多 1 张。',
+        // 能力描述（用于 UI 限制与运行时校验）
+        requiresPrompt: true,
+        supportsReferenceImages: true,
+        maxRefImages: 1,
+        // 分辨率（方式1）：1K/2K/4K；尺寸（方式2）：通过像素宽高来精确指定比例
+        qualities: [
+            { label: '1K', key: '1K' },
+            { label: '2K', key: '2K' },
+            { label: '4K', key: '4K' }
+        ],
+        // 尺寸：仅展示比例；最终会根据“分辨率+比例”映射成具体像素值写入 size 字段
+        sizes: SEEDREAM_SIZE_OPTIONS.map((o) => o.label),
+        defaultParams: {
+            size: '3:4',
+            quality: '2K'
+        }
+    },
+    {
         label: 'Grok 4 Image（Chat Completions）',
         key: 'grok-4-image',
         endpoint: '/chat/completions',
@@ -1070,7 +1095,34 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '9:16', duration: 4, size: '720x1280' }
     },
     {
-        label: 'Grok Video 3 (6s)',
+        label: 'Sora 2 Pro（OpenAI官方格式）',
+        key: 'sora-2-pro',
+        endpoint: '/v1/videos',
+        statusEndpoint: (id) => `/v1/videos/${id}`,
+        authMode: 'bearer',
+        format: 'sora-openai',
+        maxImages: 1,
+        tips: 'Sora 2 Pro 高质量版本；支持首帧图片；提示词必填。',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsLastFrame: false,
+        supportsReferenceImages: false,
+        maxRefImages: 0,
+        sizes: [
+            { label: '720x1280 (竖版)', key: '720x1280' },
+            { label: '1280x720 (横版)', key: '1280x720' },
+            { label: '1024x1792 (竖版大)', key: '1024x1792' },
+            { label: '1792x1024 (横版大)', key: '1792x1024' }
+        ],
+        ratios: ['16:9', '9:16'],
+        durs: [
+            { label: '4 秒', key: 4 },
+            { label: '8 秒', key: 8 },
+            { label: '12 秒', key: 12 }
+        ],
+        defaultParams: { ratio: '9:16', duration: 4, size: '720x1280' }
+    },
+    {
         // 文档模型名：grok-video-3（当前实测常见为 6 秒输出；接口不提供显式 duration 参数）
         // https://yunwu.apifox.cn/api-385288046
         key: 'grok-video-3',

@@ -975,11 +975,32 @@ Output STRICT JSON only (no markdown, no code fences):
             watermark: false,
             sequential_image_generation: 'disabled'
           }
+
+          const httpRefs = referenceImages
+            .map((v) => String(v || '').trim())
+            .filter((v) => /^https?:\/\//i.test(v))
+
+          if (referenceImages.length > 0 && httpRefs.length === 0) {
+            throw new Error('Seedream 参考图目前仅支持 http(s) URL，请先使用可公网访问的图片链接')
+          }
+
+          if (httpRefs.length > 0) {
+            payload.image = httpRefs.length === 1 ? httpRefs[0] : httpRefs
+            if (httpRefs.length > 1) {
+              payload.sequential_image_generation = 'auto'
+              payload.sequential_image_generation_options = { max_images: Math.min(3, httpRefs.length) }
+            }
+          }
+
           const rsp = await postJson<any>(modelCfg.endpoint || '/images/generations', payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
           if (rsp?.url) resultUrl = rsp.url
           else if (rsp?.data?.[0]?.url) resultUrl = rsp.data[0].url
           else if (rsp?.data?.[0]?.b64_json) resultUrl = `data:image/png;base64,${rsp.data[0].b64_json}`
-          else throw new Error('Seedream 未获取到图片结果')
+          else {
+            const picked = extractUrlsDeep(rsp)[0] || ''
+            if (picked) resultUrl = picked
+          }
+          if (!resultUrl) throw new Error('Seedream 未获取到图片结果')
         } else {
           // OpenAI 兼容格式
           const pickedSize = pickBestSizeKeyForAspect(modelCfg, aspectRatio || '')
