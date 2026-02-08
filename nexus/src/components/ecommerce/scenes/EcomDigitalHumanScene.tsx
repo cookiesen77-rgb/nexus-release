@@ -60,6 +60,11 @@ export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProp
   const handleUploadImage = useCallback((sceneIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      window.$message?.warning?.('图片不能超过 10MB')
+      e.currentTarget.value = ''
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => {
       const dataUrl = reader.result as string
@@ -67,8 +72,8 @@ export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProp
       const variantId = makeVariantId()
       patchScene(sceneIdx, {
         imageSlot: {
-          ...draft.digitalHumanScenes[sceneIdx].imageSlot,
-          variants: [{ id: variantId, status: 'success', createdAt: Date.now(), createdBy: 'manual', displayUrl: dataUrl }],
+          ...draft.digitalHumanScenes[sceneIdx]?.imageSlot,
+          variants: [{ id: variantId, status: 'success' as const, createdAt: Date.now(), createdBy: 'manual' as const, displayUrl: dataUrl }],
           selectedVariantId: variantId,
         },
       })
@@ -80,15 +85,24 @@ export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProp
   const handleUploadAudio = useCallback((sceneIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    // Kling API limit: audio max 5MB, 2-300 seconds, mp3/wav/m4a/aac
+    if (file.size > 5 * 1024 * 1024) {
+      window.$message?.warning?.('音频文件不能超过 5MB，请压缩后重试')
+      e.currentTarget.value = ''
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => {
       const dataUrl = reader.result as string
       if (!dataUrl) return
       const variantId = makeVariantId()
+      // sourceUrl = raw base64 (for Kling API), displayUrl = data URL (for audio preview)
+      const commaIdx = dataUrl.indexOf(',')
+      const rawBase64 = commaIdx > 0 ? dataUrl.slice(commaIdx + 1) : dataUrl
       patchScene(sceneIdx, {
         audioSlot: {
-          ...draft.digitalHumanScenes[sceneIdx].audioSlot,
-          variants: [{ id: variantId, status: 'success', createdAt: Date.now(), createdBy: 'manual', displayUrl: dataUrl, sourceUrl: dataUrl }],
+          ...draft.digitalHumanScenes[sceneIdx]?.audioSlot,
+          variants: [{ id: variantId, status: 'success' as const, createdAt: Date.now(), createdBy: 'manual' as const, displayUrl: dataUrl, sourceUrl: rawBase64 }],
           selectedVariantId: variantId,
         },
       })
@@ -103,7 +117,7 @@ export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProp
     if (!text) { window.$message?.warning?.('请输入文案'); return }
     setTtsGenerating(true)
     try {
-      const { audioDataUrl } = await generateTTS({ text, model: draft.models.ttsModelKey })
+      const { audioDataUrl, rawBase64 } = await generateTTS({ text, model: draft.models.ttsModelKey })
       const variantId = makeVariantId()
       setDraftSafe(prev => {
         const scenes = [...prev.digitalHumanScenes]
@@ -111,7 +125,14 @@ export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProp
           ...scenes[idx],
           audioSlot: {
             ...scenes[idx].audioSlot,
-            variants: [{ id: variantId, status: 'success' as const, createdAt: Date.now(), createdBy: 'auto' as const, displayUrl: audioDataUrl }],
+            variants: [{
+              id: variantId,
+              status: 'success' as const,
+              createdAt: Date.now(),
+              createdBy: 'auto' as const,
+              displayUrl: audioDataUrl,
+              sourceUrl: rawBase64,
+            }],
             selectedVariantId: variantId,
           },
         }
@@ -129,9 +150,11 @@ export default function EcomDigitalHumanScene({ draft, setDraftSafe }: SceneProp
     if (generating) return
     const scene = draft.digitalHumanScenes[idx]
     const imageUrl = getSlotUrl(scene.imageSlot)
-    const audioUrl = getSlotUrl(scene.audioSlot)
+    // For audio: prefer sourceUrl (raw base64 from TTS) over displayUrl (WAV for playback)
+    const audioV = scene.audioSlot?.variants?.[0]
+    const audioUrl = audioV?.sourceUrl || audioV?.displayUrl || ''
     if (!imageUrl) { window.$message?.warning?.('请上传人像照片'); return }
-    if (!audioUrl) { window.$message?.warning?.('请上传音频文件'); return }
+    if (!audioUrl) { window.$message?.warning?.('请上传音频文件或使用TTS生成'); return }
 
     setGenerating(true)
     const variantId = makeVariantId()

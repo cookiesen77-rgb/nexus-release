@@ -36,9 +36,16 @@ function extractVideoUrl(data: any): string {
   return url
 }
 
+function stripDataUrlPrefix(input: string): string {
+  if (!input.startsWith('data:')) return input
+  const commaIdx = input.indexOf(',')
+  return commaIdx > 0 ? input.slice(commaIdx + 1) : input
+}
+
 // ===== 数字人口播 =====
 // POST /kling/v1/videos/avatar/image2video
-// Params: image(required), audio_id|sound_file(one required), prompt(required), mode(required: std|pro)
+// Params: image(required, base64 or URL), audio_id|sound_file(one required, base64 or URL),
+//         prompt(required), mode(required: std|pro)
 // Query: GET /kling/v1/videos/avatar/image2video/{id}
 export async function generateAvatarVideo(params: {
   image: string
@@ -52,21 +59,18 @@ export async function generateAvatarVideo(params: {
   const cfg = getToolConfig('kling-digital-human')
   const endpoint = String(cfg?.endpoint || `${getKlingOrigin()}/kling/v1/videos/avatar/image2video`)
 
+  // Kling accepts raw base64 or HTTP URL — strip data:// prefix if present
+  const image = /^https?:\/\//i.test(params.image) ? params.image : stripDataUrlPrefix(params.image)
+
   const body: Record<string, string> = {
-    image: params.image,
+    image,
     mode: params.mode || 'std',
     prompt: params.prompt || '',
   }
   if (params.audioId) {
     body.audio_id = params.audioId
   } else if (params.soundFile) {
-    let audio = params.soundFile
-    // Kling API expects raw base64 or URL, not data:// URI
-    if (audio.startsWith('data:')) {
-      const commaIdx = audio.indexOf(',')
-      if (commaIdx > 0) audio = audio.slice(commaIdx + 1)
-    }
-    body.sound_file = audio
+    body.sound_file = /^https?:\/\//i.test(params.soundFile) ? params.soundFile : stripDataUrlPrefix(params.soundFile)
   }
 
   const resp = await postJson<any>(endpoint, body, { authMode: 'bearer' })
@@ -98,7 +102,7 @@ export async function generateMotionControlVideo(params: {
   const endpoint = String(cfg?.endpoint || `${getKlingOrigin()}/kling/v1/videos/motion-control`)
 
   const body: Record<string, any> = {
-    image_url: params.imageUrl,
+    image_url: /^https?:\/\//i.test(params.imageUrl) ? params.imageUrl : stripDataUrlPrefix(params.imageUrl),
     video_url: params.videoUrl,
     mode: params.mode || 'std',
     character_orientation: params.characterOrientation || 'image',

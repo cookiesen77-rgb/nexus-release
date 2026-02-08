@@ -157,8 +157,8 @@ export default function EcomVideoScene({ draft, setDraftSafe }: SceneProps) {
         if (!audioSource) {
           if (!scene.ttsText?.trim()) throw new Error('请输入 TTS 文本或先生成语音')
           const ttsResult = await generateTTS({ text: scene.ttsText, model: draft.models.ttsModelKey })
-          audioSource = ttsResult.audioDataUrl
-          patchScene(idx, { ttsAudioDataUrl: audioSource })
+          audioSource = ttsResult.rawBase64
+          patchScene(idx, { ttsAudioDataUrl: ttsResult.audioDataUrl })
         }
         const result = await generateAvatarVideo({ image: firstFrameUrl, soundFile: audioSource, prompt })
         videoUrl = result.videoUrl
