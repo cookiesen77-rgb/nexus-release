@@ -2082,11 +2082,11 @@ export const generateVideoFromConfigNode = async (
               fileInfos.push({ Type: 'Url', Url: url })
             } else if (url.startsWith('data:') && url.length > 100) {
               try {
-                const { uploadToSupabase } = await import('@/lib/supabaseStorage')
-                const publicUrl = await uploadToSupabase(url)
+                const { uploadToR2 } = await import('@/lib/r2Storage')
+                const publicUrl = await uploadToR2(url)
                 if (publicUrl) fileInfos.push({ Type: 'Url', Url: publicUrl })
               } catch (e) {
-                console.warn('[video] tencent-aigc Supabase上传失败:', e)
+                console.warn('[video] tencent-aigc R2上传失败:', e)
               }
             }
           }

@@ -1426,11 +1426,11 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
         }
         if (isAssetUrl(imgUrl)) imgUrl = await resolveAssetToDataUrl(imgUrl)
         if (isDataUrl(imgUrl) || isBase64Like(imgUrl)) {
-          // 腾讯 AIGC 不信任 imageproxy CDN，改用 Supabase 公共存储
+          // 腾讯 AIGC 不信任 imageproxy CDN，改用 R2 公共存储
           try {
-            const { uploadToSupabase } = await import('@/lib/supabaseStorage')
+            const { uploadToR2 } = await import('@/lib/r2Storage')
             const dataUrl = imgUrl.startsWith('data:') ? imgUrl : `data:image/png;base64,${imgUrl}`
-            imgUrl = await uploadToSupabase(dataUrl)
+            imgUrl = await uploadToR2(dataUrl)
           } catch {
             const compressed = await compressImageBase64(imgUrl.startsWith('data:') ? imgUrl : `data:image/png;base64,${imgUrl}`, 900 * 1024)
             imgUrl = await uploadImageToYunwu(compressed)
