@@ -83,12 +83,13 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     }
 
     const currentUrl = String(nodeData?.url || '').trim()
-    const urlIsUsable = currentUrl && !currentUrl.startsWith('blob:')
+    const urlIsUsable = currentUrl && !currentUrl.startsWith('blob:') && currentUrl.length > 10
 
-    if (urlIsUsable || nodeData?.loading || nodeData?.error) {
+    if (urlIsUsable || nodeData?.loading) {
       return
     }
 
+    // 有 error 标记但有 mediaId/sourceUrl 可恢复时，仍尝试恢复
     if (!nodeData?.mediaId && !nodeData?.sourceUrl) {
       return
     }
@@ -446,13 +447,25 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
 
   const handleVideoError = useCallback(() => {
     const url = String(displayUrl || '').trim()
-    // 远程视频在部分域名下不支持 CORS，带 crossOrigin 可能直接失败；
-    // 这里自动降级重试一次（去掉 crossOrigin），尽量保证可播放。
     if (corsMode === 'anonymous' && /^https?:\/\//i.test(url)) {
       setCorsMode('none')
       return
     }
-    // Tauri 或 API 相对路径：若直链播放失败，尝试缓存下载后再播放
+    // 远程 URL 播放失败时，尝试从 IndexedDB 恢复 data URL
+    if (nodeData?.mediaId && /^https?:\/\//i.test(url)) {
+      void (async () => {
+        try {
+          const record = await getMedia(nodeData.mediaId!)
+          if (record?.data && record.data !== url) {
+            useGraphStore.getState().updateNode(id, { data: { url: record.data, loading: false } } as any)
+            setVideoError('')
+            return
+          }
+        } catch { /* ignore */ }
+        setVideoError('视频加载失败')
+      })()
+      return
+    }
     const sourceUrl = String(nodeData?.sourceUrl || '').trim()
     const fallbackUrl = sourceUrl || (isApiRelativeUrl(url) ? url : '')
     if (fallbackUrl && isRecoverableSourceUrl(fallbackUrl) && loadErrorFallbackRef.current !== fallbackUrl) {
@@ -468,15 +481,13 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
             setVideoError('')
             return
           }
-        } catch {
-          // ignore
-        }
+        } catch { /* ignore */ }
         setVideoError('视频加载失败')
       })()
       return
     }
     setVideoError('视频加载失败')
-  }, [corsMode, displayUrl, id, nodeData?.sourceUrl])
+  }, [corsMode, displayUrl, id, nodeData?.sourceUrl, nodeData?.mediaId])
 
   return (
     // ref 用于懒加载检测
