@@ -51,13 +51,17 @@ const ensureBase64 = async (url: string): Promise<string> => {
 }
 
 const analyzeImages = async (images: string[]): Promise<string[]> => {
-  const analyzePrompt = `Analyze this image for AI image fusion. Be precise. Output in English:
+  const analyzePrompt = `Analyze this image for precision AI image fusion. Be EXTREMELY detailed and specific. Output in English:
 
-**SUBJECTS**: Main subject identity, facial features, clothing, pose
-**SCENE**: Location, background elements, atmosphere
-**TECHNICAL**: Art style, lighting, color palette, camera angle
+**IDENTITY**: Subject gender, age range. Face: shape, skin tone, eye shape/color, nose/lip features. Hair: color, length, style (straight/wavy/curly).
+**BODY & CLOTHING**: Pose, gesture. Clothing type, colors, fabric texture (silk/cotton/leather), patterns, accessories.
+**SCENE**: Setting (indoor/outdoor, specific type). Key objects with positions (foreground/midground/background). Surface materials.
+**LIGHTING**: Light source direction (top-left/right/front/back), type (natural/studio/neon), color temperature (warm/cool), shadow direction and softness.
+**COLOR**: Dominant palette (3-5 colors). Saturation (vivid/muted). Color grading (warm/cool/neutral). Contrast level.
+**COMPOSITION**: Camera angle (eye-level/low/high), lens type (wide/normal/telephoto), depth of field (shallow/deep), framing.
+**STYLE**: Art style (photorealistic/digital art/anime/oil painting). Post-processing effects.
 
-Be specific. Max 80 words.`
+Max 200 words.`
 
   const results = await Promise.all(images.map(async (img) => {
     const base64 = extractBase64(await ensureBase64(img))
@@ -81,15 +85,38 @@ const optimizePromptWithAI = async (
   mainImageAnalysis: string,
   secondaryAnalyses: string[]
 ): Promise<string> => {
-  const systemPrompt = `You are an expert AI image fusion specialist. PRIMARY goal: ADD items/objects to a scene while PRESERVING the main image EXACTLY.
+  const systemPrompt = `You are a master AI image compositing director. You create fusion prompts that achieve photorealistic seamless integration.
 
-RULES:
-1. Main image (person/scene) MUST remain EXACTLY unchanged
-2. Secondary images provide items/elements to ADD
-3. Items should integrate naturally with proper lighting/shadows
-4. Output a fusion prompt (100-150 words) that emphasizes preservation of main subject
+## FUSION METHODOLOGY
 
-Output ONLY the prompt, no explanations.`
+### Phase 1: Subject Preservation
+- Lock ALL main image features: facial geometry, skin texture, hair, clothing folds, body proportions
+- Describe them as "exactly as shown in the reference" with extreme specificity
+
+### Phase 2: Element Integration
+For each secondary item:
+- Specify EXACT placement relative to the main subject (e.g., "held in right hand at waist height")
+- Define scale transformation to match scene perspective
+- Define interaction shadows (contact shadow, ambient occlusion where item meets surface)
+
+### Phase 3: Harmonization
+- LIGHTING: Item lit from SAME direction/color temperature as main image. Specify direction and shadow casting.
+- COLOR GRADE: Items adopt main image's color grading tone
+- MATERIAL: Describe how item surfaces look under the scene's lighting (specular highlights, reflections)
+- EDGES: "Seamless edge integration with natural feathering, matching depth of field blur"
+
+### Phase 4: Quality
+- Include: "photorealistic, masterpiece, no visible seams, consistent depth of field, natural color harmony"
+- Negative: "no distortion, no unnatural lighting, no floating objects, no mismatched shadows"
+
+## OUTPUT
+Single cohesive prompt (200-300 words):
+1. Main subject lock (ultra-detailed preservation)
+2. Item placement (position, scale, interaction)
+3. Light/color/material harmonization
+4. Quality keywords + negatives
+
+Output ONLY the prompt.`
 
   const itemDescs = secondaryAnalyses.map((desc, i) => `Item ${i + 1}: ${desc}`).join('\n')
 
@@ -119,13 +146,28 @@ const blendWithGemini = async (
     return { inline_data: { mime_type: 'image/jpeg', data: base64 } }
   }))
 
-  const fullPrompt = `Generate ONE fusion image. Image 1 is the MAIN image - preserve it EXACTLY. Add elements from other images.
+  const fullPrompt = `## TASK: Precision Image Fusion
 
-CRITICAL: The person/scene in Image 1 MUST remain EXACTLY unchanged. Only ADD items from other images naturally.
+You are given multiple reference images. Image 1 is the MASTER image — its subject, scene, and atmosphere define the target output.
 
-TASK: ${prompt}
+### ABSOLUTE RULES:
+1. MASTER IMAGE PRESERVATION: The person/character in Image 1 must appear PIXEL-PERFECT identical — same face, expression, hair, clothing, pose, skin tone, accessories. Any deviation is a critical failure.
+2. SCENE INTEGRITY: The background, lighting setup, and color grading of Image 1 is the ground truth. Do not alter it.
+3. ELEMENT ADDITION ONLY: Elements from Images 2+ are to be COMPOSITED INTO the master scene — placed as if physically present during the original photo.
 
-Output ONLY the blended image.`
+### COMPOSITING STANDARDS:
+- Light Direction: Added elements receive light from the same source as Image 1
+- Shadows: Each added element casts shadows matching the scene's shadow angle and softness
+- Color Temperature: Added elements color-graded to match Image 1's palette
+- Depth of Field: Elements at different depths show appropriate focus/blur
+- Scale & Perspective: Elements obey the scene's vanishing point and lens characteristics
+- Edge Quality: No hard edges, no halo artifacts, natural feathering at boundaries
+
+### SPECIFIC INSTRUCTION:
+${prompt}
+
+### OUTPUT:
+Generate exactly ONE high-quality fused image. No text, no watermarks, no artifacts.`
 
   const response = await postJson<any>(
     '/v1beta/models/gemini-3-pro-image-preview:generateContent',
