@@ -1000,9 +1000,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     setAnalysisError('')
     setAnalysisRaw('')
     try {
-      const res = await analyzeShortDramaScriptToDraftV2({ draft, modelKey: draft.models.analysisModelKey, scriptText: script })
+      const res = await analyzeShortDramaScriptToDraftV2({ draft, scriptText: script })
       setAnalysisRaw(res.rawText)
       setDraft(res.draft)
+      // 立即落盘，防止用户快速切走导致 debounce 丢失分析结果
+      saveShortDramaDraftV2(projectId, res.draft)
       window.$message?.success?.('剧本分析完成')
       // 解析后：先自动生成“角色设定图 + 场景参考图”（一致性素材）。
       // 关键帧（首/尾）与视频必须由用户手动点击按钮触发（避免未确认一致性就开跑）。
@@ -1246,17 +1248,9 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
               <div className="mt-3 grid gap-3">
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">拆解模型</label>
-                  <select
-                    value={draft.models.analysisModelKey || DEFAULT_CHAT_MODEL}
-                    onChange={(e) => patchModels({ analysisModelKey: e.target.value })}
-                    className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
-                  >
-                    {chatModels.map((m) => (
-                      <option key={m.key} value={m.key}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-secondary)] cursor-not-allowed">
+                    Gemini 3 Pro Thinking（固定）
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">目标镜头数</label>

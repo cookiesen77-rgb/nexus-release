@@ -420,7 +420,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     script,
   ].join('\n')
 
-  const modelKey = String(opts.modelKey || opts.draft.models.analysisModelKey || DEFAULT_ANALYSIS_MODEL).trim()
+  const modelKey = DEFAULT_ANALYSIS_MODEL // 固定使用 gemini-3-pro-preview-thinking，不可更改
   let rawText = await callChatModel(modelKey, [
     { role: 'system', content: system },
     { role: 'user', content: user },

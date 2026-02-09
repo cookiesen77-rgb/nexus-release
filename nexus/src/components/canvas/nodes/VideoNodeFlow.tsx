@@ -452,13 +452,14 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       setCorsMode('none')
       return
     }
-    // Tauri：若直链播放失败，尝试用 cache_remote_media 下载到本地后再播放
+    // Tauri 或 API 相对路径：若直链播放失败，尝试缓存下载后再播放
     const sourceUrl = String(nodeData?.sourceUrl || '').trim()
-    if (isTauri && sourceUrl && isRecoverableSourceUrl(sourceUrl) && loadErrorFallbackRef.current !== sourceUrl) {
-      loadErrorFallbackRef.current = sourceUrl
+    const fallbackUrl = sourceUrl || (isApiRelativeUrl(url) ? url : '')
+    if (fallbackUrl && isRecoverableSourceUrl(fallbackUrl) && loadErrorFallbackRef.current !== fallbackUrl) {
+      loadErrorFallbackRef.current = fallbackUrl
       void (async () => {
         try {
-          const cached = await resolveCachedMediaUrl(sourceUrl)
+          const cached = await resolveCachedMediaUrl(fallbackUrl)
           const nextUrl = String(cached.displayUrl || '').trim()
           if (nextUrl && nextUrl !== url) {
             useGraphStore.getState().updateNode(id, {
@@ -555,7 +556,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
                 ref={videoRef}
                 src={displayUrl}
                 controls
-                crossOrigin={corsMode === 'anonymous' ? 'anonymous' : undefined}
+                crossOrigin={corsMode === 'anonymous' && isHttpUrl(displayUrl) ? 'anonymous' : undefined}
                 playsInline
                 preload="metadata"
                 className="w-full h-full object-contain nodrag"
