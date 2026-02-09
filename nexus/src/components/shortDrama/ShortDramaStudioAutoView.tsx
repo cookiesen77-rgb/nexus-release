@@ -1258,20 +1258,17 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">目标镜头数</label>
-                  <select
+                  <input
+                    type="number"
+                    min={0}
                     value={draft.models.targetShotCount || 0}
-                    onChange={(e) => patchModels({ targetShotCount: Number(e.target.value) || 0 })}
+                    onChange={(e) => patchModels({ targetShotCount: Math.max(0, Number(e.target.value) || 0) })}
                     className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
-                  >
-                    <option value={0}>自动（AI根据剧本决定，尽可能多）</option>
-                    <option value={10}>10 个镜头</option>
-                    <option value={15}>15 个镜头</option>
-                    <option value={20}>20 个镜头</option>
-                    <option value={25}>25 个镜头</option>
-                    <option value={30}>30 个镜头</option>
-                    <option value={40}>40 个镜头</option>
-                    <option value={50}>50 个镜头</option>
-                  </select>
+                    placeholder="0 = AI自动决定"
+                  />
+                  <span className="text-[10px] text-[var(--text-secondary)]">
+                    {(draft.models.targetShotCount || 0) > 0 ? `AI 将严格生成 ${draft.models.targetShotCount} 个镜头` : '0 = AI 根据剧本自动决定'}
+                  </span>
                 </div>
                 <div className="grid grid-cols-1 gap-3">
                   <div className="flex flex-col gap-2">

@@ -219,7 +219,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
   const videoRatio = videoCtx?.ratio || opts.draft.models.videoRatio || '9:16'
   const targetShotCount = opts.draft.models.targetShotCount || 0
   const shotCountHint = targetShotCount > 0
-    ? `用户要求生成 ${targetShotCount} 个镜头，请严格按此数量输出。`
+    ? `用户要求生成恰好 ${targetShotCount} 个镜头。这是硬性约束，输出的 shots 数组长度必须严格等于 ${targetShotCount}，不多不少。如果剧本较短，则细化每句话拆成多个镜头角度来凑满数量；如果剧本较长，则合并次要动作保证精确数量。绝对禁止偏差。`
     : `请根据剧本内容自动决定镜头数量。原则：宁多勿少，每${videoDuration}秒为一个镜头，确保剧本的每一句台词、每一个动作、每一次情绪转折都有对应镜头，不要跳过任何细节。一般来说，一段500字的剧本至少需要15-25个镜头。`
 
   // 根据用户已选择的风格构建风格提示
