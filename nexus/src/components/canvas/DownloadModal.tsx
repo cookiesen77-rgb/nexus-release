@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react'
-import { downloadFile } from '@/lib/download'
+import { downloadBatchAsZip } from '@/lib/download'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import HistoryExportPdfModal, { type ExportPdfImageItem } from '@/components/canvas/HistoryExportPdfModal'
@@ -201,15 +201,6 @@ export default function DownloadModal({ open, onClose, nodes: propNodes }: Props
     setSelectAll(!selectAll)
   }
 
-  const doDownload = async (url: string, filename: string) => {
-    try {
-      return await downloadFile({ url, filename })
-    } catch (error) {
-      console.error('Download failed:', url, error)
-      return false
-    }
-  }
-
   const handleDownload = useCallback(async () => {
     const itemsToDownload = filteredItems.filter((item) => selectedItems.has(item.id))
     if (itemsToDownload.length === 0) return
@@ -217,18 +208,24 @@ export default function DownloadModal({ open, onClose, nodes: propNodes }: Props
     setIsDownloading(true)
     setDownloadProgress(0)
 
-    const filenameMap = buildUniqueFilenames(itemsToDownload)
-    let completed = 0
-    for (const item of itemsToDownload) {
-      const filename = filenameMap.get(item.id) || `${sanitizeFilenameBase(pickBaseName(item)) || 'asset'}.${inferExtFromUrl(item.src, item.type)}`
-
-      await doDownload(item.src, filename)
-      completed++
-      setDownloadProgress(Math.round((completed / itemsToDownload.length) * 100))
+    try {
+      const filenameMap = buildUniqueFilenames(itemsToDownload)
+      const files = itemsToDownload.map((item) => {
+        const filename = filenameMap.get(item.id) || `${sanitizeFilenameBase(pickBaseName(item)) || 'asset'}.${inferExtFromUrl(item.src, item.type)}`
+        return { url: item.src, filename }
+      })
+      const now = new Date()
+      const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+      const zipName = `批量下载_${stamp}.zip`
+      await downloadBatchAsZip(files, zipName)
+      setDownloadProgress(100)
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err || '下载失败')
+      window.$message?.error?.(msg)
+    } finally {
+      setIsDownloading(false)
+      setDownloadProgress(0)
     }
-
-    setIsDownloading(false)
-    setDownloadProgress(0)
   }, [filteredItems, selectedItems])
 
   const getTypeIcon = (type: AssetType) => {

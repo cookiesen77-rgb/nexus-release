@@ -16,7 +16,7 @@ import {
   type HistoryPerformanceMode
 } from '@/store/assets'
 import { syncAssetHistoryFromCanvasNodes } from '@/lib/assets/syncFromCanvas'
-import { downloadFile } from '@/lib/download'
+import { downloadBatchAsZip } from '@/lib/download'
 import HistoryExportPdfModal, { type ExportPdfImageItem } from '@/components/canvas/HistoryExportPdfModal'
 import {
   X,
@@ -148,16 +148,19 @@ export default function HistoryPanel({ onClose, onAddToCanvas }: Props) {
     setBatchProgress({ done: 0, total: selectedAssets.length })
     try {
       const filenameMap = buildUniqueFilenames(selectedAssets)
-      let done = 0
-      for (const a of selectedAssets) {
+      const files = selectedAssets.map((a) => {
         const url = String((a.localCacheUrl || a.src) || '').trim()
-        if (url) {
-          const filename = filenameMap.get(a.id) || `${sanitizeFilenameBase(String(a.title || '').trim() || 'asset') || 'asset'}.${inferExtFromUrl(url, a.type)}`
-          await downloadFile({ url, filename })
-        }
-        done += 1
-        setBatchProgress({ done, total: selectedAssets.length })
-      }
+        const filename = filenameMap.get(a.id) || `${sanitizeFilenameBase(String(a.title || '').trim() || 'asset') || 'asset'}.${inferExtFromUrl(url, a.type)}`
+        return { url, filename }
+      })
+      const now = new Date()
+      const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+      const zipName = `批量下载_${stamp}.zip`
+      await downloadBatchAsZip(files, zipName)
+      setBatchProgress({ done: selectedAssets.length, total: selectedAssets.length })
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err || '下载失败')
+      window.$message?.error?.(msg)
     } finally {
       setBatchBusy(false)
       setBatchProgress({ done: 0, total: 0 })
