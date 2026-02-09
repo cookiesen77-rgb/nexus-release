@@ -449,6 +449,8 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       setDraft((prev) => {
         let cur = prev
         for (const v of variants) cur = appendVariantToSlot(cur, slotId, v)
+        // 用户手动选择素材时，锁定选择防止后续自动生成覆盖
+        cur = setSlotSelectionLocked(cur, slotId, true)
         return { ...cur, updatedAt: Date.now() }
       })
       window.$message?.success?.(`已添加 ${variants.length} 个版本`)

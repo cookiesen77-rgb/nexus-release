@@ -185,7 +185,7 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
       const { nodes, edges } = store
       
       // 获取全局 AI 助手模型设置
-      const aiModel = useSettingsStore.getState().aiAssistantModel || 'gpt-5-mini'
+      const aiModel = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
       
       // 1. 推断润色模式
       const modeFromGraph = inferPolishModeFromGraph(id, nodes, edges)

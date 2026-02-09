@@ -38,12 +38,9 @@ export interface CircuitBreakerState {
   openedAt: number
 }
 
-// AI 助手模型配置（通过代理统一使用 OpenAI 兼容格式）
+// AI 助手固定使用 gemini-3-pro-preview-thinking
 export const AI_ASSISTANT_MODELS = [
-  { key: 'gpt-5-mini', label: 'GPT-5 Mini' },
-  { key: 'gemini-3-pro-preview', label: 'Gemini 3 Pro' },
-  { key: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
-  { key: 'doubao-seed-1-8-251228-thinking', label: 'Doubao Seed (思考)' },
+  { key: 'gemini-3-pro-preview-thinking', label: 'Gemini 3 Pro Thinking' },
 ] as const
 
 export type RegenerateMode = 'replace' | 'create'
@@ -192,9 +189,9 @@ const readDefaultVideoModel = () => {
 
 const readAiAssistantModel = () => {
   try {
-    return localStorage.getItem(AI_ASSISTANT_MODEL_KEY) || 'gpt-5-mini'
+    return localStorage.getItem(AI_ASSISTANT_MODEL_KEY) || 'gemini-3-pro-preview-thinking'
   } catch {
-    return 'gpt-5-mini'
+    return 'gemini-3-pro-preview-thinking'
   }
 }
 
@@ -295,7 +292,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ defaultVideoModel: next })
   },
   setAiAssistantModel: (model) => {
-    const next = String(model || 'gpt-5-mini')
+    const next = String(model || 'gemini-3-pro-preview-thinking')
     try {
       localStorage.setItem(AI_ASSISTANT_MODEL_KEY, next)
     } catch {

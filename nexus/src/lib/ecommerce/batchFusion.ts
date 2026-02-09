@@ -53,7 +53,7 @@ export async function analyzeMultiRefImages(
   productContext: string,
 ): Promise<{ mainAnalysis: string; secondaryAnalyses: string[]; fusionStrategy: string }> {
   const configured = useSettingsStore.getState().aiAssistantModel
-  const model = configured || 'gemini-3-pro-preview'
+  const model = configured || 'gemini-3-pro-preview-thinking'
 
   const analyzeOne = (url: string) =>
     chatCompletions({
@@ -87,7 +87,7 @@ export async function buildFusionPrompt(
   secondaryAnalyses: string[],
   userRequest: string,
 ): Promise<string> {
-  const model = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview'
+  const model = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
   return chatCompletions({
     model,
     messages: [
@@ -108,7 +108,7 @@ export async function buildTryOnPrompt(
   productAnalysis: string,
   userRequest: string,
 ): Promise<string> {
-  const model = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview'
+  const model = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
   const raw = await chatCompletions({
     model,
     messages: [

@@ -683,9 +683,10 @@ async function* streamGeminiChat(
   signal?: AbortSignal,
   filterThinking: boolean = true
 ): AsyncGenerator<string> {
-  // Gemini 使用 query 参数认证
-  const baseEndpoint = modelCfg.endpoint || `${DEFAULT_API_BASE_URL}/v1beta/models/gemini-3-pro-preview:generateContent`
-  const endpoint = `${baseEndpoint}?key=${apiKey}`
+  // 根据 authMode 决定认证方式
+  const baseEndpoint = modelCfg.endpoint || `/v1beta/models/gemini-3-pro-preview:generateContent`
+  const useBearerAuth = modelCfg.authMode === 'bearer'
+  const endpoint = useBearerAuth ? baseEndpoint : `${baseEndpoint}?key=${apiKey}`
 
   // 转换消息格式为 Gemini 格式
   const contents = messages
@@ -720,11 +721,14 @@ async function* streamGeminiChat(
   if (systemInstruction) body.systemInstruction = systemInstruction
 
   // Gemini 流式请求需要 alt=sse
-  const streamEndpoint = endpoint + '&alt=sse'
+  const streamEndpoint = endpoint + (useBearerAuth ? '?alt=sse' : '&alt=sse')
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (useBearerAuth) headers['Authorization'] = `Bearer ${apiKey}`
 
   const fetchOptions: RequestInit = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body)
   }
 
@@ -763,9 +767,12 @@ async function* streamGeminiChat(
 
       try {
         const parsed = JSON.parse(payload)
-        // Gemini 响应格式：candidates[0].content.parts[0].text
-        const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || ''
-        if (text) {
+        // Gemini 响应格式：candidates[0].content.parts[].text
+        const parts = parsed?.candidates?.[0]?.content?.parts || []
+        for (const part of parts) {
+          if (filterThinking && part?.thought) continue
+          const text = part?.text || ''
+          if (!text) continue
           if (filterThinking) {
             if (text.includes('<think>') || text.includes('<thinking>')) {
               inThinkingBlock = true

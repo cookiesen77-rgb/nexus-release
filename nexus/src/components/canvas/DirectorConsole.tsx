@@ -561,7 +561,7 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
 
     try {
       // 获取全局 AI 助手模型设置
-      const aiModel = useSettingsStore.getState().aiAssistantModel || 'gpt-5-mini'
+      const aiModel = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
 
       // 构建消息
       const messages: any[] = [
@@ -817,7 +817,7 @@ Output STRICT JSON only (no markdown, no code fences):
 
     try {
       // 获取全局 AI 助手模型设置
-      const aiModel = useSettingsStore.getState().aiAssistantModel || 'gpt-5-mini'
+      const aiModel = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
 
       // 构建消息
       const messages: any[] = [

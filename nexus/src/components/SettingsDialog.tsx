@@ -307,17 +307,9 @@ export default function SettingsDialog({ open, onClose }: Props) {
               <Bot className="h-4 w-4" />
               AI 助手模型
             </div>
-            <select
-              value={draftAiModel}
-              onChange={(e) => setDraftAiModel(e.target.value)}
-              className="w-full rounded-md border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
-            >
-              {AI_ASSISTANT_MODELS.map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            <div className="w-full rounded-md border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-secondary)] cursor-not-allowed">
+              Gemini 3 Pro Thinking（固定）
+            </div>
             <div className="text-xs text-[var(--text-tertiary)]">
               用于 AI 润色、对话等文本处理功能
             </div>

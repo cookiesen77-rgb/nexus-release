@@ -2,7 +2,7 @@ import { chatCompletions } from '@/lib/nexusApi'
 import { useSettingsStore } from '@/store/settings'
 
 export async function autoTagAsset(imageUrl: string): Promise<string[]> {
-  const model = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview'
+  const model = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
   const resp = await chatCompletions({
     model,
     messages: [{
