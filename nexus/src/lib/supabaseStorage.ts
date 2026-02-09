@@ -12,6 +12,19 @@ const BUCKET = 'images'
 const MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000
 const CACHE_KEY = 'nexus-supabase-upload-cache'
 
+async function fetchWithRetry(url: string, init: RequestInit, retries = 2): Promise<Response> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const resp = await fetch(url, init)
+      return resp
+    } catch (err) {
+      if (i === retries) throw err
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)))
+    }
+  }
+  throw new Error('fetch failed')
+}
+
 // Cache entry: hash → { url, uploadedAt }
 type CacheEntry = { url: string; at: number }
 const cache = new Map<string, CacheEntry>()
@@ -83,7 +96,7 @@ export async function uploadToSupabase(dataUrlOrBlob: string | Blob, filename?: 
   const name = filename || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
   const path = `uploads/${name}`
 
-  const resp = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`, {
+  const resp = await fetchWithRetry(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,

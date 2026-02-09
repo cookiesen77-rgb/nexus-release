@@ -609,24 +609,37 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
     return (slot.variants || []).find((v) => v.id === id) || null
   }, [])
 
+  const getPreferredVariant = useCallback((slot: ShortDramaMediaSlot) => {
+    const selected = getSelectedVariant(slot)
+    if (slot.selectionLockedByUser) {
+      return selected?.status === 'success' ? selected : null
+    }
+    if (selected?.status === 'success') return selected
+    const variants = slot.variants || []
+    for (let i = variants.length - 1; i >= 0; i--) {
+      if (variants[i]?.status === 'success') return variants[i]
+    }
+    return null
+  }, [getSelectedVariant])
+
   const collectRefImagesForCharacter = useCallback(
     async (characterId: string) => {
       const c = draft.characters.find((x) => x.id === characterId)
       if (!c) return []
       const inputs: string[] = []
       if (c.sheet) {
-        const v = getSelectedVariant(c.sheet)
+        const v = getPreferredVariant(c.sheet)
         const input = await resolveVariantInput(v || undefined)
         if (input) inputs.push(input)
       }
       for (const slot of c.refs || []) {
-        const v = getSelectedVariant(slot)
+        const v = getPreferredVariant(slot)
         const input = await resolveVariantInput(v || undefined)
         if (input) inputs.push(input)
       }
       return Array.from(new Set(inputs)).filter(Boolean)
     },
-    [draft.characters, getSelectedVariant, resolveVariantInput]
+    [draft.characters, getPreferredVariant, resolveVariantInput]
   )
 
 
@@ -638,12 +651,12 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       const inputs: string[] = []
       // 资产自身参考图
       if (a.ref) {
-        const v = getSelectedVariant(a.ref)
+        const v = getPreferredVariant(a.ref)
         const input = await resolveVariantInput(v || undefined)
         if (input) inputs.push(input)
       }
       for (const slot of a.refs || []) {
-        const v = getSelectedVariant(slot)
+        const v = getPreferredVariant(slot)
         const input = await resolveVariantInput(v || undefined)
         if (input) inputs.push(input)
       }
@@ -654,7 +667,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       }
       return Array.from(new Set(inputs)).filter(Boolean)
     },
-    [collectRefImagesForCharacter, draft.assets, getSelectedVariant, resolveVariantInput]
+    [collectRefImagesForCharacter, draft.assets, getPreferredVariant, resolveVariantInput]
   )
 
   const collectRefImagesForShot = useCallback(
@@ -671,7 +684,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         if (scene?.ref) slots.push(scene.ref)
         if (Array.isArray(scene?.refs) && scene.refs.length > 0) slots.push(...scene.refs)
         for (const slot of slots) {
-          const v = getSelectedVariant(slot)
+          const v = getPreferredVariant(slot)
           const input = await resolveVariantInput(v || undefined)
           if (input) refInputs.push(input)
         }
@@ -683,7 +696,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         if (!c) continue
 
         // 1) Sheet (if any)
-        const sheetV = c.sheet ? getSelectedVariant(c.sheet) : null
+        const sheetV = c.sheet ? getPreferredVariant(c.sheet) : null
         const sheetInput = await resolveVariantInput(sheetV || undefined)
         if (sheetInput) refInputs.push(sheetInput)
 
@@ -692,7 +705,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         const primary = c.primaryRefSlotId ? allRefSlots.find((r) => r.id === c.primaryRefSlotId) : null
         const ordered = primary ? [primary, ...allRefSlots.filter((r) => r.id !== primary.id)] : allRefSlots
         for (const slot of ordered) {
-          const v = getSelectedVariant(slot)
+          const v = getPreferredVariant(slot)
           const input = await resolveVariantInput(v || undefined)
           if (input) refInputs.push(input)
         }
@@ -706,14 +719,14 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
 
       // End frame can use start frame as extra ref (helps identity continuity)
       if (role === 'end') {
-        const startV = getSelectedVariant(shot.frames.start.slot)
+        const startV = getPreferredVariant(shot.frames.start.slot)
         const input = await resolveVariantInput(startV || undefined)
         if (input) refInputs.unshift(input)
       }
 
       return Array.from(new Set(refInputs)).filter(Boolean)
     },
-    [collectRefImagesForAsset, draft, getSelectedVariant, resolveVariantInput]
+    [collectRefImagesForAsset, draft, getPreferredVariant, resolveVariantInput]
   )
 
   const buildFramePrompt = useCallback(
@@ -1023,8 +1036,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         return
       }
 
-      const startV = getSelectedVariant(shot.frames.start.slot)
-      const endV = getSelectedVariant(shot.frames.end.slot)
+      const startV = getPreferredVariant(shot.frames.start.slot)
+      const endV = getPreferredVariant(shot.frames.end.slot)
       const startInput = await resolveVariantInput(startV || undefined)
       const endInput = await resolveVariantInput(endV || undefined)
 
@@ -1103,7 +1116,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         setSlotBusy(slotId, false)
       }
     },
-    [draft, buildFramePrompt, getSelectedVariant, resolveVariantInput, queue, setDraft, setSlotBusy]
+    [draft, buildFramePrompt, getPreferredVariant, resolveVariantInput, queue, setDraft, setSlotBusy]
   )
 
   const uploadToImageSlot = useCallback(
