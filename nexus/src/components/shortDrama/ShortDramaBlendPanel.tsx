@@ -66,7 +66,7 @@ Max 200 words.`
   const results = await Promise.all(images.map(async (img) => {
     const base64 = extractBase64(await ensureBase64(img))
     const result = await chatCompletions({
-      model: 'gpt-5-mini',
+      model: 'gemini-3-pro-preview-thinking',
       messages: [{
         role: 'user',
         content: [
@@ -121,7 +121,7 @@ Output ONLY the prompt.`
   const itemDescs = secondaryAnalyses.map((desc, i) => `Item ${i + 1}: ${desc}`).join('\n')
 
   const result = await chatCompletions({
-    model: 'gpt-4o',
+    model: 'gemini-3-pro-preview-thinking',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `MAIN IMAGE (preserve):\n${mainImageAnalysis}\n\nITEMS TO ADD:\n${itemDescs}\n\nUser request: "${userRequirement}"` }
