@@ -1,19 +1,63 @@
 /**
- * Supabase Storage image/video upload utility
+ * Supabase Storage upload utility with deduplication cache
  * Public bucket "images" on nexus-ai project
- * Auto-cleanup: files older than 2 days are deleted on each upload
+ * Same image won't be uploaded twice — cached by content hash
  */
 
 const SUPABASE_URL = 'https://mjxmdpyfolmhklmgvfwk.supabase.co'
 const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qeG1kcHlmb2xtaGtsbWd2ZndrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Nzk1NjQyNywiZXhwIjoyMDgzNTMyNDI3fQ.07NKMY9ZPyc5OLA0ej31RNazIQE7PSbvr0h4mob_PIU'
 const BUCKET = 'images'
-const MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000 // 2 days
 
-let lastCleanup = 0
+// In-memory dedup cache: content hash → public URL
+const uploadCache = new Map<string, string>()
+
+// Persistent dedup cache in localStorage
+const CACHE_KEY = 'nexus-supabase-upload-cache'
+
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return
+    const entries = JSON.parse(raw) as [string, string][]
+    for (const [k, v] of entries) uploadCache.set(k, v)
+  } catch { /* ignore */ }
+}
+
+function saveCache() {
+  try {
+    const entries = Array.from(uploadCache.entries()).slice(-500) // Keep last 500
+    localStorage.setItem(CACHE_KEY, JSON.stringify(entries))
+  } catch { /* ignore */ }
+}
+
+// Fast hash of data URL content (sample first + last 200 chars + length)
+function hashContent(data: string): string {
+  const sample = data.slice(0, 200) + data.slice(-200) + data.length
+  let h = 0
+  for (let i = 0; i < sample.length; i++) {
+    h = ((h << 5) - h) + sample.charCodeAt(i)
+    h |= 0
+  }
+  return String(Math.abs(h).toString(36))
+}
+
+// Init cache on load
+loadCache()
 
 export async function uploadToSupabase(dataUrlOrBlob: string | Blob, filename?: string): Promise<string> {
+  // Check dedup cache for string inputs
+  if (typeof dataUrlOrBlob === 'string') {
+    const hash = hashContent(dataUrlOrBlob)
+    const cached = uploadCache.get(hash)
+    if (cached) {
+      console.log('[supabaseStorage] Cache hit, skipping upload:', cached.slice(0, 80))
+      return cached
+    }
+  }
+
   let blob: Blob
   let ext = 'png'
+  let contentHash = ''
 
   if (typeof dataUrlOrBlob === 'string') {
     const m = dataUrlOrBlob.match(/^data:([^;]+);base64,(.*)$/)
@@ -24,6 +68,7 @@ export async function uploadToSupabase(dataUrlOrBlob: string | Blob, filename?: 
     const bytes = new Uint8Array(byteString.length)
     for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i)
     blob = new Blob([bytes], { type: mimeType })
+    contentHash = hashContent(dataUrlOrBlob)
   } else {
     blob = dataUrlOrBlob
     ext = (blob.type || 'image/png').split('/')[1]?.replace('jpeg', 'jpg') || 'png'
@@ -47,51 +92,13 @@ export async function uploadToSupabase(dataUrlOrBlob: string | Blob, filename?: 
     throw new Error(`Supabase upload failed: ${resp.status} ${err.slice(0, 200)}`)
   }
 
-  // Auto-cleanup old files (runs at most once per hour)
-  if (Date.now() - lastCleanup > 60 * 60 * 1000) {
-    lastCleanup = Date.now()
-    void cleanupOldFiles().catch(() => {})
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`
+
+  // Save to dedup cache
+  if (contentHash) {
+    uploadCache.set(contentHash, publicUrl)
+    saveCache()
   }
 
-  return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`
-}
-
-async function cleanupOldFiles() {
-  const cutoff = Date.now() - MAX_AGE_MS
-
-  // List files in uploads/ folder
-  const listResp = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ prefix: 'uploads/', limit: 500 }),
-  })
-
-  if (!listResp.ok) return
-
-  const files = await listResp.json() as any[]
-  if (!Array.isArray(files) || files.length === 0) return
-
-  const toDelete: string[] = []
-  for (const f of files) {
-    const created = new Date(f.created_at || f.updated_at || 0).getTime()
-    if (created > 0 && created < cutoff) {
-      toDelete.push(`uploads/${f.name}`)
-    }
-  }
-
-  if (toDelete.length === 0) return
-
-  console.log(`[supabaseStorage] Cleaning up ${toDelete.length} files older than 2 days`)
-
-  await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}`, {
-    method: 'DELETE',
-    headers: {
-      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ prefixes: toDelete }),
-  })
+  return publicUrl
 }
