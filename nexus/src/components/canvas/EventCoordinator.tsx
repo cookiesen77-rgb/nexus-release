@@ -178,7 +178,7 @@ export default function EventCoordinator({
         // 连接模式：创建连接或执行多选快速连接
         if (inConnectMode) {
           const idx = store.nodes.findIndex((n) => n.id === hitNode.id)
-          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 14 / vp.zoom)
+          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 24 / vp.zoom)
           const fromSide: PortSide = portSide || inferPortSide(world, hitNode, getNodeSize(hitNode.type))
 
           // 检查是否点击的是选中节点之一（用于判断是开始拖拽还是快速连接）
@@ -537,7 +537,7 @@ export default function EventCoordinator({
         let toSide: PortSide = 'left'
 
         if (hitNode && hitNode.id !== drag.fromId) {
-          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 14 / vp.zoom)
+          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 24 / vp.zoom)
           toSide = portSide || inferPortSide(world, hitNode, getNodeSize(hitNode.type))
           to = getPortWorldPos(hitNode, toSide, getNodeSize(hitNode.type))
         } else {
@@ -557,7 +557,7 @@ export default function EventCoordinator({
         // 如果命中节点且不在源节点列表中
         const sourceIds = drag.sources.map(s => s.nodeId)
         if (hitNode && !sourceIds.includes(hitNode.id)) {
-          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 14 / vp.zoom)
+          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 24 / vp.zoom)
           toSide = portSide || inferPortSide(world, hitNode, getNodeSize(hitNode.type))
           to = getPortWorldPos(hitNode, toSide, getNodeSize(hitNode.type))
         }
@@ -613,7 +613,7 @@ export default function EventCoordinator({
         const hitNode = hitTestNode(world, store.nodes, getNodeSize, vp.zoom)
 
         if (hitNode && hitNode.id !== drag.fromId) {
-          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 14 / vp.zoom)
+          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 24 / vp.zoom)
           const toSide: PortSide = portSide || inferPortSide(world, hitNode, getNodeSize(hitNode.type))
 
           if (drag.reconnect) {
@@ -680,7 +680,7 @@ export default function EventCoordinator({
         // 如果命中节点且不在源节点列表中
         if (hitNode && !sourceIds.includes(hitNode.id)) {
           const targetId = hitNode.id
-          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 14 / vp.zoom)
+          const portSide = hitTestPort(world, hitNode, getNodeSize(hitNode.type), 24 / vp.zoom)
           const toSide: PortSide = portSide || inferPortSide(world, hitNode, getNodeSize(hitNode.type))
 
           // 收集已存在的连接 key

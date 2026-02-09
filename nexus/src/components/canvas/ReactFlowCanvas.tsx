@@ -996,6 +996,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         onlyRenderVisibleElements={true}
         snapToGrid={!debugFlags.disableSnap}
         snapGrid={[20, 20]}
+        connectionRadius={24}
         fitView={false}
         proOptions={{ hideAttribution: true }}
         className={`bg-[var(--bg-primary)]${debugFlags.disableComposite ? ' rf-no-composite' : ''}`}

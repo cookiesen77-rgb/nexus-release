@@ -547,7 +547,7 @@ export default function WebGLGraphCanvas({
     const w = nodeDataRef.current[base + 2]
     const h = nodeDataRef.current[base + 3]
 
-    const rPx = 14
+    const rPx = 24
     const r = rPx / Math.max(0.001, zoom)
     const r2 = r * r
 
