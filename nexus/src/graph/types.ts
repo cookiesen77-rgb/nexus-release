@@ -10,6 +10,8 @@ export type NodeType =
   | 'klingVideoTool'
   | 'klingImageTool'
   | 'klingAudioTool'
+  | 'llm'
+  | 'textSplitter'
 
 export type GraphNode = {
   id: string

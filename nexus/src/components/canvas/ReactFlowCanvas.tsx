@@ -38,6 +38,8 @@ import { LocalSaveNodeComponent } from './nodes/LocalSaveNodeFlow'
 import { KlingVideoToolNodeComponent } from './nodes/KlingVideoToolNodeFlow'
 import { KlingImageToolNodeComponent } from './nodes/KlingImageToolNodeFlow'
 import { KlingAudioToolNodeComponent } from './nodes/KlingAudioToolNodeFlow'
+import { LlmNodeComponent } from './nodes/LlmNodeFlow'
+import { TextSplitterNodeComponent } from './nodes/TextSplitterNodeFlow'
 
 // 导入自定义边组件
 import { ImageRoleEdge } from './edges/ImageRoleEdge'
@@ -54,6 +56,8 @@ const nodeTypes: NodeTypes = {
   klingVideoTool: KlingVideoToolNodeComponent,
   klingImageTool: KlingImageToolNodeComponent,
   klingAudioTool: KlingAudioToolNodeComponent,
+  llm: LlmNodeComponent,
+  textSplitter: TextSplitterNodeComponent,
 }
 
 // 定义边类型映射
@@ -328,7 +332,18 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
           const mediaIdChanged = prev.mediaId !== curr?.mediaId
           const sourceUrlChanged = prev.sourceUrl !== curr?.sourceUrl
           const fileNameChanged = prev.fileName !== curr?.fileName
-          
+          const modelChanged = prev.model !== curr?.model
+          const sizeChanged = prev.size !== curr?.size
+          const qualityChanged = prev.quality !== curr?.quality
+          const loopCountChanged = prev.loopCount !== curr?.loopCount
+          const ratioChanged = prev.ratio !== curr?.ratio
+          const durChanged = prev.dur !== curr?.dur
+          const statusChanged = prev.status !== curr?.status
+          const outputChanged = prev.output !== curr?.output
+          const errorMessageChanged = prev.errorMessage !== curr?.errorMessage
+          const instructionChanged = prev.instruction !== curr?.instruction
+          const splitCountChanged = prev.splitCount !== curr?.splitCount
+
           if (
             loadingChanged ||
             urlChanged ||
@@ -337,7 +352,18 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
             executedChanged ||
             mediaIdChanged ||
             sourceUrlChanged ||
-            fileNameChanged
+            fileNameChanged ||
+            modelChanged ||
+            sizeChanged ||
+            qualityChanged ||
+            loopCountChanged ||
+            ratioChanged ||
+            durChanged ||
+            statusChanged ||
+            outputChanged ||
+            errorMessageChanged ||
+            instructionChanged ||
+            splitCountChanged
           ) {
             console.log('[ReactFlowCanvas] 节点数据变化:', node.id, {
               loadingChanged,
@@ -348,6 +374,12 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
               mediaIdChanged,
               sourceUrlChanged,
               fileNameChanged,
+              modelChanged,
+              sizeChanged,
+              qualityChanged,
+              loopCountChanged,
+              ratioChanged,
+              durChanged,
               prevLoading: prev.loading, currLoading: curr?.loading,
               prevUrl: !!prev.url, currUrl: !!curr?.url
             })

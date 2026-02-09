@@ -590,8 +590,8 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
         </div>
 
         {/* 连接点 */}
-        <Handle type="target" position={Position.Left} id="left" />
-        <Handle type="source" position={Position.Right} id="right" />
+        <Handle type="target" position={Position.Left} id="left" className="handle-video" />
+        <Handle type="source" position={Position.Right} id="right" className="handle-video" />
       </div>
 
       {/* 悬浮操作按钮 - 复制（右上角偏左） */}

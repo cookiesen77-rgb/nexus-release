@@ -621,8 +621,8 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
         </div>
 
         {/* 连接点 */}
-        <Handle type="target" position={Position.Left} id="left" />
-        <Handle type="source" position={Position.Right} id="right" />
+        <Handle type="target" position={Position.Left} id="left" className="handle-image" />
+        <Handle type="source" position={Position.Right} id="right" className="handle-image" />
       </div>
 
       {/* 图片编辑工具栏（在节点上方，仅在有图片时显示） */}

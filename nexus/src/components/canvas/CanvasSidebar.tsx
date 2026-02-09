@@ -1,5 +1,5 @@
 import React from 'react'
-import { Archive, Brush, Camera, Film, Hand, LayoutGrid, Link2, MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch, Save, Wand2, ShoppingBag } from 'lucide-react'
+import { Archive, Brush, Camera, Film, Hand, LayoutGrid, Link2, MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch, Save, Wand2, ShoppingBag, Sparkles } from 'lucide-react'
 
 export type CanvasTool = 'select' | 'pan' | 'connect'
 
@@ -19,6 +19,7 @@ type Props = {
   onOpenCameraControl?: () => void
   onOpenEcomStudio?: () => void
   onOpenAssetLibrary?: () => void
+  onOpenPromptAgent?: () => void
   onSaveAsTemplate?: () => void
   onUndo?: () => void
   onRedo?: () => void
@@ -75,6 +76,7 @@ export default function CanvasSidebar({
   onOpenCameraControl,
   onOpenEcomStudio,
   onOpenAssetLibrary,
+  onOpenPromptAgent,
   onSaveAsTemplate,
   onUndo,
   onRedo,
@@ -156,6 +158,13 @@ export default function CanvasSidebar({
         onClick={() => onOpenPromptReverse?.()}
       >
         <ScanSearch className="h-5 w-5" />
+      </IconButton>
+
+      <IconButton
+        title="提示词Agent"
+        onClick={() => onOpenPromptAgent?.()}
+      >
+        <Sparkles className="h-5 w-5" />
       </IconButton>
 
       <IconButton

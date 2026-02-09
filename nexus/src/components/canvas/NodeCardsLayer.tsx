@@ -474,13 +474,50 @@ const LocalSaveContent = memo(function LocalSaveContent() {
   return (
     <>
       <div className="text-xs text-[var(--text-secondary)]">连接素材节点后点击保存</div>
-      <button 
+      <button
         className="mt-2 w-full px-2 py-1.5 text-xs rounded-lg bg-[var(--bg-tertiary)] hover:bg-[var(--accent-color)] hover:text-white"
         onPointerDown={e => e.stopPropagation()}
       >
         缓存到本地
       </button>
     </>
+  )
+})
+
+// ============= LLM 节点 =============
+const LlmContent = memo(function LlmContent({ node }: { node: GraphNode }) {
+  const d = node.data as any || {}
+  const status = getString(d.status, 'idle')
+  const output = getString(d.output)
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-500">LLM</span>
+        <span className="text-[11px] text-[var(--text-secondary)] truncate">{getString(d.model, 'model')}</span>
+      </div>
+      {d.instruction && <div className="text-xs text-[var(--text-secondary)] line-clamp-2">{getString(d.instruction)}</div>}
+      {output && <div className="text-xs text-[var(--text-primary)] line-clamp-3 bg-[var(--bg-primary)] rounded p-1.5">{output}</div>}
+      <div className="flex items-center gap-1">
+        <div className={`w-1.5 h-1.5 rounded-full ${status === 'running' ? 'bg-amber-500 animate-pulse' : status === 'done' ? 'bg-emerald-500' : status === 'error' ? 'bg-red-500' : 'bg-gray-400'}`} />
+        <span className="text-[10px] text-[var(--text-secondary)]">{status === 'running' ? '生成中' : status === 'done' ? '完成' : status === 'error' ? '错误' : '就绪'}</span>
+      </div>
+    </div>
+  )
+})
+
+// ============= Text Splitter 节点 =============
+const TextSplitterContent = memo(function TextSplitterContent({ node }: { node: GraphNode }) {
+  const d = node.data as any || {}
+  const status = getString(d.status, 'idle')
+  const count = Number(d.splitCount) || 0
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="text-xs text-[var(--text-secondary)]">{getString(d.instruction, '按分镜拆分')}</div>
+      <div className="flex items-center gap-1">
+        <div className={`w-1.5 h-1.5 rounded-full ${status === 'done' ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+        <span className="text-[10px] text-[var(--text-secondary)]">{status === 'done' ? `已拆分 ${count} 段` : '就绪'}</span>
+      </div>
+    </div>
   )
 })
 
@@ -515,6 +552,12 @@ const NodeCard = memo(function NodeCard({
       break
     case 'localSave':
       content = <LocalSaveContent />
+      break
+    case 'llm':
+      content = <LlmContent node={node} />
+      break
+    case 'textSplitter':
+      content = <TextSplitterContent node={node} />
       break
     default:
       content = <div className="text-xs text-[var(--text-secondary)]">未知类型: {node.type}</div>

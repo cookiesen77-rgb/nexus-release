@@ -70,10 +70,22 @@ async function signRequest(method: string, path: string, headers: Record<string,
 
 // ── Retry helper ───────────────────────────────────────────────────
 
+// ── Fetch (Tauri-aware) ────────────────────────────────────────────
+
+const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
+
+async function r2Fetch(url: string, init: RequestInit): Promise<Response> {
+  if (isTauri) {
+    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
+    return (tauriFetch as typeof fetch)(url, init)
+  }
+  return fetch(url, init)
+}
+
 async function fetchWithRetry(url: string, init: RequestInit, retries = 2): Promise<Response> {
   for (let i = 0; i <= retries; i++) {
     try {
-      return await fetch(url, init)
+      return await r2Fetch(url, init)
     } catch (err) {
       if (i === retries) throw err
       await new Promise(r => setTimeout(r, 1000 * (i + 1)))
@@ -160,7 +172,7 @@ export async function uploadToR2(dataUrlOrBlob: string | Blob, filename?: string
   const resp = await fetchWithRetry(`${R2_ENDPOINT}/${R2_BUCKET}/${objectKey}`, {
     method: 'PUT',
     headers: signed,
-    body: bodyBytes,
+    body: new Blob([bodyBytes], { type: contentType }),
   })
 
   if (!resp.ok) {

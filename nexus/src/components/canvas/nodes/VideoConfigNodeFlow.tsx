@@ -72,9 +72,23 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
   const [loopCount, setLoopCount] = useState(nodeData?.loopCount || 1) // 循环次数，默认 1
   const [klingVoiceIds, setKlingVoiceIds] = useState(() => String(nodeData?.klingVoiceIds || '').trim())
   const [loading, setLoading] = useState(false)
-  
+
   const updateTimerRef = useRef<number>(0)
   const initializedRef = useRef(false)
+
+  // 外部 data 变化时同步到本地 state（防止 React Flow 重建节点后配置丢失）
+  useEffect(() => {
+    const extModel = nodeData?.model || getDefaultVideoModel()
+    const extRatio = nodeData?.ratio || '16:9'
+    const extDur = nodeData?.dur || 5
+    const extSize = nodeData?.size || ''
+    const extLoopCount = nodeData?.loopCount || 1
+    if (extModel !== model) setModel(extModel)
+    if (extRatio !== ratio) setRatio(extRatio)
+    if (extDur !== duration) setDuration(extDur)
+    if (extSize !== size) setSize(extSize)
+    if (extLoopCount !== loopCount) setLoopCount(extLoopCount)
+  }, [nodeData?.model, nodeData?.ratio, nodeData?.dur, nodeData?.size, nodeData?.loopCount])
 
   // 兼容旧 key（MODEL_ALIASES）：如果节点里保存的是旧 key，自动迁移到新 key，避免下拉框空白
   useEffect(() => {
@@ -565,8 +579,8 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
         </div>
 
         {/* 连接点 */}
-        <Handle type="target" position={Position.Left} id="left" />
-        <Handle type="source" position={Position.Right} id="right" />
+        <Handle type="target" position={Position.Left} id="left" className="handle-image" />
+        <Handle type="source" position={Position.Right} id="right" className="handle-video" />
       </div>
 
       {/* 悬浮复制按钮 */}

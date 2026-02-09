@@ -1,4 +1,5 @@
 import { DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL } from '@/config/models'
+import { useSettingsStore } from '@/store/settings'
 import type {
   ShortDramaDraftV2,
   ShortDramaMediaKind,
@@ -91,26 +92,29 @@ export const createEmptyShot = (title?: string): ShortDramaShot => {
   }
 }
 
-export const createDefaultDraftV2 = (projectId: string): ShortDramaDraftV2 => ({
-  version: 2,
-  projectId: projectId || 'default',
-  createdAt: Date.now(),
-  updatedAt: Date.now(),
-  title: '',
-  logline: '',
-  script: { text: '' },
-  style: createDefaultStyle(),
-  models: {
-    analysisModelKey: DEFAULT_CHAT_MODEL,
-    imageModelKey: DEFAULT_IMAGE_MODEL,
-    videoModelKey: DEFAULT_VIDEO_MODEL,
-  },
-  characters: [],
-  scenes: [],
-  assets: [],
-  shots: [],
-  plan: undefined,
-})
+export const createDefaultDraftV2 = (projectId: string): ShortDramaDraftV2 => {
+  const settings = useSettingsStore.getState()
+  return {
+    version: 2,
+    projectId: projectId || 'default',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    title: '',
+    logline: '',
+    script: { text: '' },
+    style: createDefaultStyle(),
+    models: {
+      analysisModelKey: DEFAULT_CHAT_MODEL,
+      imageModelKey: settings.defaultImageModel || DEFAULT_IMAGE_MODEL,
+      videoModelKey: settings.defaultVideoModel || DEFAULT_VIDEO_MODEL,
+    },
+    characters: [],
+    scenes: [],
+    assets: [],
+    shots: [],
+    plan: undefined,
+  }
+}
 
 const normalizeLegacyShotTitle = (title: unknown, index: number) => {
   const t = String(title || '').trim()

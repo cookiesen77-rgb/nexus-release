@@ -152,42 +152,13 @@ const getApiKey = () => {
 }
 
 // 将 base64 图片上传到图床，获取公网 URL
-// 腾讯 AIGC API 需要公网可访问的图片 URL
+// 使用 Cloudflare R2 存储，通过 vite proxy 代理，不暴露客户端 IP
 const uploadBase64ToImageHost = async (base64Data: string): Promise<string> => {
-  // ⚠️ 仅允许使用云雾官方图床：
-  // - 文档：https://yunwu.apifox.cn/doc-7376047
-  // - API：https://yunwu.apifox.cn/api-356192326
-  console.log('[uploadImage] 开始上传图片到云雾图床..., Tauri 环境:', isTauriEnv)
-
-  const apiKey = getApiKey()
-  if (!apiKey) {
-    throw new Error('缺少 API Key，无法上传到云雾图床。请先在设置中填写 apiKey。')
-  }
-
-  // 将 base64 转换为 Blob
-  const base64Content = base64Data.split(',')[1] || base64Data
-  const mimeMatch = base64Data.match(/^data:([^;]+);/)
-  const mimeType = mimeMatch ? mimeMatch[1] : 'image/png'
-  const byteCharacters = atob(base64Content)
-  const byteNumbers = new Array(byteCharacters.length)
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i)
-  }
-  const byteArray = new Uint8Array(byteNumbers)
-  const blob = new Blob([byteArray], { type: mimeType })
-
-  const ext = mimeType.split('/')[1] || 'png'
-  const fileName = `image.${ext}`
-
-  const form = new FormData()
-  form.append('file', blob, fileName)
-
-  // 使用统一的 postFormData（Tauri 下会自动转换成 multipart bytes）
-  const resp = await postFormData<any>('https://imageproxy.zhongzhuan.chat/api/upload', form, { authMode: 'bearer', timeoutMs: 120000 })
-  console.log('[uploadImage] 云雾图床响应:', JSON.stringify(resp, null, 2))
-  const urlOut = String(resp?.url || resp?.data?.url || resp?.data?.link || '').trim()
-  if (urlOut && /^https?:\/\//i.test(urlOut)) return urlOut
-  throw new Error(String(resp?.error || resp?.message || resp?.data?.message || '云雾图床上传失败'))
+  const { uploadToR2 } = await import('@/lib/r2Storage')
+  console.log('[uploadImage] 开始上传图片到 R2...')
+  const url = await uploadToR2(base64Data)
+  console.log('[uploadImage] R2 上传完成:', url)
+  return url
 }
 
 // 图片压缩工具函数 - 将 base64 图片压缩到指定大小以下

@@ -221,6 +221,29 @@ export default defineConfig(({ mode }) => {
               proxyReq.setHeader('Connection', 'keep-alive')
             })
           }
+        },
+        // Cloudflare R2 存储代理（绕过浏览器 CORS）
+        '/r2-upload': {
+          target: 'https://aeb71d0aea1f77ff49955e4535ab344b.r2.cloudflarestorage.com',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/r2-upload/, ''),
+          timeout: 120000,
+          proxyTimeout: 120000,
+          agent: httpsAgent,
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.log('[R2 Proxy Error]', err.message)
+            })
+            proxy.on('proxyReq', (proxyReq, req) => {
+              // 注入签名需要的 Host header
+              const r2Host = req.headers['x-r2-host']
+              if (r2Host) {
+                proxyReq.setHeader('Host', r2Host)
+                proxyReq.removeHeader('x-r2-host')
+              }
+            })
+          }
         }
       }
     }

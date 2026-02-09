@@ -3,7 +3,7 @@ import type { NodeType } from '@/graph/types'
 import { useGraphStore } from '@/graph/store'
 import { getNodeSize } from '@/graph/nodeSizing'
 import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS } from '@/config/models'
-import { Clapperboard, Image, Mic, Music, Save, Settings2, SlidersHorizontal, Sparkles, Type, Video } from 'lucide-react'
+import { Clapperboard, Image, Mic, Music, Save, Settings2, SlidersHorizontal, Sparkles, Type, Video, BrainCircuit, Scissors } from 'lucide-react'
 import { saveMedia } from '@/lib/mediaStorage'
 
 // 检测 Tauri 环境
@@ -11,6 +11,8 @@ const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTER
 
 const NODE_OPTIONS: { type: NodeType; name: string; Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; color: string }[] = [
   { type: 'text', name: '文本节点', Icon: Type, color: '#3b82f6' },
+  { type: 'llm', name: 'LLM 文本生成', Icon: BrainCircuit, color: '#22d37e' },
+  { type: 'textSplitter', name: '文本拆分', Icon: Scissors, color: '#f97316' },
   { type: 'imageConfig', name: '文生图配置', Icon: SlidersHorizontal, color: '#22c55e' },
   { type: 'videoConfig', name: '视频生成配置', Icon: Settings2, color: '#f59e0b' },
   { type: 'klingVideoTool', name: 'Kling 视频工具', Icon: Clapperboard, color: '#f97316' },
@@ -33,6 +35,8 @@ const defaultLabelFor = (type: NodeType) => {
   if (type === 'video') return '视频'
   if (type === 'audio') return '音频'
   if (type === 'localSave') return '本地保存'
+  if (type === 'llm') return 'LLM'
+  if (type === 'textSplitter') return '文本拆分'
   return type
 }
 

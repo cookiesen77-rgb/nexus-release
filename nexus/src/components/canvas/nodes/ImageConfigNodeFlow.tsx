@@ -71,8 +71,20 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   const [loopCount, setLoopCount] = useState(nodeData?.loopCount || 1) // 循环次数，默认 1
   const [loading, setLoading] = useState(false)
   const autoExecuteTriggered = useRef(false)
-  
+
   const updateTimerRef = useRef<number>(0)
+
+  // 外部 data 变化时同步到本地 state（防止 React Flow 重建节点后配置丢失）
+  useEffect(() => {
+    const extModel = getValidModel(nodeData?.model)
+    const extSize = nodeData?.size || '3:4'
+    const extQuality = nodeData?.quality || ''
+    const extLoopCount = nodeData?.loopCount || 1
+    if (extModel !== model) setModel(extModel)
+    if (extSize !== size) setSize(extSize)
+    if (extQuality !== quality) setQuality(extQuality)
+    if (extLoopCount !== loopCount) setLoopCount(extLoopCount)
+  }, [nodeData?.model, nodeData?.size, nodeData?.quality, nodeData?.loopCount])
   
   // 清理定时器（防止内存泄漏）
   useEffect(() => {
@@ -452,8 +464,8 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
         </div>
 
         {/* 连接点 */}
-        <Handle type="target" position={Position.Left} id="left" />
-        <Handle type="source" position={Position.Right} id="right" />
+        <Handle type="target" position={Position.Left} id="left" className="handle-text" />
+        <Handle type="source" position={Position.Right} id="right" className="handle-image" />
       </div>
 
       {/* 悬浮复制按钮 */}

@@ -238,6 +238,9 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
   const busySlotsRef = useRef(busySlotIds)
   busySlotsRef.current = busySlotIds
 
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+
   const queue = useMemo(() => getShortDramaTaskQueue(projectId), [projectId])
 
   // Apply concurrency limits from prefs
@@ -624,7 +627,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
 
   const collectRefImagesForCharacter = useCallback(
     async (characterId: string) => {
-      const c = draft.characters.find((x) => x.id === characterId)
+      const c = draftRef.current.characters.find((x) => x.id === characterId)
       if (!c) return []
       const inputs: string[] = []
       if (c.sheet) {
@@ -639,17 +642,16 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       }
       return Array.from(new Set(inputs)).filter(Boolean)
     },
-    [draft.characters, getPreferredVariant, resolveVariantInput]
+    [getPreferredVariant, resolveVariantInput]
   )
 
 
 
   const collectRefImagesForAsset = useCallback(
     async (assetId: string) => {
-      const a = (draft.assets || []).find((x) => x.id === assetId)
+      const a = (draftRef.current.assets || []).find((x) => x.id === assetId)
       if (!a) return []
       const inputs: string[] = []
-      // 资产自身参考图
       if (a.ref) {
         const v = getPreferredVariant(a.ref)
         const input = await resolveVariantInput(v || undefined)
@@ -660,26 +662,26 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         const input = await resolveVariantInput(v || undefined)
         if (input) inputs.push(input)
       }
-      // 资产所属角色参考（风格/一致性）
       for (const cid of a.ownerCharacterIds || []) {
         const refs = await collectRefImagesForCharacter(cid)
         inputs.push(...refs)
       }
       return Array.from(new Set(inputs)).filter(Boolean)
     },
-    [collectRefImagesForCharacter, draft.assets, getPreferredVariant, resolveVariantInput]
+    [collectRefImagesForCharacter, getPreferredVariant, resolveVariantInput]
   )
 
   const collectRefImagesForShot = useCallback(
     async (shotId: string, role: 'start' | 'end') => {
-      const shot = draft.shots.find((s) => s.id === shotId)
+      const d = draftRef.current
+      const shot = d.shots.find((s) => s.id === shotId)
       if (!shot) return []
 
       const refInputs: string[] = []
 
       // Scene refs (primary + extra)
       if (shot.sceneId) {
-        const scene = draft.scenes.find((s) => s.id === shot.sceneId)
+        const scene = d.scenes.find((s) => s.id === shot.sceneId)
         const slots: ShortDramaMediaSlot[] = []
         if (scene?.ref) slots.push(scene.ref)
         if (Array.isArray(scene?.refs) && scene.refs.length > 0) slots.push(...scene.refs)
@@ -692,15 +694,13 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
 
       // Character refs: sheet + (primary first) + other refs
       for (const cid of shot.characterIds || []) {
-        const c = draft.characters.find((x) => x.id === cid)
+        const c = d.characters.find((x) => x.id === cid)
         if (!c) continue
 
-        // 1) Sheet (if any)
         const sheetV = c.sheet ? getPreferredVariant(c.sheet) : null
         const sheetInput = await resolveVariantInput(sheetV || undefined)
         if (sheetInput) refInputs.push(sheetInput)
 
-        // 2) Refs
         const allRefSlots = Array.isArray(c.refs) ? c.refs.slice() : []
         const primary = c.primaryRefSlotId ? allRefSlots.find((r) => r.id === c.primaryRefSlotId) : null
         const ordered = primary ? [primary, ...allRefSlots.filter((r) => r.id !== primary.id)] : allRefSlots
@@ -726,7 +726,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
 
       return Array.from(new Set(refInputs)).filter(Boolean)
     },
-    [collectRefImagesForAsset, draft, getPreferredVariant, resolveVariantInput]
+    [collectRefImagesForAsset, getPreferredVariant, resolveVariantInput]
   )
 
   const buildFramePrompt = useCallback(
@@ -776,7 +776,13 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       const beat = String(shot.beat || '').trim()
       if (beat) parts.push(`本镜头意图/节拍：\n${beat}`)
 
-      parts.push('一致性要求：严格参考已上传的角色设定图、场景参考图、资产参考图，保持人物/场景/资产外观一致，不要随意更换。')
+      parts.push([
+        '构图硬性要求（必须严格遵守）：',
+        '1. 整张图只能包含「一个连续的单一场景」，严禁分屏、拼图、多格漫画、上下/左右分割、画中画等多场景构图。',
+        '2. 画面必须像电影截图/剧照一样，只有一个统一的视角和景深。',
+        '3. 不要出现黑色分隔线、边框、文字标签、水印或任何 UI 元素。',
+        '4. 一致性：严格参考已上传的角色设定图、场景参考图、资产参考图，保持人物/场景/资产外观一致，不要随意更换。',
+      ].join('\n'))
 
       const prompt = String(frame.prompt || '').trim()
       if (prompt) parts.push(prompt)

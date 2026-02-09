@@ -321,8 +321,8 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
         </div>
 
         {/* 连接点 */}
-        <Handle type="source" position={Position.Right} id="right" />
-        <Handle type="target" position={Position.Left} id="left" />
+        <Handle type="source" position={Position.Right} id="right" className="handle-text" />
+        <Handle type="target" position={Position.Left} id="left" className="handle-text" />
       </div>
 
       {/* 悬浮操作按钮 - 复制（右上角偏左，与 Vue 版本一致） */}

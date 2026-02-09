@@ -29,13 +29,15 @@ import SketchEditor from '@/components/canvas/SketchEditor'
 import SonicStudio from '@/components/canvas/SonicStudio'
 import BlendToolPanel from '@/components/canvas/BlendToolPanel'
 import PromptReverseModal from '@/components/canvas/PromptReverseModal'
+import PromptAgentModal from '@/components/canvas/PromptAgentModal'
 import CameraControlModal from '@/components/cameraControl/CameraControlModal'
 import { getWorkflowById } from '@/config/workflows'
 import { getNodeSize } from '@/graph/nodeSizing'
 import { useSettingsStore } from '@/store/settings'
 import { saveMedia } from '@/lib/mediaStorage'
-import { ChevronDown, ChevronLeft, Download, History, Moon, Play, Settings, Sun, Type, SlidersHorizontal, Settings2, Image, Video, Music } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Download, History, Moon, Play, Settings, Sun, Type, SlidersHorizontal, Settings2, Image, Video, Music, BrainCircuit, Scissors, Loader2 } from 'lucide-react'
 import { generateImageFromConfigNode } from '@/lib/workflow/image'
+import { runWorkflow } from '@/lib/workflow/run'
 import { generateVideoFromConfigNode } from '@/lib/workflow/video'
 import { saveCurrentAsTemplate } from '@/lib/workflowTemplates'
 
@@ -74,7 +76,10 @@ export default function Canvas() {
   const [audioOpen, setAudioOpen] = useState(false)
   const [blendToolOpen, setBlendToolOpen] = useState(false)
   const [promptReverseOpen, setPromptReverseOpen] = useState(false)
+  const [promptAgentOpen, setPromptAgentOpen] = useState(false)
   const [cameraControlOpen, setCameraControlOpen] = useState(false)
+  const [workflowRunning, setWorkflowRunning] = useState(false)
+  const [workflowProgress, setWorkflowProgress] = useState({ total: 0, completed: 0, current: '', running: false })
   const [batchGenerating, setBatchGenerating] = useState(false)
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [saveTemplateName, setSaveTemplateName] = useState('')
@@ -213,6 +218,23 @@ export default function Canvas() {
     }
   }, [saveTemplateName, saveTemplateDesc])
 
+  const handleRunWorkflow = useCallback(async () => {
+    if (workflowRunning) return
+    setWorkflowRunning(true)
+    setWorkflowProgress({ total: 0, completed: 0, current: '', running: true })
+    try {
+      await runWorkflow((p) => {
+        setWorkflowProgress(p)
+        if (!p.running) setWorkflowRunning(false)
+      })
+    } catch (err: any) {
+      console.error('[Canvas] runWorkflow error:', err)
+      window.$message?.error?.(err?.message || '工作流执行失败')
+    } finally {
+      setWorkflowRunning(false)
+    }
+  }, [workflowRunning])
+
   // 画布右键菜单 - 创建节点（仅在画布空白处触发）
   const handleCanvasContextMenu = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement
@@ -253,6 +275,8 @@ export default function Canvas() {
   // 右键菜单节点选项（不包含本地保存）
   const contextMenuNodeOptions = [
     { type: 'text', name: '文本节点', Icon: Type, color: '#3b82f6' },
+    { type: 'llm', name: 'LLM 文本生成', Icon: BrainCircuit, color: '#22d37e' },
+    { type: 'textSplitter', name: '文本拆分', Icon: Scissors, color: '#f97316' },
     { type: 'imageConfig', name: '文生图配置', Icon: SlidersHorizontal, color: '#22c55e' },
     { type: 'videoConfig', name: '视频生成配置', Icon: Settings2, color: '#f59e0b' },
     { type: 'image', name: '图片节点', Icon: Image, color: '#8b5cf6' },
@@ -441,8 +465,10 @@ export default function Canvas() {
     const pos = { x: flowX - w * 0.5, y: flowY - h * 0.5 }
     
     const store = useGraphStore.getState()
-    const data: Record<string, unknown> = { label: type === 'text' ? '文本' : type === 'imageConfig' ? '生图配置' : type === 'videoConfig' ? '视频配置' : type }
-    
+    const data: Record<string, unknown> = {
+      label: type === 'text' ? '文本' : type === 'imageConfig' ? '生图配置' : type === 'videoConfig' ? '视频配置' : type === 'llm' ? 'LLM' : type === 'textSplitter' ? '文本拆分' : type
+    }
+
     if (type === 'imageConfig') {
       const baseModelCfg: any = (IMAGE_MODELS as any[]).find((m: any) => m.key === DEFAULT_IMAGE_MODEL) || (IMAGE_MODELS as any[])[0]
       data.model = DEFAULT_IMAGE_MODEL
@@ -479,18 +505,23 @@ export default function Canvas() {
     // 智能过滤：根据来源节点类型推荐合适的目标节点
     const allOptions = [
       { type: 'text', name: '文本节点', Icon: Type, color: '#3b82f6' },
+      { type: 'llm', name: 'LLM 文本生成', Icon: BrainCircuit, color: '#22d37e' },
+      { type: 'textSplitter', name: '文本拆分', Icon: Scissors, color: '#f97316' },
       { type: 'imageConfig', name: '文生图配置', Icon: SlidersHorizontal, color: '#22c55e' },
       { type: 'videoConfig', name: '视频生成配置', Icon: Settings2, color: '#f59e0b' },
       { type: 'image', name: '图片节点', Icon: Image, color: '#8b5cf6' },
       { type: 'video', name: '视频节点', Icon: Video, color: '#ef4444' },
       { type: 'audio', name: '音频节点', Icon: Music, color: '#0ea5e9' }
     ]
-    
+
     // 根据来源节点类型过滤
     switch (sourceType) {
       case 'text':
-        // 文本节点 → 生图配置、视频配置
-        return allOptions.filter(o => ['imageConfig', 'videoConfig'].includes(o.type))
+        return allOptions.filter(o => ['llm', 'textSplitter', 'imageConfig', 'videoConfig'].includes(o.type))
+      case 'llm':
+        return allOptions.filter(o => ['textSplitter', 'imageConfig', 'text'].includes(o.type))
+      case 'textSplitter':
+        return allOptions.filter(o => ['text', 'imageConfig'].includes(o.type))
       case 'imageConfig':
         // 生图配置 → 图片节点
         return allOptions.filter(o => o.type === 'image')
@@ -699,8 +730,10 @@ export default function Canvas() {
     const pos = { x: flowX - w * 0.5, y: flowY - h * 0.5 }
     
     const store = useGraphStore.getState()
-    const data: Record<string, unknown> = { label: type === 'text' ? '文本' : type === 'imageConfig' ? '生图配置' : type === 'videoConfig' ? '视频配置' : type }
-    
+    const data: Record<string, unknown> = {
+      label: type === 'text' ? '文本' : type === 'imageConfig' ? '生图配置' : type === 'videoConfig' ? '视频配置' : type === 'llm' ? 'LLM' : type === 'textSplitter' ? '文本拆分' : type
+    }
+
     if (type === 'imageConfig') {
       const baseModelCfg: any = (IMAGE_MODELS as any[]).find((m: any) => m.key === DEFAULT_IMAGE_MODEL) || (IMAGE_MODELS as any[])[0]
       data.model = DEFAULT_IMAGE_MODEL
@@ -1552,8 +1585,35 @@ export default function Canvas() {
               onOpenBlend={() => setBlendToolOpen(true)}
               onOpenPromptLibrary={() => setPromptLibraryOpen(true)}
               onOpenPromptReverse={() => setPromptReverseOpen(true)}
+              onOpenPromptAgent={() => setPromptAgentOpen(true)}
               onSaveAsTemplate={handleSaveAsTemplate}
             />
+
+            {/* 全局 Run 按钮 */}
+            <div className="pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-2">
+              {workflowRunning ? (
+                <div className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+                  <span className="text-xs text-[var(--text-primary)]">
+                    {workflowProgress.completed}/{workflowProgress.total}
+                  </span>
+                  <button
+                    onClick={() => { setWorkflowRunning(false) }}
+                    className="px-2 py-0.5 text-xs rounded bg-red-500/20 text-red-500 hover:bg-red-500/30"
+                  >
+                    停止
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleRunWorkflow}
+                  className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
+                >
+                  <Play className="h-4 w-4" />
+                  Run
+                </button>
+              )}
+            </div>
 
             {/* CanvasHud 在 React Flow / DOM 画布模式下禁用，因为它订阅 viewport 会导致性能问题 */}
             {/* React Flow 和 DOMGraphCanvas 已经内置了小地图，缩放控制通过 wheel 事件实现 */}
@@ -1897,6 +1957,11 @@ export default function Canvas() {
       <PromptReverseModal
         open={promptReverseOpen}
         onClose={() => setPromptReverseOpen(false)}
+      />
+
+      <PromptAgentModal
+        open={promptAgentOpen}
+        onClose={() => setPromptAgentOpen(false)}
       />
 
       <CameraControlModal

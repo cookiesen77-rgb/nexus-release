@@ -253,6 +253,12 @@ select option {
   transition: transform 0.15s ease, width 0.15s ease, height 0.15s ease;
 }
 
+/* 端口类型化着色 */
+.react-flow__handle.handle-text { background-color: #22d37e; }
+.react-flow__handle.handle-image { background-color: #3b82f6; }
+.react-flow__handle.handle-video { background-color: #ec4899; }
+.react-flow__handle.handle-audio { background-color: #eab308; }
+
 .react-flow__handle:hover {
   width: 14px;
   height: 14px;

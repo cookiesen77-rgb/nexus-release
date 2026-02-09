@@ -252,8 +252,8 @@ export const AudioNodeComponent = memo(function AudioNode({ id, data, selected }
         </div>
 
         {/* 连接点 */}
-        <Handle type="target" position={Position.Left} id="left" />
-        <Handle type="source" position={Position.Right} id="right" />
+        <Handle type="target" position={Position.Left} id="left" className="handle-audio" />
+        <Handle type="source" position={Position.Right} id="right" className="handle-audio" />
       </div>
     </div>
   )

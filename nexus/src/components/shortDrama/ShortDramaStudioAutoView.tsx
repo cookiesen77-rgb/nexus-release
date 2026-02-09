@@ -210,6 +210,9 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   const busySlotsRef = useRef(busySlotIds)
   busySlotsRef.current = busySlotIds
 
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+
   const setSlotBusy = useCallback((slotId: string, busy: boolean) => {
     setBusySlotIds((prev) => ({ ...prev, [slotId]: busy }))
   }, [])
@@ -562,10 +565,9 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
 
   const collectRefImagesForCharacter = useCallback(
     async (characterId: string) => {
-      const c = draft.characters.find((x) => x.id === characterId)
+      const c = draftRef.current.characters.find((x) => x.id === characterId)
       if (!c) return []
       const inputs: string[] = []
-      // 优先收集角色设定图（sheet）
       if (c.sheet) {
         const v = getPreferredVariant(c.sheet)
         const input = await resolveVariantInput(v || undefined)
@@ -578,7 +580,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       }
       return Array.from(new Set(inputs)).filter(Boolean)
     },
-    [draft.characters, getPreferredVariant, resolveVariantInput]
+    [getPreferredVariant, resolveVariantInput]
   )
 
   const buildScenePrompt = useCallback(
@@ -652,10 +654,9 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
 
   const collectRefImagesForAsset = useCallback(
     async (assetId: string) => {
-      const a = (draft.assets || []).find((x) => x.id === assetId)
+      const a = (draftRef.current.assets || []).find((x) => x.id === assetId)
       if (!a) return []
       const inputs: string[] = []
-      // 收集资产自身的参考图
       if (a.ref) {
         const v = getPreferredVariant(a.ref)
         const input = await resolveVariantInput(v || undefined)
@@ -666,14 +667,13 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         const input = await resolveVariantInput(v || undefined)
         if (input) inputs.push(input)
       }
-      // 如果资产有所属角色，也收集角色的参考图作为风格参考
       for (const charId of a.ownerCharacterIds || []) {
         const charRefs = await collectRefImagesForCharacter(charId)
         inputs.push(...charRefs)
       }
       return Array.from(new Set(inputs)).filter(Boolean)
     },
-    [draft.assets, getPreferredVariant, resolveVariantInput, collectRefImagesForCharacter]
+    [getPreferredVariant, resolveVariantInput, collectRefImagesForCharacter]
   )
 
   const buildFramePrompt = useCallback(
@@ -720,7 +720,13 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       const beat = String(shot.beat || '').trim()
       if (beat) parts.push(`本镜头意图/节拍：\n${beat}`)
 
-      parts.push('一致性要求：严格参考已上传的角色设定图、场景参考图、资产参考图，保持人物/场景/资产外观一致，不要随意更换。')
+      parts.push([
+        '构图硬性要求（必须严格遵守）：',
+        '1. 整张图只能包含「一个连续的单一场景」，严禁分屏、拼图、多格漫画、上下/左右分割、画中画等多场景构图。',
+        '2. 画面必须像电影截图/剧照一样，只有一个统一的视角和景深。',
+        '3. 不要出现黑色分隔线、边框、文字标签、水印或任何 UI 元素。',
+        '4. 一致性：严格参考已上传的角色设定图、场景参考图、资产参考图，保持人物/场景/资产外观一致，不要随意更换。',
+      ].join('\n'))
 
       const prompt = String(frame.prompt || '').trim()
       if (prompt) parts.push(prompt)
@@ -765,7 +771,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         if (names) parts.push(`出镜资产：${names}`)
       }
 
-      parts.push('一致性要求：视频中的人物/场景/资产必须与首尾帧及参考图一致。')
+      parts.push('一致性要求：视频中的人物/场景/资产必须与首尾帧及参考图一致，画面保持单一连续场景，不要分屏或拼图。')
 
       const v = String(shot.videoPrompt || '').trim() || String(shot.frames.start.prompt || '').trim()
       if (v) parts.push(`视频描述（动作/运镜/节奏）：\n${v}`)
@@ -776,13 +782,14 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
 
   const collectRefImagesForShot = useCallback(
     async (shotId: string, role: 'start' | 'end') => {
-      const shot = draft.shots.find((s) => s.id === shotId)
+      const d = draftRef.current
+      const shot = d.shots.find((s) => s.id === shotId)
       if (!shot) return []
       const refInputs: string[] = []
 
       // Scene refs (primary + extra)
       if (shot.sceneId) {
-        const scene = draft.scenes.find((s) => s.id === shot.sceneId)
+        const scene = d.scenes.find((s) => s.id === shot.sceneId)
         const slots: ShortDramaMediaSlot[] = []
         if (scene?.ref) slots.push(scene.ref)
         if (Array.isArray(scene?.refs) && scene.refs.length > 0) slots.push(...scene.refs)
@@ -795,7 +802,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
 
       // Character refs: sheet + refs
       for (const cid of shot.characterIds || []) {
-        const c = draft.characters.find((x) => x.id === cid)
+        const c = d.characters.find((x) => x.id === cid)
         if (!c) continue
         const sheetV = c.sheet ? getPreferredVariant(c.sheet) : null
         const sheetInput = await resolveVariantInput(sheetV || undefined)
@@ -822,7 +829,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
 
       return Array.from(new Set(refInputs)).filter(Boolean)
     },
-    [collectRefImagesForAsset, draft, getPreferredVariant, resolveVariantInput]
+    [collectRefImagesForAsset, getPreferredVariant, resolveVariantInput]
   )
 
   const runGenerateSlotImage = useCallback(
@@ -1024,8 +1031,9 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   }, [draft, setDraft])
 
   const runBatchGenerateCoreRefs = useCallback(async () => {
+    const d = draftRef.current
     // 1) Character sheets
-    const charTasks = draft.characters.map(async (c) => {
+    const charTasks = d.characters.map(async (c) => {
       const slotId = c.sheet.id
       markSlotStaleRunning(slotId)
       const selected = getPreferredVariant(c.sheet)
@@ -1036,7 +1044,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     })
 
     // 2) Scene refs (primary)
-    const sceneTasks = draft.scenes.map(async (s) => {
+    const sceneTasks = d.scenes.map(async (s) => {
       const slotId = s.ref.id
       markSlotStaleRunning(slotId)
       const selected = getPreferredVariant(s.ref)
@@ -1046,7 +1054,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     })
 
     // 3) Asset refs
-    const assetTasks = (draft.assets || []).map(async (a) => {
+    const assetTasks = (d.assets || []).map(async (a) => {
       const slotId = a.ref.id
       markSlotStaleRunning(slotId)
       const selected = getPreferredVariant(a.ref)
@@ -1063,9 +1071,6 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     buildScenePrompt,
     collectRefImagesForAsset,
     collectRefImagesForCharacter,
-    draft.assets,
-    draft.characters,
-    draft.scenes,
     getPreferredVariant,
     markSlotStaleRunning,
     runGenerateSlotImage,
@@ -1092,21 +1097,23 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   const runBatchGenerateKeyframes = useCallback(async () => {
     setKeyframesBusy(true)
     try {
-      // Shot frames (start & end) — 依赖角色/场景参考图（已在“分析并搭建”后优先生成）
-      const shotStartTasks = draft.shots.map(async (sh) => {
-        const slotId = sh.frames.start.slot.id
+      const d = draftRef.current
+      const shotStartTasks = d.shots.map(async (sh) => {
+        const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
+        const slotId = freshShot.frames.start.slot.id
         markSlotStaleRunning(slotId)
-        const selected = getPreferredVariant(sh.frames.start.slot)
+        const selected = getPreferredVariant(freshShot.frames.start.slot)
         if (selected?.status === 'success') return
         const prompt = buildFramePrompt(sh.id, 'start')
         const refs = await collectRefImagesForShot(sh.id, 'start')
         await runGenerateSlotImage(slotId, prompt, refs, 'auto')
       })
 
-      const shotEndTasks = draft.shots.map(async (sh) => {
-        const slotId = sh.frames.end.slot.id
+      const shotEndTasks = d.shots.map(async (sh) => {
+        const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
+        const slotId = freshShot.frames.end.slot.id
         markSlotStaleRunning(slotId)
-        const selected = getPreferredVariant(sh.frames.end.slot)
+        const selected = getPreferredVariant(freshShot.frames.end.slot)
         if (selected?.status === 'success') return
         const prompt = buildFramePrompt(sh.id, 'end')
         const refs = await collectRefImagesForShot(sh.id, 'end')
@@ -1119,14 +1126,8 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       setKeyframesBusy(false)
     }
   }, [
-    buildCharacterSheetPrompt,
     buildFramePrompt,
-    buildScenePrompt,
-    collectRefImagesForCharacter,
     collectRefImagesForShot,
-    draft.characters,
-    draft.scenes,
-    draft.shots,
     getPreferredVariant,
     markSlotStaleRunning,
     runGenerateSlotImage,
@@ -1135,12 +1136,13 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   const runBatchGenerateVideos = useCallback(async () => {
     setVideosBusy(true)
     try {
-      const tasks = draft.shots.map(async (sh) => {
-        const slotId = sh.video.id
+      const tasks = draftRef.current.shots.map(async (sh) => {
+        const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
+        const slotId = freshShot.video.id
         if (busySlotsRef.current[slotId]) return
 
-        const startV = getPreferredVariant(sh.frames.start.slot)
-        const endV = getPreferredVariant(sh.frames.end.slot)
+        const startV = getPreferredVariant(freshShot.frames.start.slot)
+        const endV = getPreferredVariant(freshShot.frames.end.slot)
         const startInput = await resolveVariantInput(startV || undefined)
         const endInput = await resolveVariantInput(endV || undefined)
         if (!startInput) return
@@ -1155,7 +1157,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     } finally {
       setVideosBusy(false)
     }
-  }, [buildVideoPrompt, collectRefImagesForShot, draft.shots, getPreferredVariant, resolveVariantInput, runGenerateSlotVideo])
+  }, [buildVideoPrompt, collectRefImagesForShot, getPreferredVariant, resolveVariantInput, runGenerateSlotVideo])
 
   const runBatchGenerateAll = useCallback(async () => {
     try {
