@@ -2,11 +2,12 @@ import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Trash2, Play, Loader2 } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
-import { useSettingsStore } from '@/store/settings'
 import { streamAiAssistant } from '@/lib/nexusApi'
 import { CHAT_MODELS } from '@/config/models'
 
-const MODEL_OPTIONS = (CHAT_MODELS as any[]).map((m: any) => ({ key: m.key, label: m.label }))
+const FIXED_MODEL = (CHAT_MODELS as any[])[0]
+const FIXED_MODEL_KEY = FIXED_MODEL?.key || 'gemini-3-pro-preview-thinking'
+const FIXED_MODEL_LABEL = FIXED_MODEL?.label || 'Gemini 3 Pro Thinking'
 
 interface LlmNodeData {
   label?: string
@@ -19,8 +20,6 @@ interface LlmNodeData {
 
 export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: NodeProps) {
   const nodeData = data as LlmNodeData
-  const defaultModel = useSettingsStore.getState().aiAssistantModel || MODEL_OPTIONS[0]?.key || ''
-  const [model, setModel] = useState(nodeData?.model || defaultModel)
   const [instruction, setInstruction] = useState(nodeData?.instruction || '')
   const [output, setOutput] = useState(nodeData?.output || '')
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>(nodeData?.status as any || 'idle')
@@ -38,11 +37,6 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
   const syncToStore = useCallback((patch: Record<string, unknown>) => {
     useGraphStore.getState().updateNode(id, { data: patch })
   }, [id])
-
-  const handleModelChange = useCallback((val: string) => {
-    setModel(val)
-    syncToStore({ model: val })
-  }, [syncToStore])
 
   const handleInstructionBlur = useCallback(() => {
     syncToStore({ instruction: instructionRef.current })
@@ -89,7 +83,7 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
       messages.push({ role: 'user', content: inputText || inst })
 
       let full = ''
-      for await (const chunk of streamAiAssistant(model, messages, { signal: ctrl.signal, filterThinking: true })) {
+      for await (const chunk of streamAiAssistant(FIXED_MODEL_KEY, messages, { signal: ctrl.signal, filterThinking: true })) {
         full += chunk
         setOutput(full)
       }
@@ -103,7 +97,7 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
       setErrorMessage(msg)
       syncToStore({ status: 'error', errorMessage: msg })
     }
-  }, [model, collectInputText, syncToStore])
+  }, [collectInputText, syncToStore])
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort()
@@ -168,18 +162,12 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
           />
         </div>
 
-        {/* Model Selector */}
+        {/* Model */}
         <div className="px-3 py-2">
-          <select
-            value={model}
-            onChange={(e) => handleModelChange(e.target.value)}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="nodrag w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs text-[var(--text-primary)] focus:border-emerald-500 focus:outline-none"
-          >
-            {MODEL_OPTIONS.map(m => (
-              <option key={m.key} value={m.key}>{m.label}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1.5">
+            <span className="text-xs text-emerald-500">✦</span>
+            <span className="text-xs text-[var(--text-primary)]">{FIXED_MODEL_LABEL}</span>
+          </div>
         </div>
 
         {/* Output */}
