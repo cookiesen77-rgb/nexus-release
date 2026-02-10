@@ -58,6 +58,8 @@ const SUPPORTED_VIDEO_FORMATS = new Set<string>([
   'minimax-hailuo-video',
   'runway-video',
   'luma-video',
+  'vidu-ent-video',
+  'tencent-aigc-video',
 ])
 
 const getModelLabel = (m: any) => String(m?.label || m?.key || '')
@@ -960,6 +962,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
             ratio: draft.models.videoRatio,
             duration: draft.models.videoDuration,
             size: draft.models.videoSize,
+            resolution: draft.models.videoResolution,
             images,
             lastFrame,
           })
@@ -1562,6 +1565,21 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                             </option>
                           )
                         })}
+                      </select>
+                    </div>
+                  ) : null}
+
+                  {Array.isArray((videoModelCfg as any)?.resolutions) && (videoModelCfg as any).resolutions.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">分辨率</label>
+                      <select
+                        value={draft.models.videoResolution || (videoModelCfg as any).defaultParams?.resolution || ''}
+                        onChange={(e) => patchModels({ videoResolution: e.target.value || undefined })}
+                        className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
+                      >
+                        {((videoModelCfg as any).resolutions as string[]).map((r: string) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
                       </select>
                     </div>
                   ) : null}

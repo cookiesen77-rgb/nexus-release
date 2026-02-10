@@ -82,6 +82,7 @@ export interface ShortDramaModels {
   videoRatio?: string
   videoDuration?: number
   videoSize?: string
+  videoResolution?: string
   targetShotCount?: number
   defaultFrameMode?: ShotFrameMode
 }

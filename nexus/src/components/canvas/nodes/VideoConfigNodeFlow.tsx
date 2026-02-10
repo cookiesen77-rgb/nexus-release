@@ -4,7 +4,7 @@
  */
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
-import { Trash2, Copy, Expand, Video } from 'lucide-react'
+import { Trash2, Copy, Expand, Video, Search } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { getNodeSize } from '@/graph/nodeSizing'
 import { generateVideoFromConfigNode } from '@/lib/workflow/video'
@@ -12,6 +12,7 @@ import { DEFAULT_VIDEO_MODEL, VIDEO_MODELS } from '@/config/models'
 import * as modelsConfig from '@/config/models'
 import { getVideoModelCaps, coerceVideoImageRole } from '@/lib/modelCaps'
 import { useSettingsStore } from '@/store/settings'
+import { VIDU_VOICES, VIDU_VOICE_LANGS } from '@/config/viduVoices'
 
 // 获取用户全局默认视频模型（回退到配置默认）
 const getDefaultVideoModel = (): string => {
@@ -57,8 +58,10 @@ interface VideoConfigNodeData {
   ratio?: string
   dur?: number
   size?: string
-  loopCount?: number  // 循环生成次数，默认 1
-  // Kling v2.6 音色（可选）：最多 2 个 voice_id（逗号分隔）
+  loopCount?: number
+  resolution?: string
+  viduAudio?: boolean
+  viduVoiceId?: string
   klingVoiceIds?: string
 }
 
@@ -69,7 +72,12 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
   const [ratio, setRatio] = useState(nodeData?.ratio || '16:9')
   const [duration, setDuration] = useState(nodeData?.dur || 5)
   const [size, setSize] = useState(nodeData?.size || '')
-  const [loopCount, setLoopCount] = useState(nodeData?.loopCount || 1) // 循环次数，默认 1
+  const [loopCount, setLoopCount] = useState(nodeData?.loopCount || 1)
+  const [resolution, setResolution] = useState(nodeData?.resolution || '')
+  const [viduAudio, setViduAudio] = useState(nodeData?.viduAudio !== false)
+  const [viduVoiceId, setViduVoiceId] = useState(nodeData?.viduVoiceId || '')
+  const [voiceSearch, setVoiceSearch] = useState('')
+  const [voiceDropdownOpen, setVoiceDropdownOpen] = useState(false)
   const [klingVoiceIds, setKlingVoiceIds] = useState(() => String(nodeData?.klingVoiceIds || '').trim())
   const [loading, setLoading] = useState(false)
 
@@ -121,6 +129,9 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
   const durationOptions = getModelDurationOptions(model)
   const sizeOptions = getModelSizeOptions(model)
   const hasSizeOptions = sizeOptions.length > 0
+  const resolutionOptions: string[] = currentModelConfig?.resolutions || []
+  const hasResolution = resolutionOptions.length > 0
+  const hasAudioSupport = !!currentModelConfig?.supportsAudio
 
   // 初始化：保证 store 上的 model/ratio/dur/size 与 UI 一致（避免“UI 选 Veo，实际走 Sora”）
   useEffect(() => {
@@ -172,6 +183,20 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
     if (next !== klingVoiceIds) setKlingVoiceIds(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeData?.klingVoiceIds, id])
+
+  useEffect(() => {
+    const r = String(nodeData?.resolution || '').trim()
+    if (r && r !== resolution) setResolution(r)
+  }, [nodeData?.resolution, id])
+
+  useEffect(() => {
+    if (nodeData?.viduAudio !== undefined && nodeData.viduAudio !== viduAudio) setViduAudio(nodeData.viduAudio)
+  }, [nodeData?.viduAudio, id])
+
+  useEffect(() => {
+    const v = String(nodeData?.viduVoiceId || '').trim()
+    if (v !== viduVoiceId) setViduVoiceId(v)
+  }, [nodeData?.viduVoiceId, id])
 
   // 按需计算连接状态
   const getConnectionStatus = useCallback(() => {
@@ -276,7 +301,7 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
     try {
       // 生成前强制同步当前 UI 选择到 store（用于持久化）
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
-      useGraphStore.getState().updateNode(id, { data: { model, ratio, dur: duration, size, loopCount, klingVoiceIds } } as any)
+      useGraphStore.getState().updateNode(id, { data: { model, ratio, dur: duration, size, loopCount, resolution, viduAudio, viduVoiceId, klingVoiceIds } } as any)
       
       // 循环生成（并发）：选择 N 次就立即创建 N 个后续输出节点，并发完成调用
       const actualLoopCount = Math.max(1, Math.min(10, loopCount)) // 限制 1-10 次
@@ -517,6 +542,103 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
               ))}
             </select>
           </div>
+
+          {/* 分辨率选择 */}
+          {hasResolution && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--text-secondary)]">分辨率</span>
+              <select
+                value={resolution || resolutionOptions[0] || ''}
+                onChange={(e) => {
+                  setResolution(e.target.value)
+                  debouncedUpdateStore({ resolution: e.target.value })
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="nodrag text-sm bg-transparent border border-[var(--border-color)] rounded px-2 py-1 outline-none"
+              >
+                {resolutionOptions.map((r: string) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 音频生成（Vidu 等支持音画同出的模型） */}
+          {hasAudioSupport && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[var(--text-secondary)]">音频生成</span>
+                <button
+                  onClick={() => {
+                    const next = !viduAudio
+                    setViduAudio(next)
+                    debouncedUpdateStore({ viduAudio: next })
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className={`nodrag relative w-9 h-5 rounded-full transition-colors ${viduAudio ? 'bg-emerald-500' : 'bg-[var(--border-color)]'}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${viduAudio ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+              {viduAudio && (
+                <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
+                  <div className="text-[11px] text-[var(--text-secondary)] mb-1">音色（留空自动推荐）</div>
+                  <div
+                    className="nodrag nowheel flex items-center gap-1 border border-[var(--border-color)] rounded px-2 py-1 bg-[var(--bg-primary)] cursor-text"
+                    onClick={() => setVoiceDropdownOpen(true)}
+                  >
+                    <Search size={12} className="text-[var(--text-secondary)] shrink-0" />
+                    <input
+                      value={voiceDropdownOpen ? voiceSearch : (viduVoiceId ? VIDU_VOICES.find(v => v.id === viduVoiceId)?.name || viduVoiceId : '')}
+                      onChange={(e) => { setVoiceSearch(e.target.value); setVoiceDropdownOpen(true) }}
+                      onFocus={() => setVoiceDropdownOpen(true)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className="nodrag w-full bg-transparent outline-none text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
+                      placeholder="搜索音色名称或 ID..."
+                    />
+                    {viduVoiceId && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setViduVoiceId(''); setVoiceSearch(''); debouncedUpdateStore({ viduVoiceId: '' }) }}
+                        className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] shrink-0"
+                      >×</button>
+                    )}
+                  </div>
+                  {voiceDropdownOpen && (
+                    <div
+                      className="nowheel absolute z-50 left-0 right-0 mt-1 max-h-[200px] overflow-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-lg"
+                      onWheel={(e) => e.stopPropagation()}
+                    >
+                      {VIDU_VOICE_LANGS.map(lang => {
+                        const q = voiceSearch.toLowerCase()
+                        const voices = VIDU_VOICES.filter(v => v.lang === lang && (!q || v.name.toLowerCase().includes(q) || v.id.toLowerCase().includes(q) || v.lang.includes(q)))
+                        if (voices.length === 0) return null
+                        return (
+                          <div key={lang}>
+                            <div className="px-2 py-1 text-[10px] font-bold text-[var(--text-secondary)] bg-[var(--bg-tertiary)] sticky top-0">{lang}</div>
+                            {voices.map(v => (
+                              <button
+                                key={v.id}
+                                onClick={() => {
+                                  setViduVoiceId(v.id)
+                                  setVoiceSearch('')
+                                  setVoiceDropdownOpen(false)
+                                  debouncedUpdateStore({ viduVoiceId: v.id })
+                                }}
+                                className={`w-full text-left px-2 py-1.5 text-xs hover:bg-[var(--bg-tertiary)] ${viduVoiceId === v.id ? 'bg-emerald-500/10 text-emerald-600' : 'text-[var(--text-primary)]'}`}
+                              >
+                                <span>{v.name}</span>
+                                <span className="ml-1 text-[10px] text-[var(--text-secondary)]">{v.id}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 循环次数 */}
           <div className="flex items-center justify-between">

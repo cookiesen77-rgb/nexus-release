@@ -1123,6 +1123,31 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '9:16', duration: 4, size: '720x1280' }
     },
     {
+        label: 'Vidu Q3 Pro',
+        key: 'viduq3-pro',
+        endpoint: '/ent/v2/text2video',
+        endpointImage: '/ent/v2/img2video',
+        statusEndpoint: (id) => `/ent/v2/tasks/${id}/creations`,
+        authMode: 'bearer',
+        format: 'vidu-ent-video',
+        tips: 'Vidu Q3 Pro；音画同出；智能切镜；5s/16s；720P/1080P/540P。',
+        requiresPrompt: true,
+        supportsFirstFrame: true,
+        supportsReferenceImages: false,
+        supportsAudio: true,
+        ratios: ['16:9', '9:16', '1:1'],
+        resolutions: ['1080p', '720p', '540p'],
+        durs: [
+            { label: '5 秒', key: 5 },
+            { label: '16 秒', key: 16 },
+        ],
+        defaultParams: {
+            ratio: '16:9',
+            duration: 5,
+            resolution: '1080p',
+        }
+    },
+    {
         label: 'Vidu Q3 Pro（腾讯AIGC）',
         key: 'vidu-q3-pro',
         endpoint: '/tencent-vod/v1/aigc-video',
@@ -1137,6 +1162,7 @@ export const VIDEO_MODELS = [
         supportsReferenceImages: true,
         maxRefImages: 7,
         ratios: ['16:9', '9:16', '1:1'],
+        resolutions: ['1080P', '720P'],
         durs: [
             { label: '1 秒', key: 1 }, { label: '2 秒', key: 2 }, { label: '3 秒', key: 3 },
             { label: '4 秒', key: 4 }, { label: '5 秒', key: 5 }, { label: '6 秒', key: 6 },
@@ -1168,6 +1194,7 @@ export const VIDEO_MODELS = [
         supportsReferenceImages: true,
         maxRefImages: 7,
         ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+        resolutions: ['1080P', '720P'],
         durs: [
             { label: '1 秒', key: 1 }, { label: '2 秒', key: 2 }, { label: '3 秒', key: 3 },
             { label: '4 秒', key: 4 }, { label: '5 秒', key: 5 }, { label: '6 秒', key: 6 },

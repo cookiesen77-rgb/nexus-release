@@ -971,7 +971,12 @@ const pollVideoTask = async (id: string, modelCfg: any, nodeId?: string, videoNo
     const downloadUrlRaw = Array.isArray(downloads) && downloads.length > 0 ? (downloads[0]?.url || downloads[0]?.video_url || downloads[0]) : null
     const downloadUrl = pickUrl(downloadUrlRaw)
     
-    const videoUrl = videoUrlFromFileInfos || outputVideo || downloadUrl ||
+    // Vidu Enterprise V2 格式：creations[0].url
+    const creations = resp?.creations || response?.creations || output?.creations
+    const creationUrl = Array.isArray(creations) && creations.length > 0
+      ? (creations[0]?.url || creations[0]?.video_url || '') : ''
+
+    const videoUrl = videoUrlFromFileInfos || outputVideo || downloadUrl || creationUrl ||
                      aigcOutput?.VideoUrl || aigcOutput?.video_url ||
                      output?.VideoUrl || output?.video_url || output?.ResultUrl || output?.result_url || 
                      response?.VideoUrl || response?.video_url ||
@@ -2007,13 +2012,40 @@ export const generateVideoFromConfigNode = async (
           video: { duration: dur, size: size, aspect_ratio: aspectRatio }
         }
       }
+    } else if (modelCfg.format === 'vidu-ent-video') {
+      // Vidu Enterprise V2：POST /ent/v2/text2video 或 /ent/v2/img2video
+      const dur = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg.defaultParams?.duration || 5)
+      const aspectRatio = ratio || modelCfg.defaultParams?.ratio || '16:9'
+      const resolution = String(d?.resolution || modelCfg.defaultParams?.resolution || '1080p')
+      const audioEnabled = d?.viduAudio !== false
+      const voiceId = String(d?.viduVoiceId || '').trim()
+
+      payload = {
+        model: modelCfg.key,
+        prompt: prompt || '',
+        duration: dur,
+        aspect_ratio: aspectRatio,
+        resolution,
+        audio: audioEnabled,
+      }
+      if (voiceId) (payload as any).voice_id = voiceId
+
+      // 图生视频：有首帧图时切换到 img2video 端点
+      if (firstFrame) {
+        const imgUrl = await ensurePublicHttpImageUrl(firstFrame, '首帧图')
+        if (imgUrl) {
+          ;(payload as any).images = [imgUrl]
+          endpointOverride = modelCfg.endpointImage || '/ent/v2/img2video'
+        }
+      }
+
     } else if (modelCfg.format === 'tencent-aigc-video') {
       // 腾讯 AIGC 视频（Vidu 等）：POST /tencent-vod/v1/aigc-video
       const modelName = modelCfg.defaultParams?.model_name || 'Vidu'
       const modelVersion = modelCfg.defaultParams?.model_version || 'q3-pro'
       const dur = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg.defaultParams?.duration || 5)
       const aspectRatio = ratio || modelCfg.defaultParams?.ratio || '16:9'
-      const resolution = modelCfg.defaultParams?.resolution || '1080P'
+      const resolution = String(d?.resolution || modelCfg.defaultParams?.resolution || '1080P')
 
       payload = {
         model_name: modelName,

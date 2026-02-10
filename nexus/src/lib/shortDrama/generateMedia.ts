@@ -527,7 +527,8 @@ export type ShortDramaVideoRequest = {
   ratio?: string
   duration?: number
   size?: string
-  images?: string[] // 参考图/首帧（允许 data: 或 http）
+  resolution?: string
+  images?: string[]
   lastFrame?: string
 }
 
@@ -605,10 +606,16 @@ const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: 
     const outputVideo = output?.video || resp?.output?.video || resp?.data?.output?.video
     const downloads = resp?.downloads || resp?.data?.downloads || output?.downloads
     const downloadUrl = Array.isArray(downloads) && downloads.length > 0 ? (downloads[0]?.url || downloads[0]?.video_url || downloads[0]) : null
+
+    const creations = resp?.creations || response?.creations || output?.creations
+    const creationUrl = Array.isArray(creations) && creations.length > 0
+      ? (creations[0]?.url || creations[0]?.video_url || '') : ''
+
     const videoUrl =
       videoUrlFromFileInfos ||
       outputVideo ||
       downloadUrl ||
+      creationUrl ||
       aigcOutput?.VideoUrl ||
       aigcOutput?.video_url ||
       output?.VideoUrl ||
@@ -668,6 +675,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
   const ratio = String(req?.ratio || modelCfg?.defaultParams?.ratio || '').trim()
   const duration = Number.isFinite(req?.duration) && Number(req?.duration) > 0 ? Number(req?.duration) : Number(modelCfg?.defaultParams?.duration || 0)
   const size = String(req?.size || modelCfg?.defaultParams?.size || '').trim()
+  const resolution = String(req?.resolution || modelCfg?.defaultParams?.resolution || '').trim()
   const images = Array.isArray(req?.images) ? req!.images!.map((x) => String(x || '').trim()).filter(Boolean) : []
   const lastFrame = String(req?.lastFrame || '').trim()
 
@@ -1380,15 +1388,28 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
       resolution,
     }
     console.log('[generateShortDramaVideo] luma-video payload:', JSON.stringify(payload, null, 2))
+  } else if (modelCfg.format === 'vidu-ent-video') {
+    const dur = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg.defaultParams?.duration || 5)
+    const aspectRatio = ratio || modelCfg.defaultParams?.ratio || '16:9'
+    const res = resolution || modelCfg.defaultParams?.resolution || '1080p'
+    payload = {
+      model: modelCfg.key,
+      prompt: prompt || '',
+      duration: dur,
+      aspect_ratio: aspectRatio,
+      resolution: res,
+      audio: true,
+    }
+    if (images.length > 0) {
+      ;(payload as any).images = images.slice(0, 1)
+      endpointOverride = modelCfg.endpointImage || '/ent/v2/img2video'
+    }
   } else if (modelCfg.format === 'tencent-aigc-video') {
-    // 腾讯 AIGC 视频：POST /tencent-vod/v1/aigc-video
-    // 查询：GET /tencent-vod/v1/query/{task_id}
-    // 响应：Response.AigcImageTask.Output.FileInfos[].FileUrl
     const modelName = modelCfg.defaultParams?.model_name || 'Vidu'
     const modelVersion = modelCfg.defaultParams?.model_version || 'q3-pro'
     const durValue = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg.defaultParams?.duration || 5)
     const aspectRatio = ratio || modelCfg.defaultParams?.ratio || '16:9'
-    const resolution = modelCfg.defaultParams?.resolution || '1080P'
+    const resValue = resolution || modelCfg.defaultParams?.resolution || '1080P'
     const audioGen = modelCfg.defaultParams?.audio_generation || 'Enabled'
     const enhancePrompt = modelCfg.defaultParams?.enhance_prompt || 'Enabled'
 
@@ -1400,7 +1421,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
       output_config: {
         storage_mode: 'Temporary',
         duration: durValue,
-        resolution,
+        resolution: resValue,
         aspect_ratio: aspectRatio,
         audio_generation: audioGen,
       },
