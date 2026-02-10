@@ -2,7 +2,8 @@ import { CHAT_MODELS, DEFAULT_CHAT_MODEL } from '@/config/models'
 import { postJson } from '@/lib/workflow/request'
 import { SHORT_DRAMA_STYLE_PRESETS, getShortDramaStylePresetById } from '@/lib/shortDrama/stylePresets'
 import { createEmptyImageSlot, createEmptyShot, createEmptyAsset } from '@/lib/shortDrama/draftStorage'
-import type { ShortDramaDraftV2, ShortDramaAssetCategory } from '@/lib/shortDrama/types'
+import type { ShortDramaDraftV2, ShortDramaAssetCategory, ShotFrameMode } from '@/lib/shortDrama/types'
+import { SHOT_FRAME_MODES } from '@/lib/shortDrama/types'
 
 const DEFAULT_ANALYSIS_MODEL = 'gemini-3-pro-preview-thinking'
 
@@ -77,6 +78,30 @@ const callChatModel = async (modelKey: string, messages: ChatMessage[]): Promise
     const parts = rsp?.candidates?.[0]?.content?.parts || []
     const text = Array.isArray(parts) ? parts.map((p: any) => p?.text).filter(Boolean).join('') : ''
     return normalizeText(text)
+  }
+
+  // Anthropic Messages API
+  if (format === 'anthropic-chat') {
+    const system = messages.find((m) => m.role === 'system')?.content || ''
+    const nonSystemMessages = messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    const payload: any = {
+      model: modelCfg.key,
+      max_tokens: 16384,
+      messages: nonSystemMessages,
+    }
+    if (system) payload.system = system
+    const rsp = await postJson<any>(modelCfg.endpoint, payload, {
+      authMode: modelCfg.authMode,
+      timeoutMs: 240000,
+      extraHeaders: { 'anthropic-version': '2023-06-01' },
+    })
+    const content = rsp?.content
+    if (Array.isArray(content)) {
+      return normalizeText(content.map((b: any) => b?.text || '').filter(Boolean).join(''))
+    }
+    return normalizeText(String(content || ''))
   }
 
   // OpenAI Responses API
@@ -218,6 +243,8 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
   const supportsFirstLastFrame = videoCtx?.supportsFirstLastFrame ?? true
   const videoRatio = videoCtx?.ratio || opts.draft.models.videoRatio || '9:16'
   const targetShotCount = opts.draft.models.targetShotCount || 0
+  const defaultFrameMode: ShotFrameMode = opts.draft.models.defaultFrameMode || 'first_last'
+  const frameModeInfo = SHOT_FRAME_MODES.find((m) => m.value === defaultFrameMode)
   const shotCountHint = targetShotCount > 0
     ? `用户要求生成恰好 ${targetShotCount} 个镜头。这是硬性约束，输出的 shots 数组长度必须严格等于 ${targetShotCount}，不多不少。如果剧本较短，则细化每句话拆成多个镜头角度来凑满数量；如果剧本较长，则合并次要动作保证精确数量。绝对禁止偏差。`
     : `请根据剧本内容自动决定镜头数量。原则：宁多勿少，每${videoDuration}秒为一个镜头，确保剧本的每一句台词、每一个动作、每一次情绪转折都有对应镜头，不要跳过任何细节。一般来说，一段500字的剧本至少需要15-25个镜头。`
@@ -318,11 +345,18 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     '',
     '镜头支持多种帧模式，根据选定模式生成不同数量的提示词：',
     '- first_only: 仅生成 startPrompt（1张首帧）',
-    '- first_last: 生成 startPrompt + endPrompt（首帧+尾帧，默认模式）',
+    '- first_last: 生成 startPrompt + endPrompt（首帧+尾帧）',
     '- grid_4: 生成 4 格提示词（起-承-转-合），格式为 gridPrompts 数组',
     '- grid_6: 生成 6 格提示词（引入-发展-高潮前-高潮-回落-结尾）',
     '- grid_9: 生成 9 格提示词（3×3叙事网格，按从左到右、从上到下的阅读顺序）',
     '- grid_25: 生成 25 格提示词（5×5细粒度分镜）',
+    '',
+    `【当前帧模式 — 必须严格遵守】：${defaultFrameMode}（${frameModeInfo?.label || ''}，每镜头 ${frameModeInfo?.count || 2} 张提示词）`,
+    defaultFrameMode === 'first_only'
+      ? '所有镜头只需生成 startPrompt，endPrompt 留空字符串，gridPrompts 留空数组。'
+      : defaultFrameMode === 'first_last'
+        ? '所有镜头必须同时生成 startPrompt 和 endPrompt，gridPrompts 留空数组。'
+        : `所有镜头必须生成 gridPrompts 数组，长度严格等于 ${frameModeInfo?.count || 4}。startPrompt/endPrompt 可留空。每格提示词必须是完整的画面描述（至少120字中文）。`,
     '',
     '宫格模式规则：',
     '1. 每格提示词必须重复角色核心外貌特征（视觉锚点），确保一致性',
@@ -441,7 +475,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     script,
   ].join('\n')
 
-  const modelKey = DEFAULT_ANALYSIS_MODEL // 固定使用 gemini-3-pro-preview-thinking，不可更改
+  const modelKey = opts.modelKey || opts.draft.models.analysisModelKey || DEFAULT_ANALYSIS_MODEL
   let rawText = await callChatModel(modelKey, [
     { role: 'system', content: system },
     { role: 'user', content: user },
@@ -632,9 +666,11 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
       if (!nextShot.frames.start.prompt && startPrompt) nextShot.frames.start.prompt = startPrompt
       if (!nextShot.frames.end.prompt && endPrompt) nextShot.frames.end.prompt = endPrompt
       if ((!nextShot.gridPrompts || nextShot.gridPrompts.length === 0) && gridPrompts.length > 0) nextShot.gridPrompts = gridPrompts
+      if (nextShot.frameMode === 'first_last' && defaultFrameMode !== 'first_last') nextShot.frameMode = defaultFrameMode
       mergedShots[i] = nextShot
     } else {
       const shot = createEmptyShot(title)
+      shot.frameMode = defaultFrameMode
       shot.beat = beat
       shot.scriptExcerpt = scriptExcerpt
       shot.videoPrompt = videoPrompt

@@ -297,115 +297,91 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
 
   // 额外订阅：监听节点数据变化（loading/url 等属性更新）
   useEffect(() => {
-    // 存储节点数据的快照用于比较
-    const nodeDataSnapshotRef: Record<string, any> = {}
-    
-    // 初始化快照
+    // 只存需要比较的轻量属性，避免持有 base64 大数据引用
+    // url/sourceUrl 用身份标记（长度+前16字符）代替完整值
+    const urlTag = (v: any) => v ? `${String(v).length}:${String(v).slice(0, 16)}` : ''
+    const pick = (d: any) => d ? {
+      loading: d.loading, url: urlTag(d.url), error: d.error, content: d.content,
+      executed: d.executed, mediaId: d.mediaId, sourceUrl: urlTag(d.sourceUrl),
+      fileName: d.fileName, model: d.model, size: d.size, quality: d.quality,
+      loopCount: d.loopCount, ratio: d.ratio, dur: d.dur,
+      status: d.status, output: d.output, errorMessage: d.errorMessage,
+      instruction: d.instruction, splitCount: d.splitCount,
+    } : {}
+
+    const snaps: Record<string, any> = {}
     for (const node of useGraphStore.getState().nodes) {
-      nodeDataSnapshotRef[node.id] = { ...node.data }
+      snaps[node.id] = pick(node.data)
     }
-    
+
+    // 清理已删除节点的快照
+    const cleanupSnaps = (currentIds: Set<string>) => {
+      for (const id of Object.keys(snaps)) {
+        if (!currentIds.has(id)) delete snaps[id]
+      }
+    }
+
     const unsubscribe = useGraphStore.subscribe(
       (state) => {
-        // 检查节点数据是否变化
         const updatedNodes: { id: string; data: any }[] = []
-        
+        const currentIds = new Set<string>()
+
         for (const node of state.nodes) {
-          const prev = nodeDataSnapshotRef[node.id]
+          currentIds.add(node.id)
+          const prev = snaps[node.id]
           const curr = node.data as any
-          
+
           if (!prev) {
-            // 新节点，记录快照并标记为需要更新
-            console.log('[ReactFlowCanvas] 发现新节点:', node.id, node.type)
-            nodeDataSnapshotRef[node.id] = { ...node.data }
-            // 新节点也需要同步数据到 React Flow
+            snaps[node.id] = pick(curr)
             updatedNodes.push({ id: node.id, data: node.data })
             continue
           }
-          
-          // 检查关键属性是否变化
-          const loadingChanged = prev.loading !== curr?.loading
-          const urlChanged = prev.url !== curr?.url
-          const errorChanged = prev.error !== curr?.error
-          const contentChanged = prev.content !== curr?.content
-          const executedChanged = prev.executed !== curr?.executed
-          const mediaIdChanged = prev.mediaId !== curr?.mediaId
-          const sourceUrlChanged = prev.sourceUrl !== curr?.sourceUrl
-          const fileNameChanged = prev.fileName !== curr?.fileName
-          const modelChanged = prev.model !== curr?.model
-          const sizeChanged = prev.size !== curr?.size
-          const qualityChanged = prev.quality !== curr?.quality
-          const loopCountChanged = prev.loopCount !== curr?.loopCount
-          const ratioChanged = prev.ratio !== curr?.ratio
-          const durChanged = prev.dur !== curr?.dur
-          const statusChanged = prev.status !== curr?.status
-          const outputChanged = prev.output !== curr?.output
-          const errorMessageChanged = prev.errorMessage !== curr?.errorMessage
-          const instructionChanged = prev.instruction !== curr?.instruction
-          const splitCountChanged = prev.splitCount !== curr?.splitCount
+
+          const p = prev
+          const loadingChanged = p.loading !== curr?.loading
+          const urlChanged = p.url !== urlTag(curr?.url)
+          const errorChanged = p.error !== curr?.error
+          const contentChanged = p.content !== curr?.content
+          const executedChanged = p.executed !== curr?.executed
+          const mediaIdChanged = p.mediaId !== curr?.mediaId
+          const sourceUrlChanged = p.sourceUrl !== urlTag(curr?.sourceUrl)
+          const fileNameChanged = p.fileName !== curr?.fileName
+          const modelChanged = p.model !== curr?.model
+          const sizeChanged = p.size !== curr?.size
+          const qualityChanged = p.quality !== curr?.quality
+          const loopCountChanged = p.loopCount !== curr?.loopCount
+          const ratioChanged = p.ratio !== curr?.ratio
+          const durChanged = p.dur !== curr?.dur
+          const statusChanged = p.status !== curr?.status
+          const outputChanged = p.output !== curr?.output
+          const errorMessageChanged = p.errorMessage !== curr?.errorMessage
+          const instructionChanged = p.instruction !== curr?.instruction
+          const splitCountChanged = p.splitCount !== curr?.splitCount
 
           if (
-            loadingChanged ||
-            urlChanged ||
-            errorChanged ||
-            contentChanged ||
-            executedChanged ||
-            mediaIdChanged ||
-            sourceUrlChanged ||
-            fileNameChanged ||
-            modelChanged ||
-            sizeChanged ||
-            qualityChanged ||
-            loopCountChanged ||
-            ratioChanged ||
-            durChanged ||
-            statusChanged ||
-            outputChanged ||
-            errorMessageChanged ||
-            instructionChanged ||
-            splitCountChanged
+            loadingChanged || urlChanged || errorChanged || contentChanged ||
+            executedChanged || mediaIdChanged || sourceUrlChanged || fileNameChanged ||
+            modelChanged || sizeChanged || qualityChanged || loopCountChanged ||
+            ratioChanged || durChanged ||
+            statusChanged || outputChanged || errorMessageChanged ||
+            instructionChanged || splitCountChanged
           ) {
-            console.log('[ReactFlowCanvas] 节点数据变化:', node.id, {
-              loadingChanged,
-              urlChanged,
-              errorChanged,
-              contentChanged,
-              executedChanged,
-              mediaIdChanged,
-              sourceUrlChanged,
-              fileNameChanged,
-              modelChanged,
-              sizeChanged,
-              qualityChanged,
-              loopCountChanged,
-              ratioChanged,
-              durChanged,
-              prevLoading: prev.loading, currLoading: curr?.loading,
-              prevUrl: !!prev.url, currUrl: !!curr?.url
-            })
             updatedNodes.push({ id: node.id, data: node.data })
-            nodeDataSnapshotRef[node.id] = { ...node.data }
+            snaps[node.id] = pick(curr)
           }
         }
-        
+
+        cleanupSnaps(currentIds)
+
         if (updatedNodes.length > 0) {
-          console.log('[ReactFlowCanvas] 同步节点数据到 React Flow:', updatedNodes.map(n => ({ id: n.id, loading: n.data?.loading, hasUrl: !!n.data?.url })))
-          setNodes((prev) => {
-            const newNodes = prev.map(n => {
-              const updated = updatedNodes.find(u => u.id === n.id)
-              if (updated) {
-                console.log('[ReactFlowCanvas] 更新节点:', n.id, '新 data:', { loading: updated.data?.loading, hasUrl: !!updated.data?.url })
-                return { ...n, data: updated.data }
-              }
-              return n
-            })
-            console.log('[ReactFlowCanvas] setNodes 完成, 节点数:', newNodes.length)
-            return newNodes
-          })
+          setNodes((prev) => prev.map(n => {
+            const updated = updatedNodes.find(u => u.id === n.id)
+            return updated ? { ...n, data: updated.data } : n
+          }))
         }
       }
     )
-    
+
     return unsubscribe
   }, [setNodes])
 

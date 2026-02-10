@@ -1508,6 +1508,20 @@ export const CHAT_MODELS = [
         format: 'openai-chat'
     },
     {
+        label: 'Claude Opus 4.6',
+        key: 'claude-opus-4-6',
+        endpoint: '/messages',
+        authMode: 'bearer',
+        format: 'anthropic-chat'
+    },
+    {
+        label: 'Claude Opus 4.5',
+        key: 'claude-opus-4-5-20251101',
+        endpoint: '/messages',
+        authMode: 'bearer',
+        format: 'anthropic-chat'
+    },
+    {
         label: 'GPT-5 mini（Responses）',
         key: 'gpt-5-mini',
         endpoint: '/responses',

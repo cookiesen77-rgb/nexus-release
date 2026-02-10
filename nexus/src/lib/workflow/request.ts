@@ -249,7 +249,7 @@ export const resolveEndpointUrl = (endpoint: string) => {
   return `${base}${path}`
 }
 
-export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMode?: AuthMode; timeoutMs?: number }) => {
+export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMode?: AuthMode; timeoutMs?: number; extraHeaders?: Record<string, string> }) => {
   const url0 = resolveEndpointUrl(endpoint)
   const authMode = opts?.authMode
   const apiKey = getApiKey()
@@ -286,7 +286,8 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
           Accept: 'application/json',
           'Content-Type': 'application/json',
           ...(authMode === 'query' && apiKey ? { 'x-goog-api-key': apiKey } : {}),
-          ...(authMode !== 'query' && apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+          ...(authMode !== 'query' && apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+          ...(opts?.extraHeaders || {})
         },
         body: JSON.stringify(body || {})
       }

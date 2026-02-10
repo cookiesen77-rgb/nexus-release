@@ -211,14 +211,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
           model: typeof (nodeData as any)?.model === 'string' ? (nodeData as any).model : undefined,
         })
         if (mediaId) {
-          // Save mediaId and, if sourceUrl exists, swap display to sourceUrl to avoid
-          // storing huge data: URLs in localStorage graph state (prevents quota overflow)
-          const httpSource = typeof nodeData?.sourceUrl === 'string' && /^https?:\/\//i.test(nodeData.sourceUrl) ? nodeData.sourceUrl : ''
-          if (httpSource && url.length > 100000) {
-            store.patchNodeDataSilent(id, { mediaId, url: httpSource })
-          } else {
-            store.patchNodeDataSilent(id, { mediaId })
-          }
+          store.patchNodeDataSilent(id, { mediaId })
         }
       } catch {
         // ignore

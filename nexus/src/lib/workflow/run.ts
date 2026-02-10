@@ -1,8 +1,13 @@
 /**
- * runWorkflow - 拓扑排序执行整个画布工作流
+ * runWorkflow / runFromNode — 画布工作流引擎
  *
- * 遍历所有可执行节点（llm, textSplitter, imageConfig, videoConfig），
- * 按拓扑依赖顺序串行执行。
+ * 支持两种执行方式：
+ * - runWorkflow()      全画布拓扑排序执行
+ * - runFromNode(id)    从指定节点开始级联执行所有下游
+ *
+ * LLM 节点特性：
+ * - 上游有 TextSplitter 时自动 fan-out（逐段独立处理，创建文本节点 + 可选 imageConfig）
+ * - 指令中含「生图/配图/图片」等关键词时自动为每段创建 imageConfig 节点
  */
 
 import { useGraphStore } from '@/graph/store'
@@ -10,10 +15,22 @@ import { streamAiAssistant } from '@/lib/nexusApi'
 import { generateImageFromConfigNode } from '@/lib/workflow/image'
 import { generateVideoFromConfigNode } from '@/lib/workflow/video'
 import type { GraphNode, GraphEdge } from '@/graph/types'
+import { CHAT_MODELS, DEFAULT_IMAGE_MODEL, IMAGE_MODELS } from '@/config/models'
+import { useSettingsStore } from '@/store/settings'
 
 type ExecutableType = 'llm' | 'textSplitter' | 'imageConfig' | 'videoConfig'
 
 const EXECUTABLE_TYPES = new Set<string>(['llm', 'textSplitter', 'imageConfig', 'videoConfig'])
+const DEFAULT_LLM_MODEL = (CHAT_MODELS as any[])[0]?.key || 'gemini-3-pro-preview-thinking'
+const IMAGE_KEYWORDS = /生图|配图|图片|画面|绘图|illustration|visual|生成图/i
+
+function getEffectiveImageModel(): string {
+  const userDefault = useSettingsStore.getState().defaultImageModel
+  if (userDefault && (IMAGE_MODELS as any[]).some((m: any) => m.key === userDefault)) return userDefault
+  return DEFAULT_IMAGE_MODEL
+}
+
+// ─── 拓扑排序 ────────────────────────────────────────────
 
 function topoSort(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
   const execNodes = nodes.filter(n => EXECUTABLE_TYPES.has(n.type))
@@ -54,45 +71,180 @@ function topoSort(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
   return sorted
 }
 
+// ─── 输入收集 ────────────────────────────────────────────
+
 function collectInputTextForNode(nodeId: string, nodes: GraphNode[], edges: GraphEdge[]): string {
-  const inEdges = edges.filter(e => e.target === nodeId)
   const parts: string[] = []
-  for (const edge of inEdges) {
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue
     const src = nodes.find(n => n.id === edge.source)
     if (!src) continue
-    if (src.type === 'text') {
-      const c = (src.data as any)?.content
-      if (c) parts.push(String(c))
-    } else if (src.type === 'llm') {
-      const o = (src.data as any)?.output
-      if (o) parts.push(String(o))
-    }
+    const d = src.data as any
+    if (src.type === 'text' && d?.content) parts.push(String(d.content))
+    else if (src.type === 'llm' && d?.output) parts.push(String(d.output))
+    else if (src.type === 'textSplitter' && d?.output) parts.push(String(d.output))
   }
   return parts.join('\n\n')
 }
 
-async function executeLlmNode(node: GraphNode, nodes: GraphNode[], edges: GraphEdge[]): Promise<void> {
-  const store = useGraphStore.getState()
-  const d = node.data as any
-  const model = d?.model || 'gemini-3-pro-preview-thinking'
-  const instruction = String(d?.instruction || '').trim()
-  const inputText = collectInputTextForNode(node.id, nodes, edges)
+/** 当上游有 TextSplitter 时，收集拆分器创建的各段文本（用于 fan-out） */
+function collectSegmentsFromSplitter(nodeId: string, nodes: GraphNode[], edges: GraphEdge[]): string[] {
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue
+    const src = nodes.find(n => n.id === edge.source)
+    if (src?.type !== 'textSplitter') continue
 
+    const segments: string[] = []
+    for (const de of edges) {
+      if (de.source !== src.id || de.target === nodeId) continue
+      const tn = nodes.find(n => n.id === de.target)
+      if (tn?.type === 'text') {
+        const c = (tn.data as any)?.content
+        if (c) segments.push(String(c))
+      }
+    }
+    if (segments.length > 0) return segments
+  }
+  return []
+}
+
+// ─── LLM 执行 ───────────────────────────────────────────
+
+async function executeLlmNode(
+  node: GraphNode, nodes: GraphNode[], edges: GraphEdge[], signal?: AbortSignal
+): Promise<void> {
+  const d = node.data as any
+  const model = d?.model || DEFAULT_LLM_MODEL
+  const instruction = String(d?.instruction || '').trim()
+
+  // fan-out：上游 TextSplitter 有多段
+  const segments = collectSegmentsFromSplitter(node.id, nodes, edges)
+  if (segments.length >= 1) {
+    await executeLlmFanOut(node, segments, instruction, model, signal)
+    return
+  }
+
+  // 普通单次执行
+  const inputText = collectInputTextForNode(node.id, nodes, edges)
   if (!inputText && !instruction) return
 
-  store.updateNode(node.id, { data: { status: 'running', output: '', errorMessage: '' } })
+  useGraphStore.getState().updateNode(node.id, { data: { status: 'running', output: '', errorMessage: '' } })
 
   const messages: any[] = []
   if (instruction) messages.push({ role: 'system', content: instruction })
   messages.push({ role: 'user', content: inputText || instruction })
 
   let full = ''
-  for await (const chunk of streamAiAssistant(model, messages, { filterThinking: true })) {
-    full += chunk
+  let lastFlush = 0
+  try {
+    for await (const chunk of streamAiAssistant(model, messages, { filterThinking: true, signal })) {
+      full += chunk
+      const now = Date.now()
+      if (now - lastFlush > 300) {
+        lastFlush = now
+        useGraphStore.getState().patchNodeDataSilent(node.id, { output: full })
+      }
+    }
+    useGraphStore.getState().updateNode(node.id, { data: { output: full, status: 'done' } })
+  } catch (err: any) {
+    if (signal?.aborted) {
+      useGraphStore.getState().updateNode(node.id, {
+        data: { output: full || '', status: full ? 'done' : 'idle' }
+      })
+      return
+    }
+    throw err
+  }
+}
+
+/** fan-out：对每段独立调用 LLM，为每段创建文本节点 + 可选 imageConfig */
+async function executeLlmFanOut(
+  node: GraphNode, segments: string[], instruction: string, model: string, signal?: AbortSignal
+): Promise<void> {
+  const store = useGraphStore.getState()
+  store.updateNode(node.id, { data: { status: 'running', output: '', errorMessage: '' } })
+
+  // 已有下游文本节点 → 跳过（防重复）
+  const hasCreatedNodes = store.edges
+    .filter(e => e.source === node.id)
+    .some(e => {
+      const t = store.nodes.find(n => n.id === e.target)
+      return t?.type === 'text'
+    })
+  if (hasCreatedNodes) {
+    store.updateNode(node.id, { data: { status: 'done' } })
+    return
   }
 
-  store.updateNode(node.id, { data: { output: full, status: 'done' } })
+  const thisNode = store.nodes.find(n => n.id === node.id)
+  if (!thisNode) return
+
+  const wantsImage = IMAGE_KEYWORDS.test(instruction)
+  const baseX = thisNode.x + 420
+  const baseY = thisNode.y
+  const yGap = wantsImage ? 260 : 180
+
+  let combinedOutput = ''
+
+  for (let i = 0; i < segments.length; i++) {
+    if (signal?.aborted) break
+
+    useGraphStore.getState().patchNodeDataSilent(node.id, {
+      output: `[${i + 1}/${segments.length}] 处理中...`
+    })
+
+    const messages: any[] = []
+    if (instruction) messages.push({ role: 'system', content: instruction })
+    messages.push({ role: 'user', content: segments[i] })
+
+    let full = ''
+    let lastFlush = 0
+    try {
+      for await (const chunk of streamAiAssistant(model, messages, { filterThinking: true, signal })) {
+        full += chunk
+        const now = Date.now()
+        if (now - lastFlush > 300) {
+          lastFlush = now
+          useGraphStore.getState().patchNodeDataSilent(node.id, {
+            output: `[${i + 1}/${segments.length}]\n${full.slice(-300)}`
+          })
+        }
+      }
+    } catch (err: any) {
+      if (signal?.aborted) break
+      throw err
+    }
+
+    combinedOutput += full + '\n\n'
+
+    // 创建下游节点
+    const s = useGraphStore.getState()
+    s.withBatchUpdates(() => {
+      const textId = s.addNode('text', { x: baseX, y: baseY + i * yGap }, {
+        label: `分镜 ${i + 1}`,
+        content: full
+      })
+      s.addEdge(node.id, textId, { sourceHandle: 'right', targetHandle: 'left' })
+
+      if (wantsImage) {
+        const imgModel = getEffectiveImageModel()
+        const baseCfg = (IMAGE_MODELS as any[]).find((m: any) => m.key === imgModel) || (IMAGE_MODELS as any[])[0]
+        const cfgData: Record<string, unknown> = { label: `生图 ${i + 1}`, model: imgModel }
+        if (baseCfg?.defaultParams?.size) cfgData.size = baseCfg.defaultParams.size
+        if (baseCfg?.defaultParams?.quality) cfgData.quality = baseCfg.defaultParams.quality
+
+        const cfgId = s.addNode('imageConfig', { x: baseX + 300, y: baseY + i * yGap }, cfgData)
+        s.addEdge(textId, cfgId, { sourceHandle: 'right', targetHandle: 'left' })
+      }
+    })
+  }
+
+  useGraphStore.getState().updateNode(node.id, {
+    data: { output: combinedOutput.trim() || '已中断', status: combinedOutput ? 'done' : 'idle' }
+  })
 }
+
+// ─── TextSplitter 执行 ──────────────────────────────────
 
 function executeTextSplitterNode(node: GraphNode, nodes: GraphNode[], edges: GraphEdge[]): void {
   const store = useGraphStore.getState()
@@ -124,10 +276,13 @@ function executeTextSplitterNode(node: GraphNode, nodes: GraphNode[], edges: Gra
   const thisNode = store.nodes.find(n => n.id === node.id)
   if (!thisNode) return
 
-  // 检查是否已有下游 text 节点（避免重复创建）
-  const existingDownstream = edges.filter(e => e.source === node.id).map(e => e.target)
-  if (existingDownstream.length > 0) {
-    store.updateNode(node.id, { data: { status: 'done', splitCount: existingDownstream.length } })
+  // 只检查下游 text 节点（忽略下游可执行节点如 LLM）
+  const existingTextNodes = edges
+    .filter(e => e.source === node.id)
+    .map(e => nodes.find(n => n.id === e.target))
+    .filter(n => n?.type === 'text')
+  if (existingTextNodes.length > 0) {
+    store.updateNode(node.id, { data: { status: 'done', splitCount: existingTextNodes.length } })
     return
   }
 
@@ -148,6 +303,8 @@ function executeTextSplitterNode(node: GraphNode, nodes: GraphNode[], edges: Gra
   store.updateNode(node.id, { data: { status: 'done', splitCount: segments.length } })
 }
 
+// ─── 执行引擎 ───────────────────────────────────────────
+
 export type WorkflowProgress = {
   total: number
   completed: number
@@ -155,6 +312,44 @@ export type WorkflowProgress = {
   running: boolean
 }
 
+async function executeNodes(
+  sorted: GraphNode[],
+  signal?: AbortSignal,
+  onProgress?: (p: WorkflowProgress) => void
+): Promise<void> {
+  const total = sorted.length
+  let completed = 0
+
+  for (const node of sorted) {
+    if (signal?.aborted) break
+    onProgress?.({ total, completed, current: node.type, running: true })
+
+    try {
+      const fresh = useGraphStore.getState()
+      if (node.type === 'llm') {
+        await executeLlmNode(node, fresh.nodes, fresh.edges, signal)
+      } else if (node.type === 'textSplitter') {
+        executeTextSplitterNode(node, fresh.nodes, fresh.edges)
+      } else if (node.type === 'imageConfig') {
+        await generateImageFromConfigNode(node.id)
+      } else if (node.type === 'videoConfig') {
+        await generateVideoFromConfigNode(node.id)
+      }
+    } catch (err: any) {
+      if (signal?.aborted) break
+      useGraphStore.getState().updateNode(node.id, {
+        data: { status: 'error', errorMessage: err?.message || '执行失败' }
+      })
+    }
+
+    completed++
+    onProgress?.({ total, completed, current: node.type, running: true })
+  }
+
+  onProgress?.({ total, completed: total, current: '', running: false })
+}
+
+/** 执行整个画布 */
 export async function runWorkflow(
   onProgress?: (p: WorkflowProgress) => void
 ): Promise<void> {
@@ -166,35 +361,42 @@ export async function runWorkflow(
     return
   }
 
-  const total = sorted.length
-  let completed = 0
+  await executeNodes(sorted, undefined, onProgress)
+}
 
-  for (const node of sorted) {
-    onProgress?.({ total, completed, current: node.type, running: true })
+/** 从指定节点开始级联执行所有下游可执行节点 */
+export async function runFromNode(
+  startNodeId: string,
+  options?: { signal?: AbortSignal; onProgress?: (p: WorkflowProgress) => void }
+): Promise<void> {
+  const { nodes, edges } = useGraphStore.getState()
+  const nodeMap = new Map(nodes.map(n => [n.id, n]))
 
-    try {
-      if (node.type === 'llm') {
-        // 每次重新读取最新的 nodes/edges（前面的节点可能创建了新节点）
-        const fresh = useGraphStore.getState()
-        await executeLlmNode(node, fresh.nodes, fresh.edges)
-      } else if (node.type === 'textSplitter') {
-        const fresh = useGraphStore.getState()
-        executeTextSplitterNode(node, fresh.nodes, fresh.edges)
-      } else if (node.type === 'imageConfig') {
-        await generateImageFromConfigNode(node.id)
-      } else if (node.type === 'videoConfig') {
-        await generateVideoFromConfigNode(node.id)
-      }
-    } catch (err: any) {
-      console.error(`[runWorkflow] 节点 ${node.id} (${node.type}) 执行失败:`, err?.message)
-      useGraphStore.getState().updateNode(node.id, {
-        data: { status: 'error', errorMessage: err?.message || '执行失败' }
-      })
+  // BFS 找出所有可达的可执行节点（穿透非可执行节点）
+  const visited = new Set<string>()
+  const queue = [startNodeId]
+  const reachableIds = new Set<string>()
+
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    if (visited.has(id)) continue
+    visited.add(id)
+
+    const node = nodeMap.get(id)
+    if (node && EXECUTABLE_TYPES.has(node.type)) {
+      reachableIds.add(id)
     }
 
-    completed++
-    onProgress?.({ total, completed, current: node.type, running: true })
+    for (const e of edges) {
+      if (e.source === id && !visited.has(e.target)) {
+        queue.push(e.target)
+      }
+    }
   }
 
-  onProgress?.({ total, completed: total, current: '', running: false })
+  const reachable = nodes.filter(n => reachableIds.has(n.id))
+  const sorted = topoSort(reachable, edges)
+  if (sorted.length === 0) return
+
+  await executeNodes(sorted, options?.signal, options?.onProgress)
 }

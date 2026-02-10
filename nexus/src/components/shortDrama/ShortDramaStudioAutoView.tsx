@@ -19,9 +19,11 @@ import MediaPreviewModal from '@/components/canvas/MediaPreviewModal'
 import ShortDramaMediaPickerModal, { type ShortDramaPickKind, type ShortDramaPickedMedia } from '@/components/shortDrama/ShortDramaMediaPickerModal'
 import { ShortDramaSlotVersions, ShortDramaVariantThumb } from '@/components/shortDrama/ShortDramaSlotVersions'
 import ShortDramaBlendPanel from '@/components/shortDrama/ShortDramaBlendPanel'
-import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
+import ShortDramaExportModal from '@/components/shortDrama/ShortDramaExportModal'
+import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, ShotFrameMode } from '@/lib/shortDrama/types'
+import { SHOT_FRAME_MODES } from '@/lib/shortDrama/types'
 import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1 } from '@/lib/shortDrama/uiPrefs'
-import { FileText, Loader2, Upload, Video as VideoIcon, Wand2, Sword, Layers } from 'lucide-react'
+import { Download, FileText, Loader2, Upload, Video as VideoIcon, Wand2, Sword, Layers } from 'lucide-react'
 
 interface Props {
   projectId: string
@@ -196,6 +198,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   const [previewBusy, setPreviewBusy] = useState(false)
 
   const [blendPanelOpen, setBlendPanelOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
 
   type PickerTarget = { slotId: string; label?: string }
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -1009,7 +1012,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     setAnalysisError('')
     setAnalysisRaw('')
     try {
-      const res = await analyzeShortDramaScriptToDraftV2({ draft, scriptText: script })
+      const res = await analyzeShortDramaScriptToDraftV2({ draft, scriptText: script, modelKey: draft.models.analysisModelKey })
       setAnalysisRaw(res.rawText)
       setDraft(res.draft)
       // 立即落盘，防止用户快速切走导致 debounce 丢失分析结果
@@ -1094,39 +1097,132 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     })()
   }, [autoPipelineToken, runBatchGenerateCoreRefs])
 
+  const buildGridPanelPrompt = useCallback(
+    (shotId: string, panelIndex: number) => {
+      const shot = draft.shots.find((s) => s.id === shotId)
+      if (!shot) return ''
+      const panelPrompt = (shot.gridPrompts || [])[panelIndex] || ''
+      if (!panelPrompt) return ''
+
+      const style = buildEffectiveStyle(draft.style)
+      const preset = getShortDramaStylePresetById(draft.style.presetId)
+      const modeInfo = SHOT_FRAME_MODES.find((m) => m.value === shot.frameMode)
+
+      const parts: string[] = []
+      if (draft.title) parts.push(`短剧标题：${draft.title}`)
+      if (draft.logline) parts.push(`短剧梗概：\n${draft.logline}`)
+      parts.push(`风格预设：${preset.name}\n${preset.description}`)
+      if (style.styleText) parts.push(`统一画风/镜头语言（必须严格遵守）：\n${style.styleText}`)
+      if (style.negativeText) parts.push(`全局负面约束（严格避免）：\n${style.negativeText}`)
+
+      if (shot.sceneId) {
+        const scene = draft.scenes.find((s) => s.id === shot.sceneId)
+        const sceneText = String(scene?.description || '').trim()
+        if (scene?.name || sceneText) parts.push(`场景：${String(scene?.name || '').trim()}\n${sceneText}`)
+      }
+
+      const chars = (shot.characterIds || [])
+        .map((id) => draft.characters.find((c) => c.id === id))
+        .filter(Boolean) as any[]
+      if (chars.length > 0) {
+        const charBlock = chars
+          .map((c) => `- ${String(c.name || '').trim()}\n${String(c.description || '').trim()}`.trim())
+          .join('\n\n')
+        parts.push(`出镜角色设定（保持同一张脸/发型/服装/体型的一致性）：\n${charBlock}`)
+      }
+
+      parts.push([
+        '构图硬性要求（必须严格遵守）：',
+        '1. 整张图只能包含「一个连续的单一场景」，严禁分屏、拼图、多格漫画、上下/左右分割、画中画等多场景构图。',
+        '2. 画面必须像电影截图/剧照一样，只有一个统一的视角和景深。',
+        '3. 不要出现黑色分隔线、边框、文字标签、水印或任何 UI 元素。',
+        '4. 一致性：严格参考已上传的角色设定图、场景参考图、资产参考图，保持人物/场景/资产外观一致，不要随意更换。',
+      ].join('\n'))
+
+      parts.push(`${modeInfo?.label || '宫格'}第 ${panelIndex + 1} 格画面：\n${panelPrompt}`)
+      return parts.join('\n\n').trim()
+    },
+    [draft]
+  )
+
   const runBatchGenerateKeyframes = useCallback(async () => {
     setKeyframesBusy(true)
     try {
       const d = draftRef.current
-      const shotStartTasks = d.shots.map(async (sh) => {
-        const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
-        const slotId = freshShot.frames.start.slot.id
-        markSlotStaleRunning(slotId)
-        const selected = getPreferredVariant(freshShot.frames.start.slot)
-        if (selected?.status === 'success') return
-        const prompt = buildFramePrompt(sh.id, 'start')
-        const refs = await collectRefImagesForShot(sh.id, 'start')
-        await runGenerateSlotImage(slotId, prompt, refs, 'auto')
-      })
+      const allTasks: Promise<void>[] = []
 
-      const shotEndTasks = d.shots.map(async (sh) => {
-        const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
-        const slotId = freshShot.frames.end.slot.id
-        markSlotStaleRunning(slotId)
-        const selected = getPreferredVariant(freshShot.frames.end.slot)
-        if (selected?.status === 'success') return
-        const prompt = buildFramePrompt(sh.id, 'end')
-        const refs = await collectRefImagesForShot(sh.id, 'end')
-        await runGenerateSlotImage(slotId, prompt, refs, 'auto')
-      })
+      for (const sh of d.shots) {
+        const mode = sh.frameMode || 'first_last'
+        const isGrid = mode.startsWith('grid_')
 
-      await Promise.all([...shotStartTasks, ...shotEndTasks])
+        if (isGrid) {
+          // 宫格模式：用第一格 prompt 生成到 start slot（作为视频首帧），其余格各自独立生成
+          const gridCount = SHOT_FRAME_MODES.find((m) => m.value === mode)?.count || 4
+          const prompts = sh.gridPrompts || []
+
+          // 第一格 → start slot
+          if (prompts[0]) {
+            allTasks.push((async () => {
+              const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
+              const slotId = freshShot.frames.start.slot.id
+              markSlotStaleRunning(slotId)
+              const selected = getPreferredVariant(freshShot.frames.start.slot)
+              if (selected?.status === 'success') return
+              const prompt = buildGridPanelPrompt(sh.id, 0)
+              const refs = await collectRefImagesForShot(sh.id, 'start')
+              await runGenerateSlotImage(slotId, prompt, refs, 'auto')
+            })())
+          }
+
+          // 最后一格 → end slot（用于视频尾帧）
+          if (gridCount > 1 && prompts[gridCount - 1]) {
+            allTasks.push((async () => {
+              const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
+              const slotId = freshShot.frames.end.slot.id
+              markSlotStaleRunning(slotId)
+              const selected = getPreferredVariant(freshShot.frames.end.slot)
+              if (selected?.status === 'success') return
+              const prompt = buildGridPanelPrompt(sh.id, gridCount - 1)
+              const refs = await collectRefImagesForShot(sh.id, 'end')
+              await runGenerateSlotImage(slotId, prompt, refs, 'auto')
+            })())
+          }
+        } else {
+          // first_only / first_last 模式
+          allTasks.push((async () => {
+            const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
+            const slotId = freshShot.frames.start.slot.id
+            markSlotStaleRunning(slotId)
+            const selected = getPreferredVariant(freshShot.frames.start.slot)
+            if (selected?.status === 'success') return
+            const prompt = buildFramePrompt(sh.id, 'start')
+            const refs = await collectRefImagesForShot(sh.id, 'start')
+            await runGenerateSlotImage(slotId, prompt, refs, 'auto')
+          })())
+
+          if (mode === 'first_last') {
+            allTasks.push((async () => {
+              const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
+              const slotId = freshShot.frames.end.slot.id
+              markSlotStaleRunning(slotId)
+              const selected = getPreferredVariant(freshShot.frames.end.slot)
+              if (selected?.status === 'success') return
+              const prompt = buildFramePrompt(sh.id, 'end')
+              const refs = await collectRefImagesForShot(sh.id, 'end')
+              await runGenerateSlotImage(slotId, prompt, refs, 'auto')
+            })())
+          }
+        }
+      }
+
+      await Promise.all(allTasks)
       window.$message?.success?.('关键帧批量生成完成')
     } finally {
       setKeyframesBusy(false)
     }
   }, [
     buildFramePrompt,
+    buildGridPanelPrompt,
     collectRefImagesForShot,
     getPreferredVariant,
     markSlotStaleRunning,
@@ -1252,9 +1348,17 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
               <div className="mt-3 grid gap-3">
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">拆解模型</label>
-                  <div className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-secondary)] cursor-not-allowed">
-                    Gemini 3 Pro Thinking（固定）
-                  </div>
+                  <select
+                    value={draft.models.analysisModelKey || DEFAULT_CHAT_MODEL}
+                    onChange={(e) => patchModels({ analysisModelKey: e.target.value })}
+                    className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
+                  >
+                    {(CHAT_MODELS as any[]).map((m: any) => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">目标镜头数</label>
@@ -1268,6 +1372,23 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                   />
                   <span className="text-[10px] text-[var(--text-secondary)]">
                     {(draft.models.targetShotCount || 0) > 0 ? `AI 将严格生成 ${draft.models.targetShotCount} 个镜头` : '0 = AI 根据剧本自动决定'}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">帧模式</label>
+                  <select
+                    value={draft.models.defaultFrameMode || 'first_last'}
+                    onChange={(e) => patchModels({ defaultFrameMode: e.target.value as ShotFrameMode })}
+                    className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
+                  >
+                    {SHOT_FRAME_MODES.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}（{m.count}张）
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-[var(--text-secondary)]">
+                    AI 拆解和批量生图将使用此帧模式
                   </span>
                 </div>
                 <div className="grid grid-cols-1 gap-3">
@@ -1647,6 +1768,30 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                   </div>
                 </div>
 
+                {/* Step 5: Export */}
+                <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/10 text-[11px] font-bold text-[var(--text-secondary)]">
+                        5
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-[var(--text-primary)]">批量导出</div>
+                        <div className="mt-0.5 text-xs text-[var(--text-secondary)]">选择需要导出的素材类型，打包为 ZIP 下载。</div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="shrink-0 whitespace-nowrap gap-1"
+                      onClick={() => setExportOpen(true)}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      批量导出
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="text-xs text-[var(--text-secondary)]">
                   提示：建议先在首/尾帧中“采用”满意版本后再生成视频；需要更精细的参考图绑定可切换到“手动”模式。队列会根据成功率与限流信号自动升降并发。
                 </div>
@@ -1909,12 +2054,13 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                     {idx + 1}. {sh.title || '镜头'}
                   </div>
                   {sh.scriptExcerpt && (
-                    <div className="mt-1 rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300 line-clamp-3 italic">
-                      原文：{sh.scriptExcerpt}
-                    </div>
+                    <details className="mt-1 rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
+                      <summary className="cursor-pointer select-none font-medium">原文摘录（点击展开）</summary>
+                      <div className="mt-1 whitespace-pre-wrap italic">{sh.scriptExcerpt}</div>
+                    </details>
                   )}
                   {sh.beat && !sh.scriptExcerpt && (
-                    <div className="mt-1 text-[11px] text-[var(--text-secondary)] line-clamp-2">{sh.beat}</div>
+                    <div className="mt-1 text-[11px] text-[var(--text-secondary)]">{sh.beat}</div>
                   )}
 
                   <div className="mt-2 grid gap-2 md:grid-cols-3">
@@ -2204,6 +2350,8 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       />
 
       <MediaPreviewModal open={previewOpen} url={previewUrl} type={previewType} onClose={() => setPreviewOpen(false)} />
+
+      <ShortDramaExportModal open={exportOpen} onClose={() => setExportOpen(false)} draft={draft} />
 
       <ShortDramaBlendPanel
         open={blendPanelOpen}

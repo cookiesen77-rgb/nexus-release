@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useCallback } from 'react'
 import type { NodeType } from '@/graph/types'
 import { useGraphStore } from '@/graph/store'
 import { getNodeSize } from '@/graph/nodeSizing'
-import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS } from '@/config/models'
+import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS, CHAT_MODELS } from '@/config/models'
 import { Clapperboard, Image, Mic, Music, Save, Settings2, SlidersHorizontal, Sparkles, Type, Video, BrainCircuit, Scissors } from 'lucide-react'
 import { saveMedia } from '@/lib/mediaStorage'
 
@@ -283,6 +283,9 @@ export default function NodePalettePanel({
         if (baseModelCfg?.defaultParams?.ratio) data.ratio = baseModelCfg.defaultParams.ratio
         if (baseModelCfg?.defaultParams?.duration) data.dur = baseModelCfg.defaultParams.duration
         if (baseModelCfg?.defaultParams?.size) data.size = baseModelCfg.defaultParams.size
+      }
+      if (type === 'llm') {
+        data.model = (CHAT_MODELS as any[])[0]?.key || 'gemini-3-pro-preview-thinking'
       }
       const id = store.addNode(type, pos, data)
       useGraphStore.getState().setSelected(id)

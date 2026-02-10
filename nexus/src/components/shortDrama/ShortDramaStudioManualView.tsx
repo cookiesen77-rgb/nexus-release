@@ -27,6 +27,7 @@ import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1 } from '@/lib/shortDr
 import { cn } from '@/lib/utils'
 import { Check, Eye, Image as ImageIcon, Layers, Loader2, Plus, Sword, Trash2, Upload, Video as VideoIcon, X } from 'lucide-react'
 import ShortDramaBlendPanel from '@/components/shortDrama/ShortDramaBlendPanel'
+import ShortDramaExportModal from '@/components/shortDrama/ShortDramaExportModal'
 import { createEmptyAsset } from '@/lib/shortDrama/draftStorage'
 
 interface Props {
@@ -228,6 +229,7 @@ function SlotVersions({
 export default function ShortDramaStudioManualView({ projectId, draft, setDraft, prefs, setPrefs }: Props) {
   const navigate = useNavigate()
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewType, setPreviewType] = useState<'image' | 'video'>('image')
   const [previewBusy, setPreviewBusy] = useState(false)
@@ -830,7 +832,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
 
   const runGenerateCharacterSheet = useCallback(
     async (characterId: string) => {
-      const c = draft.characters.find((x) => x.id === characterId)
+      const d = draftRef.current
+      const c = d.characters.find((x) => x.id === characterId)
       if (!c) return
       const slotId = c.sheet.id
       if (busySlotsRef.current[slotId]) return
@@ -847,9 +850,9 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         status: 'running',
         createdAt: Date.now(),
         createdBy: 'manual',
-        modelKey: draft.models.imageModelKey,
+        modelKey: d.models.imageModelKey,
         promptSnapshot: prompt,
-        styleSnapshot: { ...draft.style },
+        styleSnapshot: { ...d.style },
       }
 
       setSlotBusy(slotId, true)
@@ -858,10 +861,10 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         const refImages = await collectRefImagesForCharacter(characterId)
         const task = queue.enqueue('image', slotId, async () => {
           return await generateShortDramaImage({
-            modelKey: draft.models.imageModelKey,
+            modelKey: d.models.imageModelKey,
             prompt,
-            size: draft.models.imageSize,
-            quality: draft.models.imageQuality,
+            size: d.models.imageSize,
+            quality: d.models.imageQuality,
             refImages,
           })
         })
@@ -880,7 +883,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             type: 'image',
             data: displayUrl,
             sourceUrl: safeSourceUrl && safeSourceUrl !== displayUrl ? safeSourceUrl : undefined,
-            model: draft.models.imageModelKey,
+            model: d.models.imageModelKey,
           })
         } else if (isSourceDataUrl) {
           mediaId = await saveMedia({
@@ -888,7 +891,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             projectId,
             type: 'image',
             data: sourceUrl,
-            model: draft.models.imageModelKey,
+            model: d.models.imageModelKey,
           })
         }
 
@@ -902,13 +905,12 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
           })
         )
 
-        // 同步到历史素材（角色设定图）
         try {
           useAssetsStore.getState().addAsset({
             type: 'image',
             src: safeSourceUrl || displayUrl,
             title: `${String(c.name || '角色').trim()} · 设定图`.slice(0, 80),
-            model: draft.models.imageModelKey,
+            model: d.models.imageModelKey,
           })
         } catch {
           // ignore
@@ -922,12 +924,13 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         setSlotBusy(slotId, false)
       }
     },
-    [draft, projectId, buildCharacterSheetPrompt, collectRefImagesForCharacter, queue, setDraft, setSlotBusy]
+    [projectId, buildCharacterSheetPrompt, collectRefImagesForCharacter, queue, setDraft, setSlotBusy]
   )
 
   const runGenerateFrameImage = useCallback(
     async (shotId: string, role: 'start' | 'end') => {
-      const shot = draft.shots.find((s) => s.id === shotId)
+      const d = draftRef.current
+      const shot = d.shots.find((s) => s.id === shotId)
       if (!shot) return
       const slot = role === 'start' ? shot.frames.start.slot : shot.frames.end.slot
       const slotId = slot.id
@@ -945,9 +948,9 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         status: 'running',
         createdAt: Date.now(),
         createdBy: 'manual',
-        modelKey: draft.models.imageModelKey,
+        modelKey: d.models.imageModelKey,
         promptSnapshot: prompt,
-        styleSnapshot: { ...draft.style },
+        styleSnapshot: { ...d.style },
       }
 
       setSlotBusy(slotId, true)
@@ -956,10 +959,10 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         const refImages = await collectRefImagesForShot(shotId, role)
         const task = queue.enqueue('image', slotId, async () => {
           return await generateShortDramaImage({
-            modelKey: draft.models.imageModelKey,
+            modelKey: d.models.imageModelKey,
             prompt,
-            size: draft.models.imageSize,
-            quality: draft.models.imageQuality,
+            size: d.models.imageSize,
+            quality: d.models.imageQuality,
             refImages,
           })
         })
@@ -1018,7 +1021,6 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       }
     },
     [
-      draft,
       projectId,
       buildFramePrompt,
       collectRefImagesForShot,
@@ -1030,7 +1032,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
 
   const runGenerateShotVideo = useCallback(
     async (shotId: string) => {
-      const shot = draft.shots.find((s) => s.id === shotId)
+      const d = draftRef.current
+      const shot = d.shots.find((s) => s.id === shotId)
       if (!shot) return
       const slotId = shot.video.id
       if (busySlotsRef.current[slotId]) return
@@ -1047,7 +1050,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       const startInput = await resolveVariantInput(startV || undefined)
       const endInput = await resolveVariantInput(endV || undefined)
 
-      const modelCfg: any = VIDEO_MODELS.find((m) => m.key === draft.models.videoModelKey)
+      const modelCfg: any = VIDEO_MODELS.find((m) => m.key === d.models.videoModelKey)
       const supportsFirstFrame = modelCfg?.supportsFirstFrame !== false
       const supportsLastFrame = modelCfg?.supportsLastFrame === true
       const supportsSound = !!(modelCfg?.supportsSound || modelCfg?.defaultParams?.sound === 'on')
@@ -1072,9 +1075,9 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         status: 'running',
         createdAt: Date.now(),
         createdBy: 'manual',
-        modelKey: draft.models.videoModelKey,
+        modelKey: d.models.videoModelKey,
         promptSnapshot: prompt,
-        styleSnapshot: { ...draft.style },
+        styleSnapshot: { ...d.style },
       }
 
       setSlotBusy(slotId, true)
@@ -1082,14 +1085,14 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       try {
         const effectiveStartInput = supportsFirstFrame ? startInput : ''
         const effectiveEndInput = supportsLastFrame ? endInput : ''
-        const images = [effectiveStartInput, effectiveEndInput].filter(Boolean)
+        const images = [effectiveStartInput].filter(Boolean)
         const task = queue.enqueue('video', slotId, async () => {
           return await generateShortDramaVideo({
-            modelKey: draft.models.videoModelKey,
+            modelKey: d.models.videoModelKey,
             prompt,
-            ratio: draft.models.videoRatio,
-            duration: draft.models.videoDuration,
-            size: draft.models.videoSize,
+            ratio: d.models.videoRatio,
+            duration: d.models.videoDuration,
+            size: d.models.videoSize,
             images,
             lastFrame: effectiveEndInput || '',
           })
@@ -1122,7 +1125,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         setSlotBusy(slotId, false)
       }
     },
-    [draft, buildFramePrompt, getPreferredVariant, resolveVariantInput, queue, setDraft, setSlotBusy]
+    [buildFramePrompt, getPreferredVariant, resolveVariantInput, queue, setDraft, setSlotBusy]
   )
 
   const uploadToImageSlot = useCallback(
@@ -2192,19 +2195,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             <Plus className="h-4 w-4" />
             添加镜头
           </Button>
-          <Button size="sm" variant="secondary" onClick={async () => {
-            try {
-              const { exportStoryboardPdf } = await import('@/lib/shortDrama/storyboardExport')
-              const bytes = await exportStoryboardPdf(draft)
-              const { saveBytesAsFile } = await import('@/lib/download')
-              const safeName = String(draft.title || 'storyboard').replace(/[<>:"/\\|?*]+/g, '_').trim() || 'storyboard'
-              await saveBytesAsFile({ data: new Uint8Array(bytes), filename: `${safeName}.pdf`, mimeType: 'application/pdf' })
-              window.$message?.success?.('分镜表已导出')
-            } catch (err: any) {
-              window.$message?.error?.(err?.message || '导出失败')
-            }
-          }} className="gap-1">
-            导出PDF
+          <Button size="sm" variant="secondary" onClick={() => setExportOpen(true)} className="gap-1">
+            批量导出
           </Button>
           </div>
         </div>
@@ -2242,6 +2234,16 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
+
+                {shot.scriptExcerpt && (
+                  <details className="mt-2 rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
+                    <summary className="cursor-pointer select-none font-medium">原文摘录（点击展开）</summary>
+                    <div className="mt-1 whitespace-pre-wrap italic">{shot.scriptExcerpt}</div>
+                  </details>
+                )}
+                {shot.beat && !shot.scriptExcerpt && (
+                  <div className="mt-2 text-[11px] text-[var(--text-secondary)]">{shot.beat}</div>
+                )}
 
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div className="flex flex-col gap-2">
@@ -2674,6 +2676,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
       />
 
       <MediaPreviewModal open={previewOpen} url={previewUrl} type={previewType} onClose={() => setPreviewOpen(false)} />
+
+      <ShortDramaExportModal open={exportOpen} onClose={() => setExportOpen(false)} draft={draft} />
 
       <ShortDramaBlendPanel
         open={blendPanelOpen}

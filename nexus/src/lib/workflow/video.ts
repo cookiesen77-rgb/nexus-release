@@ -315,6 +315,12 @@ const sanitizeErrorForNode = (raw: any) => {
   if (/Failed to fetch|NetworkError|Network request failed/i.test(msg)) {
     return '网络请求失败（Failed to fetch）。请稍后重试，或检查网络/代理设置'
   }
+  if (/public.?ip|publicIp|IP.*error/i.test(msg)) {
+    return '图片上传服务 IP 限制，请稍后重试'
+  }
+  if (/危险过滤|content.?filter|safety|内容审核|敏感|违规|nsfw|moderat|risk.?filter/i.test(msg)) {
+    return '内容安全过滤：提示词或参考图触发了平台审核，请修改后重试'
+  }
   // 防止把 nginx/网关的整段 HTML 直接写进节点（会污染画布/存储）
   if (/<(html|!doctype|head|body|title)\b/i.test(msg)) {
     const m = msg.match(/<title[^>]*>([^<]+)<\/title>/i)

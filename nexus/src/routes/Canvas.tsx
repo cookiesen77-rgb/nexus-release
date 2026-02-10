@@ -36,9 +36,7 @@ import { getNodeSize } from '@/graph/nodeSizing'
 import { useSettingsStore } from '@/store/settings'
 import { saveMedia } from '@/lib/mediaStorage'
 import { ChevronDown, ChevronLeft, Download, History, Moon, Play, Settings, Sun, Type, SlidersHorizontal, Settings2, Image, Video, Music, BrainCircuit, Scissors, Loader2 } from 'lucide-react'
-import { generateImageFromConfigNode } from '@/lib/workflow/image'
 import { runWorkflow } from '@/lib/workflow/run'
-import { generateVideoFromConfigNode } from '@/lib/workflow/video'
 import { saveCurrentAsTemplate } from '@/lib/workflowTemplates'
 
 // 功能开关
@@ -80,7 +78,6 @@ export default function Canvas() {
   const [cameraControlOpen, setCameraControlOpen] = useState(false)
   const [workflowRunning, setWorkflowRunning] = useState(false)
   const [workflowProgress, setWorkflowProgress] = useState({ total: 0, completed: 0, current: '', running: false })
-  const [batchGenerating, setBatchGenerating] = useState(false)
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [saveTemplateName, setSaveTemplateName] = useState('')
   const [saveTemplateDesc, setSaveTemplateDesc] = useState('')
@@ -128,78 +125,6 @@ export default function Canvas() {
   const contextMenuPendingPosRef = useRef<{ flowX: number; flowY: number } | null>(null)
   const connectMenuPendingInfoRef = useRef<{ flowX: number; flowY: number; sourceNodeId: string } | null>(null)
 
-  // 一键全部生成（并发）
-  const handleBatchGenerate = useCallback(async () => {
-    const store = useGraphStore.getState()
-    const nodes = store.nodes
-    
-    // 找到所有需要生成的配置节点
-    const imageConfigs = nodes.filter((n) => {
-      if (n.type !== 'imageConfig') return false
-      const d: any = n.data || {}
-      // 跳过正在生成的节点
-      if (d.loading || d.status === 'running') return false
-      return true
-    })
-    
-    const videoConfigs = nodes.filter((n) => {
-      if (n.type !== 'videoConfig') return false
-      const d: any = n.data || {}
-      // 跳过正在生成的节点
-      if (d.loading || d.status === 'running') return false
-      return true
-    })
-    
-    const total = imageConfigs.length + videoConfigs.length
-    if (total === 0) {
-      window.$message?.info?.('没有找到可生成的配置节点')
-      return
-    }
-    
-    setBatchGenerating(true)
-    window.$message?.info?.(`开始并发生成 ${total} 个节点...`)
-    
-    // 创建所有生成任务
-    const tasks: Promise<{ success: boolean; nodeId: string; type: string }>[] = []
-    
-    // 图片生成任务
-    for (const node of imageConfigs) {
-      tasks.push(
-        generateImageFromConfigNode(node.id)
-          .then(() => ({ success: true, nodeId: node.id, type: 'image' }))
-          .catch((err) => {
-            console.error(`[BatchGenerate] 图片生成失败:`, node.id, err?.message)
-            return { success: false, nodeId: node.id, type: 'image' }
-          })
-      )
-    }
-    
-    // 视频生成任务
-    for (const node of videoConfigs) {
-      tasks.push(
-        generateVideoFromConfigNode(node.id)
-          .then(() => ({ success: true, nodeId: node.id, type: 'video' }))
-          .catch((err) => {
-            console.error(`[BatchGenerate] 视频生成失败:`, node.id, err?.message)
-            return { success: false, nodeId: node.id, type: 'video' }
-          })
-      )
-    }
-    
-    // 并发执行所有任务
-    const results = await Promise.all(tasks)
-    
-    const successCount = results.filter((r) => r.success).length
-    const errorCount = results.filter((r) => !r.success).length
-    
-    setBatchGenerating(false)
-    
-    if (errorCount === 0) {
-      window.$message?.success?.(`批量生成完成！成功 ${successCount} 个`)
-    } else {
-      window.$message?.warning?.(`批量生成完成：成功 ${successCount} 个，失败 ${errorCount} 个`)
-    }
-  }, [])
 
   // 保存为模板
   const handleSaveAsTemplate = useCallback(() => {
@@ -1370,19 +1295,6 @@ export default function Canvas() {
               ))}
             </select>
           </div>
-          <button
-            className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
-              batchGenerating
-                ? 'border-[var(--accent-color)] bg-[var(--accent-color)]/10 text-[var(--accent-color)]'
-                : 'border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-            onClick={handleBatchGenerate}
-            disabled={batchGenerating}
-            title="一键全部生成"
-          >
-            <Play className={`h-4 w-4 ${batchGenerating ? 'animate-pulse' : ''}`} />
-            <span>{batchGenerating ? '生成中...' : '全部生成'}</span>
-          </button>
           <button
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
             onClick={() => toggleDark()}

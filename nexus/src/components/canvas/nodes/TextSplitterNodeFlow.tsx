@@ -1,7 +1,8 @@
-import React, { memo, useState, useCallback, useRef } from 'react'
+import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
-import { Trash2, Play, Loader2, Scissors } from 'lucide-react'
+import { Trash2, Play, Loader2, Scissors, ChevronsRight } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
+import { runFromNode } from '@/lib/workflow/run'
 
 interface TextSplitterNodeData {
   label?: string
@@ -10,121 +11,73 @@ interface TextSplitterNodeData {
   splitCount?: number
 }
 
+function hasDownstreamExecutable(nodeId: string): boolean {
+  const { nodes, edges } = useGraphStore.getState()
+  const visited = new Set<string>()
+  const queue: string[] = []
+  for (const e of edges) {
+    if (e.source === nodeId) queue.push(e.target)
+  }
+  while (queue.length > 0) {
+    const cur = queue.shift()!
+    if (visited.has(cur)) continue
+    visited.add(cur)
+    const n = nodes.find(x => x.id === cur)
+    if (n && ['llm', 'textSplitter', 'imageConfig', 'videoConfig'].includes(n.type)) return true
+    for (const e of edges) {
+      if (e.source === cur) queue.push(e.target)
+    }
+  }
+  return false
+}
+
 export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, data, selected }: NodeProps) {
   const nodeData = data as TextSplitterNodeData
   const [instruction, setInstruction] = useState(nodeData?.instruction || '按分镜拆分，每段一个镜头')
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>(nodeData?.status as any || 'idle')
   const [splitCount, setSplitCount] = useState(nodeData?.splitCount || 0)
+  const [hasDownstream, setHasDownstream] = useState(false)
   const instructionRef = useRef(instruction)
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (nodeData?.status) setStatus(nodeData.status as any)
+    if (nodeData?.splitCount !== undefined) setSplitCount(nodeData.splitCount)
+  }, [nodeData?.status, nodeData?.splitCount])
+
+  useEffect(() => {
+    const refresh = () => setHasDownstream(hasDownstreamExecutable(id))
+    refresh()
+    return useGraphStore.subscribe((s, p) => {
+      if (s.edges !== p.edges || s.nodes !== p.nodes) refresh()
+    })
+  }, [id])
+
+  useEffect(() => () => { abortRef.current?.abort() }, [])
 
   const syncToStore = useCallback((patch: Record<string, unknown>) => {
     useGraphStore.getState().updateNode(id, { data: patch })
   }, [id])
 
-  const handleInstructionBlur = useCallback(() => {
+  const handleRun = useCallback(async () => {
     syncToStore({ instruction: instructionRef.current })
-  }, [syncToStore])
 
-  const collectInputText = useCallback((): string => {
-    const { nodes, edges } = useGraphStore.getState()
-    const incomingEdges = edges.filter(e => e.target === id)
-    const parts: string[] = []
-    for (const edge of incomingEdges) {
-      const srcNode = nodes.find(n => n.id === edge.source)
-      if (!srcNode) continue
-      if (srcNode.type === 'text') {
-        const content = (srcNode.data as any)?.content
-        if (content) parts.push(String(content))
-      } else if (srcNode.type === 'llm') {
-        const out = (srcNode.data as any)?.output
-        if (out) parts.push(String(out))
+    abortRef.current?.abort()
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+
+    try {
+      await runFromNode(id, { signal: ctrl.signal })
+    } catch (err: any) {
+      if (!ctrl.signal.aborted) {
+        window.$message?.error?.(err?.message || '执行失败')
       }
     }
-    return parts.join('\n\n')
-  }, [id])
-
-  const handleRun = useCallback(() => {
-    const inputText = collectInputText()
-    if (!inputText.trim()) {
-      window.$message?.warning?.('请连接 LLM 或文本节点作为输入')
-      return
-    }
-
-    setStatus('running')
-    syncToStore({ status: 'running' })
-
-    const rule = instructionRef.current.trim() || '按段落拆分'
-
-    // 拆分策略
-    let segments: string[]
-
-    // 优先按 [SHOT x/N] 格式拆分
-    const shotRegex = /\[SHOT\s+\d+\/\d+\]/gi
-    if (shotRegex.test(inputText)) {
-      segments = inputText.split(/(?=\[SHOT\s+\d+\/\d+\])/gi).map(s => s.trim()).filter(Boolean)
-    }
-    // 按 JSON 数组拆分
-    else if (inputText.trim().startsWith('[')) {
-      try {
-        const arr = JSON.parse(inputText)
-        if (Array.isArray(arr) && arr.every(s => typeof s === 'string')) {
-          segments = arr.filter(Boolean)
-        } else {
-          segments = inputText.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
-        }
-      } catch {
-        segments = inputText.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
-      }
-    }
-    // 按双换行拆分
-    else {
-      segments = inputText.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
-    }
-
-    // 单段不拆分
-    if (segments.length <= 1) {
-      segments = inputText.split('\n').map(s => s.trim()).filter(s => s.length > 10)
-    }
-
-    if (segments.length === 0) {
-      segments = [inputText.trim()]
-    }
-
-    // 创建下游 text 节点
-    const store = useGraphStore.getState()
-    const thisNode = store.nodes.find(n => n.id === id)
-    if (!thisNode) return
-
-    // 防止重复执行创建重复节点
-    const existingDownstream = store.edges.filter(e => e.source === id)
-    if (existingDownstream.length > 0) {
-      setSplitCount(existingDownstream.length)
-      setStatus('done')
-      syncToStore({ status: 'done', splitCount: existingDownstream.length })
-      return
-    }
-
-    const startX = thisNode.x + 420
-    const startY = thisNode.y
-    const yGap = 180
-
-    store.withBatchUpdates(() => {
-      for (let i = 0; i < segments.length; i++) {
-        const newId = store.addNode('text', { x: startX, y: startY + i * yGap }, {
-          label: `分镜 ${i + 1}`,
-          content: segments[i]
-        })
-        store.addEdge(id, newId, { sourceHandle: 'right', targetHandle: 'left' })
-      }
-    })
-
-    setSplitCount(segments.length)
-    setStatus('done')
-    syncToStore({ status: 'done', splitCount: segments.length })
-  }, [id, collectInputText, syncToStore])
+  }, [id, syncToStore])
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
+    abortRef.current?.abort()
     useGraphStore.getState().removeNode(id)
   }, [id])
 
@@ -148,10 +101,11 @@ export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, da
             <button
               onClick={handleRun}
               disabled={status === 'running'}
-              className="p-1 hover:bg-orange-500/20 rounded text-orange-500 transition-colors disabled:opacity-50"
-              title="拆分"
+              className="flex items-center gap-0.5 p-1 hover:bg-orange-500/20 rounded text-orange-500 transition-colors disabled:opacity-50"
+              title={hasDownstream ? '级联执行（含下游节点）' : '拆分'}
             >
               {status === 'running' ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+              {hasDownstream && status !== 'running' && <ChevronsRight size={12} />}
             </button>
             <button onClick={handleDelete} className="p-1 hover:bg-[var(--bg-tertiary)] rounded" title="删除">
               <Trash2 size={14} />
@@ -165,7 +119,7 @@ export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, da
           <textarea
             value={instruction}
             onChange={(e) => { instructionRef.current = e.target.value; setInstruction(e.target.value) }}
-            onBlur={handleInstructionBlur}
+            onBlur={() => syncToStore({ instruction: instructionRef.current })}
             onMouseDown={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
             className="nodrag nowheel w-full mt-1 bg-[var(--bg-primary)] rounded-lg border border-[var(--border-color)] p-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-none outline-none focus:border-orange-500 select-text"
@@ -185,6 +139,9 @@ export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, da
               {status === 'done' ? `已拆分 ${splitCount} 段` : status === 'running' ? '拆分中' : '就绪'}
             </span>
           </div>
+          {hasDownstream && (
+            <span className="text-[10px] text-blue-500">有下游 →</span>
+          )}
         </div>
 
         <Handle type="target" position={Position.Left} id="left" className="handle-text" />

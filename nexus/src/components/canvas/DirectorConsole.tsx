@@ -30,7 +30,8 @@ import {
   History,
   Save,
   Edit2,
-  Star
+  Star,
+  FolderOpen
 } from 'lucide-react'
 import {
   DIRECTOR_PRESETS,
@@ -79,6 +80,33 @@ interface Props {
 }
 
 const HISTORY_KEY = 'nexus-director-history'
+
+const compressImage = (src: string, maxSize = 1920, quality = 0.8): Promise<string> =>
+  new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        let { width, height } = img
+        if (width > maxSize || height > maxSize) {
+          const scale = maxSize / Math.max(width, height)
+          width = Math.round(width * scale)
+          height = Math.round(height * scale)
+        }
+        const cvs = document.createElement('canvas')
+        cvs.width = width
+        cvs.height = height
+        cvs.getContext('2d')!.drawImage(img, 0, 0, width, height)
+        resolve(cvs.toDataURL('image/jpeg', quality))
+      } catch {
+        resolve(src)
+      }
+    }
+    img.onerror = () => resolve(src)
+    img.src = src
+  })
+
+type PickerTab = 'local' | 'canvas' | 'history'
 
 // 使用配置的图片模型列表
 const imageModelOptions = (IMAGE_MODELS as any[]).map((m: any) => ({
@@ -231,6 +259,9 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
   const [showImagePicker, setShowImagePicker] = useState(false)
   const [activeImageSlot, setActiveImageSlot] = useState<number>(0) // 当前选择的槽位
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const pickerFileInputRef = useRef<HTMLInputElement>(null)
+
+  const [pickerTab, setPickerTab] = useState<PickerTab>('local')
 
   // 重试状态
   const [retryCount, setRetryCount] = useState(0)
@@ -422,47 +453,37 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
   }, [saveHistory])
 
   // 参考图上传处理（支持多图）
+  const addCompressedImage = useCallback(async (raw: string, closePicker = false) => {
+    const compressed = await compressImage(raw)
+    setReferenceImages(prev => {
+      const newImages = [...prev]
+      if (activeImageSlot < newImages.length) {
+        newImages[activeImageSlot] = compressed
+      } else {
+        newImages.push(compressed)
+      }
+      return newImages.slice(0, maxRefImages)
+    })
+    if (closePicker) setShowImagePicker(false)
+  }, [activeImageSlot, maxRefImages])
+
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      setReferenceImages(prev => {
-        const newImages = [...prev]
-        if (activeImageSlot < newImages.length) {
-          newImages[activeImageSlot] = dataUrl
-        } else {
-          newImages.push(dataUrl)
-        }
-        return newImages.slice(0, maxRefImages)
-      })
-    }
+    reader.onload = (ev) => addCompressedImage(ev.target?.result as string)
     reader.readAsDataURL(file)
     if (fileInputRef.current) fileInputRef.current.value = ''
-  }, [activeImageSlot])
+  }, [addCompressedImage])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     const file = e.dataTransfer.files?.[0]
     if (!file || !file.type.startsWith('image/')) return
-
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      setReferenceImages(prev => {
-        const newImages = [...prev]
-        if (activeImageSlot < newImages.length) {
-          newImages[activeImageSlot] = dataUrl
-        } else {
-          newImages.push(dataUrl)
-        }
-        return newImages.slice(0, maxRefImages)
-      })
-    }
+    reader.onload = (ev) => addCompressedImage(ev.target?.result as string)
     reader.readAsDataURL(file)
-  }, [activeImageSlot, maxRefImages])
+  }, [addCompressedImage])
 
   const removeReferenceImage = useCallback((index: number) => {
     setReferenceImages(prev => prev.filter((_, i) => i !== index))
@@ -475,17 +496,26 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
 
   // 从画布或历史选择参考图
   const handleSelectFromPicker = useCallback((src: string) => {
-    setReferenceImages(prev => {
-      const newImages = [...prev]
-      if (activeImageSlot < newImages.length) {
-        newImages[activeImageSlot] = src
-      } else {
-        newImages.push(src)
-      }
-      return newImages.slice(0, maxRefImages)
-    })
-    setShowImagePicker(false)
-  }, [activeImageSlot, maxRefImages])
+    addCompressedImage(src, true)
+  }, [addCompressedImage])
+
+  const handlePickerLocalUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = (ev) => addCompressedImage(ev.target?.result as string, true)
+    reader.readAsDataURL(file)
+    if (pickerFileInputRef.current) pickerFileInputRef.current.value = ''
+  }, [addCompressedImage])
+
+  const handlePickerDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = (ev) => addCompressedImage(ev.target?.result as string, true)
+    reader.readAsDataURL(file)
+  }, [addCompressedImage])
 
   // 带重试的图片生成
   const generateImageWithRetry = useCallback(async (
@@ -1444,71 +1474,133 @@ Output STRICT JSON only (no markdown, no code fences):
                         </button>
                       </div>
 
+                      {/* Tab bar */}
+                      <div className="flex border-b border-[var(--border-color)] px-5">
+                        {([
+                          { key: 'local' as PickerTab, label: '本地上传', icon: <Upload className="h-3.5 w-3.5" /> },
+                          { key: 'canvas' as PickerTab, label: '画布素材', icon: <Layers className="h-3.5 w-3.5" /> },
+                          { key: 'history' as PickerTab, label: '历史素材', icon: <History className="h-3.5 w-3.5" /> },
+                        ]).map(tab => (
+                          <button
+                            key={tab.key}
+                            onClick={() => setPickerTab(tab.key)}
+                            className={cn(
+                              'flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors -mb-px',
+                              pickerTab === tab.key
+                                ? 'border-[var(--accent-color)] text-[var(--accent-color)]'
+                                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            )}
+                          >
+                            {tab.icon}
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+
                       <div className="flex-1 overflow-auto p-4">
-                        {/* 画布图片 */}
-                        {canvasImages.length > 0 && (
-                          <div className="mb-6">
-                            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                              <Layers className="h-4 w-4 text-[var(--accent-color)]" />
-                              画布中的图片
+                        {/* 本地上传 */}
+                        {pickerTab === 'local' && (
+                          <div
+                            className="flex h-full flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-primary)] p-8 transition-colors hover:border-[var(--accent-color)]"
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={handlePickerDrop}
+                          >
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[rgb(var(--accent-rgb)/0.1)]">
+                              <FolderOpen className="h-8 w-8 text-[var(--accent-color)]" />
                             </div>
-                            <div className="grid grid-cols-4 gap-3">
-                              {canvasImages.map((img) => (
-                                <button
-                                  key={img.id}
-                                  onClick={() => handleSelectFromPicker(img.src)}
-                                  className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--accent-color)] transition-colors"
-                                >
-                                  <img
-                                    src={img.src}
-                                    alt={img.title}
-                                    className="h-full w-full object-cover"
-                                  />
-                                  <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <span className="w-full truncate px-2 py-1.5 text-[10px] text-white">
-                                      {img.title}
-                                    </span>
-                                  </div>
-                                </button>
-                              ))}
+                            <div className="text-center">
+                              <div className="text-sm font-medium text-[var(--text-primary)]">拖拽图片到此处</div>
+                              <div className="mt-1 text-xs text-[var(--text-secondary)]">或点击下方按钮选择文件（自动压缩）</div>
                             </div>
+                            <button
+                              onClick={() => pickerFileInputRef.current?.click()}
+                              className="flex items-center gap-2 rounded-lg bg-[var(--accent-color)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)] transition-colors"
+                            >
+                              <Upload className="h-4 w-4" />
+                              选择图片
+                            </button>
+                            <input
+                              ref={pickerFileInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handlePickerLocalUpload}
+                              className="hidden"
+                            />
                           </div>
+                        )}
+
+                        {/* 画布素材 */}
+                        {pickerTab === 'canvas' && (
+                          canvasImages.length > 0 ? (
+                            <div>
+                              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                                <Layers className="h-4 w-4 text-[var(--accent-color)]" />
+                                画布中的图片
+                                <span className="text-xs text-[var(--text-secondary)]">({canvasImages.length})</span>
+                              </div>
+                              <div className="grid grid-cols-4 gap-3">
+                                {canvasImages.map((img) => (
+                                  <button
+                                    key={img.id}
+                                    onClick={() => handleSelectFromPicker(img.src)}
+                                    className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--accent-color)] transition-colors"
+                                  >
+                                    <img
+                                      src={img.src}
+                                      alt={img.title}
+                                      className="h-full w-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <span className="w-full truncate px-2 py-1.5 text-[10px] text-white">
+                                        {img.title}
+                                      </span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
+                              画布中暂无图片
+                            </div>
+                          )
                         )}
 
                         {/* 历史素材 */}
-                        {historyImages.length > 0 && (
-                          <div>
-                            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                              <History className="h-4 w-4 text-[var(--accent-color)]" />
-                              历史素材
+                        {pickerTab === 'history' && (
+                          historyImages.length > 0 ? (
+                            <div>
+                              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                                <History className="h-4 w-4 text-[var(--accent-color)]" />
+                                历史素材
+                                <span className="text-xs text-[var(--text-secondary)]">({historyImages.length})</span>
+                              </div>
+                              <div className="grid grid-cols-4 gap-3">
+                                {historyImages.map((asset) => (
+                                  <button
+                                    key={asset.id}
+                                    onClick={() => handleSelectFromPicker(asset.src)}
+                                    className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--accent-color)] transition-colors"
+                                  >
+                                    <img
+                                      src={asset.src}
+                                      alt={asset.title || '历史图片'}
+                                      className="h-full w-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <span className="w-full truncate px-2 py-1.5 text-[10px] text-white">
+                                        {asset.title || asset.model || '历史图片'}
+                                      </span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            <div className="grid grid-cols-4 gap-3">
-                              {historyImages.map((asset) => (
-                                <button
-                                  key={asset.id}
-                                  onClick={() => handleSelectFromPicker(asset.src)}
-                                  className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--accent-color)] transition-colors"
-                                >
-                                  <img
-                                    src={asset.src}
-                                    alt={asset.title || '历史图片'}
-                                    className="h-full w-full object-cover"
-                                  />
-                                  <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <span className="w-full truncate px-2 py-1.5 text-[10px] text-white">
-                                      {asset.title || asset.model || '历史图片'}
-                                    </span>
-                                  </div>
-                                </button>
-                              ))}
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
+                              暂无历史素材
                             </div>
-                          </div>
-                        )}
-
-                        {canvasImages.length === 0 && historyImages.length === 0 && (
-                          <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
-                            暂无可选图片，请先在画布中添加图片或生成图片
-                          </div>
+                          )
                         )}
                       </div>
 
