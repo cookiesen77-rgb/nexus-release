@@ -569,7 +569,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
                 controls
                 crossOrigin={corsMode === 'anonymous' && isHttpUrl(displayUrl) ? 'anonymous' : undefined}
                 playsInline
-                preload="metadata"
+                preload="auto"
                 className="w-full h-full object-contain nodrag"
                 onError={handleVideoError}
               />

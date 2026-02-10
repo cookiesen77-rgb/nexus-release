@@ -2277,9 +2277,24 @@ export const generateVideoFromConfigNode = async (
           if (!stillExists) return
           const nextUrl = String(cached.displayUrl || '').trim()
           if (nextUrl && nextUrl !== videoUrl) {
-            storeNow.updateNode(videoNodeId, {
-              data: { url: nextUrl, localPath: cached.localPath, sourceUrl: videoUrl, loading: false, error: '', updatedAt: Date.now() }
-            } as any)
+            // 保存到 IndexedDB 用于跨会话恢复，但不替换正在播放的 URL
+            // 避免 <video> 因 src 变更被重建而打断播放
+            try {
+              const projectId = storeNow.projectId || 'default'
+              const mediaId = await saveMedia({
+                nodeId: videoNodeId,
+                projectId,
+                type: 'video',
+                data: nextUrl,
+                sourceUrl: videoUrl,
+                model: modelKey,
+              })
+              if (mediaId) {
+                storeNow.patchNodeDataSilent(videoNodeId, { mediaId, sourceUrl: videoUrl, localPath: cached.localPath || '' })
+              }
+            } catch {
+              // ignore
+            }
           }
         } catch {
           // ignore
