@@ -3,14 +3,18 @@
  * AI 驱动的提示词优化工具，支持多模型、生图/生视频双模式
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import {
   X, Loader2, Copy, Check, Sparkles, Image as ImageIcon,
-  Video, ChevronDown, ChevronRight, RotateCcw, Zap, Wifi, WifiOff, Upload, Plus
+  Video, ChevronDown, ChevronRight, RotateCcw, Zap, Wifi, WifiOff, Upload, Plus,
+  Layers, History, FolderOpen
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { streamAiAssistant } from '@/lib/nexusApi'
+import { useGraphStore } from '@/graph/store'
+import { useAssetsStore } from '@/store/assets'
 
 interface Props {
   open: boolean
@@ -42,6 +46,33 @@ const readSavedModel = () => {
   } catch {}
   return AGENT_MODELS[0].key
 }
+
+const compressImage = (src: string, maxSize = 1920, quality = 0.8): Promise<string> =>
+  new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        let { width, height } = img
+        if (width > maxSize || height > maxSize) {
+          const scale = maxSize / Math.max(width, height)
+          width = Math.round(width * scale)
+          height = Math.round(height * scale)
+        }
+        const cvs = document.createElement('canvas')
+        cvs.width = width
+        cvs.height = height
+        cvs.getContext('2d')!.drawImage(img, 0, 0, width, height)
+        resolve(cvs.toDataURL('image/jpeg', quality))
+      } catch {
+        resolve(src)
+      }
+    }
+    img.onerror = () => resolve(src)
+    img.src = src
+  })
+
+type PickerTab = 'local' | 'canvas' | 'history'
 
 interface StylePreset {
   label: string
@@ -243,6 +274,21 @@ export default function PromptAgentModal({ open, onClose }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const pickerFileInputRef = useRef<HTMLInputElement>(null)
+  const [showPicker, setShowPicker] = useState(false)
+  const [pickerTab, setPickerTab] = useState<PickerTab>('local')
+
+  const canvasImages = useMemo(() => {
+    if (!showPicker) return []
+    return useGraphStore.getState().nodes
+      .filter(n => n.type === 'image' && (n.data as any)?.url)
+      .map(n => ({ id: n.id, src: (n.data as any).url as string, title: (n.data as any)?.label || (n.data as any)?.fileName || '画布图片' }))
+  }, [showPicker])
+
+  const historyImages = useMemo(() => {
+    if (!showPicker) return []
+    return useAssetsStore.getState().getAssetsByType('image').slice(0, 50)
+  }, [showPicker])
 
   const presets = mode === 'image' ? IMAGE_STYLE_PRESETS : VIDEO_STYLE_PRESETS
   const modifiers = MODIFIER_CATEGORIES[mode]
@@ -294,24 +340,28 @@ export default function PromptAgentModal({ open, onClose }: Props) {
   const addImageFiles = useCallback((files: FileList | File[]) => {
     const fileArr = Array.from(files).filter(f => f.type.startsWith('image/'))
     if (fileArr.length === 0) return
-    setImages(prev => {
-      const remaining = MAX_IMAGES - prev.length
-      if (remaining <= 0) return prev
-      const toAdd = fileArr.slice(0, remaining)
-      const promises = toAdd.map(f => new Promise<string>(resolve => {
+    const remaining = MAX_IMAGES - images.length
+    if (remaining <= 0) return
+    const toAdd = fileArr.slice(0, remaining)
+    Promise.all(
+      toAdd.map(f => new Promise<string>(resolve => {
         const reader = new FileReader()
         reader.onload = () => resolve(reader.result as string)
         reader.readAsDataURL(f)
       }))
-      Promise.all(promises).then(dataUrls => {
-        setImages(cur => {
-          const combined = [...cur, ...dataUrls]
-          return combined.slice(0, MAX_IMAGES)
-        })
+    )
+      .then(raws => Promise.all(raws.map(r => compressImage(r))))
+      .then(compressed => {
+        setImages(cur => [...cur, ...compressed].slice(0, MAX_IMAGES))
       })
-      return prev
-    })
-  }, [])
+  }, [images.length])
+
+  const addImageFromSrc = useCallback(async (src: string, closePicker = false) => {
+    if (images.length >= MAX_IMAGES) return
+    const compressed = await compressImage(src)
+    setImages(cur => [...cur, compressed].slice(0, MAX_IMAGES))
+    if (closePicker) setShowPicker(false)
+  }, [images.length])
 
   const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) addImageFiles(e.target.files)
@@ -558,10 +608,21 @@ export default function PromptAgentModal({ open, onClose }: Props) {
 
             {/* 参考图上传 */}
             <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)]">
-                参考图
-                <span className="text-[10px] opacity-60">({images.length}/{MAX_IMAGES})</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)]">
+                  参考图
+                  <span className="text-[10px] opacity-60">({images.length}/{MAX_IMAGES})</span>
+                </label>
+                {images.length < MAX_IMAGES && (
+                  <button
+                    onClick={() => setShowPicker(true)}
+                    className="flex items-center gap-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)] transition-colors"
+                  >
+                    <Layers className="h-3 w-3" />
+                    选择素材
+                  </button>
+                )}
+              </div>
               <div
                 className="flex flex-wrap gap-1.5 rounded-xl border border-dashed border-[var(--border-color)] bg-[var(--bg-primary)] p-2 transition-colors hover:border-[var(--accent-color)]"
                 onDragOver={e => e.preventDefault()}
@@ -582,13 +643,14 @@ export default function PromptAgentModal({ open, onClose }: Props) {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)] transition-colors"
+                    title="本地上传"
                   >
                     <Plus className="h-5 w-5" />
                   </button>
                 )}
                 {images.length === 0 && (
                   <div className="flex flex-1 items-center justify-center py-1">
-                    <span className="text-[11px] text-[var(--text-secondary)] opacity-50">点击 + 或拖拽图片作为风格/内容参考</span>
+                    <span className="text-[11px] text-[var(--text-secondary)] opacity-50">点击 + 上传本地图片，或「选择素材」从画布/历史选取</span>
                   </div>
                 )}
                 <input
@@ -600,6 +662,141 @@ export default function PromptAgentModal({ open, onClose }: Props) {
                   className="hidden"
                 />
               </div>
+
+              {/* 素材选择器弹窗 */}
+              {showPicker && (
+                <div
+                  className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                  onClick={e => e.target === e.currentTarget && setShowPicker(false)}
+                >
+                  <div
+                    className="flex h-[min(70vh,600px)] w-[min(700px,90vw)] flex-col overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-2xl"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between border-b border-[var(--border-color)] px-5 py-4">
+                      <h3 className="text-base font-semibold text-[var(--text-primary)]">选择参考图</h3>
+                      <button onClick={() => setShowPicker(false)} className="rounded-full p-1 text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-primary)] transition-colors">
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <div className="flex border-b border-[var(--border-color)] px-5">
+                      {([
+                        { key: 'local' as PickerTab, label: '本地上传', icon: <Upload className="h-3.5 w-3.5" /> },
+                        { key: 'canvas' as PickerTab, label: '画布素材', icon: <Layers className="h-3.5 w-3.5" /> },
+                        { key: 'history' as PickerTab, label: '历史素材', icon: <History className="h-3.5 w-3.5" /> },
+                      ]).map(tab => (
+                        <button
+                          key={tab.key}
+                          onClick={() => setPickerTab(tab.key)}
+                          className={cn(
+                            'flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors -mb-px',
+                            pickerTab === tab.key
+                              ? 'border-[var(--accent-color)] text-[var(--accent-color)]'
+                              : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                          )}
+                        >
+                          {tab.icon}
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex-1 overflow-auto p-4">
+                      {pickerTab === 'local' && (
+                        <div
+                          className="flex h-full flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-[var(--border-color)] bg-[var(--bg-primary)] p-8 transition-colors hover:border-[var(--accent-color)]"
+                          onDragOver={e => e.preventDefault()}
+                          onDrop={e => { e.preventDefault(); addImageFiles(e.dataTransfer.files); setShowPicker(false) }}
+                        >
+                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[rgb(var(--accent-rgb)/0.1)]">
+                            <FolderOpen className="h-8 w-8 text-[var(--accent-color)]" />
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm font-medium text-[var(--text-primary)]">拖拽图片到此处</div>
+                            <div className="mt-1 text-xs text-[var(--text-secondary)]">或点击下方按钮选择文件（自动压缩）</div>
+                          </div>
+                          <button
+                            onClick={() => pickerFileInputRef.current?.click()}
+                            className="flex items-center gap-2 rounded-lg bg-[var(--accent-color)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)] transition-colors"
+                          >
+                            <Upload className="h-4 w-4" />
+                            选择图片
+                          </button>
+                          <input
+                            ref={pickerFileInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={e => { if (e.target.files) { addImageFiles(e.target.files); setShowPicker(false) }; e.target.value = '' }}
+                            className="hidden"
+                          />
+                        </div>
+                      )}
+
+                      {pickerTab === 'canvas' && (
+                        canvasImages.length > 0 ? (
+                          <div>
+                            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                              <Layers className="h-4 w-4 text-[var(--accent-color)]" />
+                              画布中的图片
+                              <span className="text-xs text-[var(--text-secondary)]">({canvasImages.length})</span>
+                            </div>
+                            <div className="grid grid-cols-4 gap-3">
+                              {canvasImages.map(img => (
+                                <button
+                                  key={img.id}
+                                  onClick={() => addImageFromSrc(img.src, true)}
+                                  className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--accent-color)] transition-colors"
+                                >
+                                  <img src={img.src} alt={img.title} className="h-full w-full object-cover" />
+                                  <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <span className="w-full truncate px-2 py-1.5 text-[10px] text-white">{img.title}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">画布中暂无图片</div>
+                        )
+                      )}
+
+                      {pickerTab === 'history' && (
+                        historyImages.length > 0 ? (
+                          <div>
+                            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                              <History className="h-4 w-4 text-[var(--accent-color)]" />
+                              历史素材
+                              <span className="text-xs text-[var(--text-secondary)]">({historyImages.length})</span>
+                            </div>
+                            <div className="grid grid-cols-4 gap-3">
+                              {historyImages.map(asset => (
+                                <button
+                                  key={asset.id}
+                                  onClick={() => addImageFromSrc(asset.src, true)}
+                                  className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--accent-color)] transition-colors"
+                                >
+                                  <img src={asset.src} alt={asset.title || '历史图片'} className="h-full w-full object-cover" />
+                                  <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <span className="w-full truncate px-2 py-1.5 text-[10px] text-white">{asset.title || asset.model || '历史图片'}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">暂无历史素材</div>
+                        )
+                      )}
+                    </div>
+
+                    <div className="flex justify-end border-t border-[var(--border-color)] p-4">
+                      <Button variant="ghost" onClick={() => setShowPicker(false)}>取消</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 风格预设 */}
