@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Trash2, Play, Copy, Check, Square, ChevronsRight } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { CHAT_MODELS } from '@/config/models'
+import { streamAiAssistant } from '@/lib/nexusApi'
 import { runFromNode } from '@/lib/workflow/run'
 
 const MODEL_OPTIONS = (CHAT_MODELS as any[]).map((m: any, i: number) => ({
@@ -11,6 +12,7 @@ const MODEL_OPTIONS = (CHAT_MODELS as any[]).map((m: any, i: number) => ({
   label: m.label,
 }))
 const DEFAULT_MODEL_KEY = (CHAT_MODELS as any[])[0]?.key || 'gemini-3-pro-preview-thinking'
+const EXEC_TYPES = new Set(['llm', 'textSplitter', 'imageConfig', 'videoConfig'])
 
 interface LlmNodeData {
   label?: string
@@ -21,7 +23,21 @@ interface LlmNodeData {
   errorMessage?: string
 }
 
-/** 统计上游有效输入连接数 */
+function collectUpstreamText(nodeId: string): string {
+  const { nodes, edges } = useGraphStore.getState()
+  const parts: string[] = []
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue
+    const src = nodes.find(n => n.id === edge.source)
+    if (!src) continue
+    const d = src.data as any
+    if (src.type === 'text' && d?.content) parts.push(String(d.content))
+    else if (src.type === 'llm' && d?.output) parts.push(String(d.output))
+    else if (src.type === 'textSplitter' && d?.output) parts.push(String(d.output))
+  }
+  return parts.join('\n\n')
+}
+
 function countUpstreamInputs(nodeId: string): number {
   const { nodes, edges } = useGraphStore.getState()
   let count = 0
@@ -37,7 +53,6 @@ function countUpstreamInputs(nodeId: string): number {
   return count
 }
 
-/** 检查下游是否还有可执行节点 */
 function hasDownstreamExecutable(nodeId: string): boolean {
   const { nodes, edges } = useGraphStore.getState()
   const visited = new Set<string>()
@@ -50,12 +65,23 @@ function hasDownstreamExecutable(nodeId: string): boolean {
     if (visited.has(cur)) continue
     visited.add(cur)
     const n = nodes.find(x => x.id === cur)
-    if (n && ['llm', 'textSplitter', 'imageConfig', 'videoConfig'].includes(n.type)) return true
+    if (n && EXEC_TYPES.has(n.type)) return true
     for (const e of edges) {
       if (e.source === cur) queue.push(e.target)
     }
   }
   return false
+}
+
+/** 找到直接下游第一个可执行节点 ID（用于级联） */
+function firstDownstreamExecId(nodeId: string): string | null {
+  const { nodes, edges } = useGraphStore.getState()
+  for (const e of edges) {
+    if (e.source !== nodeId) continue
+    const n = nodes.find(x => x.id === e.target)
+    if (n && EXEC_TYPES.has(n.type)) return n.id
+  }
+  return null
 }
 
 export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: NodeProps) {
@@ -71,20 +97,18 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
 
   const abortRef = useRef<AbortController | null>(null)
   const instructionRef = useRef(instruction)
+  const outputRef = useRef(output)
 
-  // 外部 store 变化 → 同步到本地 state
   useEffect(() => {
-    if (nodeData?.output !== undefined) setOutput(nodeData.output)
+    if (nodeData?.output !== undefined) { setOutput(nodeData.output); outputRef.current = nodeData.output }
     if (nodeData?.status) setStatus(nodeData.status as any)
     if (nodeData?.model) setModel(nodeData.model)
     if (nodeData?.instruction !== undefined && nodeData.instruction !== instructionRef.current) {
-      setInstruction(nodeData.instruction)
-      instructionRef.current = nodeData.instruction
+      setInstruction(nodeData.instruction); instructionRef.current = nodeData.instruction
     }
     if (nodeData?.errorMessage !== undefined) setErrorMessage(nodeData.errorMessage)
   }, [nodeData?.output, nodeData?.status, nodeData?.model, nodeData?.instruction, nodeData?.errorMessage])
 
-  // 上游连接数 & 下游可执行节点跟踪
   useEffect(() => {
     const refresh = () => {
       setInputCount(countUpstreamInputs(id))
@@ -102,14 +126,10 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
     useGraphStore.getState().updateNode(id, { data: patch })
   }, [id])
 
-  /** 级联执行：从当前节点开始执行整条链路 */
-  const handleRunCascade = useCallback(async () => {
+  const handleRun = useCallback(async () => {
+    const inputText = collectUpstreamText(id)
     const inst = instructionRef.current.trim()
-    // flush instruction & model to store
-    sync({ instruction: inst, model })
-
-    // 校验：无上游输入也无指令时给提示
-    if (inputCount === 0 && !inst) {
+    if (!inputText && !inst) {
       window.$message?.warning?.('请连接输入或填写指令')
       return
     }
@@ -118,18 +138,48 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
     const ctrl = new AbortController()
     abortRef.current = ctrl
 
-    try {
-      await runFromNode(id, { signal: ctrl.signal })
-    } catch (err: any) {
-      if (!ctrl.signal.aborted) {
-        window.$message?.error?.(err?.message || '执行失败')
-      }
-    }
-  }, [id, model, inputCount, sync])
+    // 立即更新 UI
+    setStatus('running')
+    setOutput('')
+    setErrorMessage('')
+    outputRef.current = ''
+    sync({ instruction: inst, model, status: 'running', output: '', errorMessage: '' })
 
-  const handleStop = useCallback(() => {
-    abortRef.current?.abort()
-  }, [])
+    try {
+      const messages: any[] = []
+      if (inst) messages.push({ role: 'system', content: inst })
+      messages.push({ role: 'user', content: inputText || inst })
+
+      let full = ''
+      for await (const chunk of streamAiAssistant(model, messages, { signal: ctrl.signal, filterThinking: true })) {
+        full += chunk
+        outputRef.current = full
+        setOutput(full)
+      }
+
+      setStatus('done')
+      sync({ output: full, status: 'done' })
+
+      // 本节点完成后 → 级联执行下游
+      const downId = firstDownstreamExecId(id)
+      if (downId) {
+        await runFromNode(downId, { signal: ctrl.signal })
+      }
+    } catch (err: any) {
+      if (ctrl.signal.aborted) {
+        const partial = outputRef.current
+        if (partial) { setStatus('done'); sync({ output: partial, status: 'done' }) }
+        else { setStatus('idle'); sync({ status: 'idle' }) }
+        return
+      }
+      const msg = err?.message || '生成失败'
+      setStatus('error')
+      setErrorMessage(msg)
+      sync({ status: 'error', errorMessage: msg })
+    }
+  }, [id, model, sync])
+
+  const handleStop = useCallback(() => { abortRef.current?.abort() }, [])
 
   const handleCopy = useCallback(async () => {
     if (!output) return
@@ -152,7 +202,6 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
         }`}
         style={{ width: 360 }}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500">LLM</span>
@@ -166,7 +215,7 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
                 <Square size={12} fill="currentColor" />
               </button>
             ) : (
-              <button onClick={handleRunCascade} className="flex items-center gap-0.5 p-1 hover:bg-emerald-500/20 rounded text-emerald-500 transition-colors" title={hasDownstream ? '级联执行（含下游节点）' : '运行'}>
+              <button onClick={handleRun} className="flex items-center gap-0.5 p-1 hover:bg-emerald-500/20 rounded text-emerald-500 transition-colors" title={hasDownstream ? '级联执行（含下游节点）' : '运行'}>
                 <Play size={14} />
                 {hasDownstream && <ChevronsRight size={12} />}
               </button>
@@ -177,7 +226,6 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
           </div>
         </div>
 
-        {/* Instruction */}
         <div className="px-3 pt-2">
           <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase">指令</label>
           <textarea
@@ -192,7 +240,6 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
           />
         </div>
 
-        {/* Model Selector */}
         <div className="px-3 py-2">
           <select
             value={model}
@@ -206,7 +253,6 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
           </select>
         </div>
 
-        {/* Connection Status */}
         <div className="px-3 pb-2 flex items-center gap-2">
           <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${
             inputCount > 0
@@ -222,7 +268,6 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
           )}
         </div>
 
-        {/* Output */}
         {(output || status === 'running') && (
           <div className="px-3 pb-3">
             <div className="flex items-center justify-between mb-1">
@@ -244,7 +289,6 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
           </div>
         )}
 
-        {/* Error */}
         {status === 'error' && errorMessage && (
           <div className="px-3 pb-2">
             <div className="rounded-lg bg-red-500/10 px-3 py-1.5 text-[11px] text-red-500 truncate">
@@ -253,7 +297,6 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
           </div>
         )}
 
-        {/* Status bar */}
         <div className="flex items-center justify-between px-3 py-1.5 border-t border-[var(--border-color)]">
           <div className="flex items-center gap-1.5">
             <div className={`w-1.5 h-1.5 rounded-full ${

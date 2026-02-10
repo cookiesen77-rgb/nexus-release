@@ -4,11 +4,28 @@ import { Trash2, Play, Loader2, Scissors, ChevronsRight } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { runFromNode } from '@/lib/workflow/run'
 
+const EXEC_TYPES = new Set(['llm', 'textSplitter', 'imageConfig', 'videoConfig'])
+
 interface TextSplitterNodeData {
   label?: string
   instruction?: string
   status?: 'idle' | 'running' | 'done' | 'error'
   splitCount?: number
+}
+
+function collectInputText(nodeId: string): string {
+  const { nodes, edges } = useGraphStore.getState()
+  const parts: string[] = []
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue
+    const src = nodes.find(n => n.id === edge.source)
+    if (!src) continue
+    const d = src.data as any
+    if (src.type === 'text' && d?.content) parts.push(String(d.content))
+    else if (src.type === 'llm' && d?.output) parts.push(String(d.output))
+    else if (src.type === 'textSplitter' && d?.output) parts.push(String(d.output))
+  }
+  return parts.join('\n\n')
 }
 
 function hasDownstreamExecutable(nodeId: string): boolean {
@@ -23,12 +40,22 @@ function hasDownstreamExecutable(nodeId: string): boolean {
     if (visited.has(cur)) continue
     visited.add(cur)
     const n = nodes.find(x => x.id === cur)
-    if (n && ['llm', 'textSplitter', 'imageConfig', 'videoConfig'].includes(n.type)) return true
+    if (n && EXEC_TYPES.has(n.type)) return true
     for (const e of edges) {
       if (e.source === cur) queue.push(e.target)
     }
   }
   return false
+}
+
+function firstDownstreamExecId(nodeId: string): string | null {
+  const { nodes, edges } = useGraphStore.getState()
+  for (const e of edges) {
+    if (e.source !== nodeId) continue
+    const n = nodes.find(x => x.id === e.target)
+    if (n && EXEC_TYPES.has(n.type)) return n.id
+  }
+  return null
 }
 
 export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, data, selected }: NodeProps) {
@@ -60,18 +87,80 @@ export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, da
   }, [id])
 
   const handleRun = useCallback(async () => {
-    syncToStore({ instruction: instructionRef.current })
+    const inputText = collectInputText(id)
+    if (!inputText.trim()) {
+      window.$message?.warning?.('请连接 LLM 或文本节点作为输入')
+      return
+    }
 
     abortRef.current?.abort()
     const ctrl = new AbortController()
     abortRef.current = ctrl
 
-    try {
-      await runFromNode(id, { signal: ctrl.signal })
-    } catch (err: any) {
-      if (!ctrl.signal.aborted) {
-        window.$message?.error?.(err?.message || '执行失败')
+    setStatus('running')
+    syncToStore({ instruction: instructionRef.current, status: 'running' })
+
+    // 拆分
+    let segments: string[]
+    const shotRegex = /\[SHOT\s+\d+\/\d+\]/gi
+    if (shotRegex.test(inputText)) {
+      segments = inputText.split(/(?=\[SHOT\s+\d+\/\d+\])/gi).map(s => s.trim()).filter(Boolean)
+    } else if (inputText.trim().startsWith('[')) {
+      try {
+        const arr = JSON.parse(inputText)
+        segments = Array.isArray(arr) && arr.every(s => typeof s === 'string') ? arr.filter(Boolean) : inputText.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
+      } catch {
+        segments = inputText.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
       }
+    } else {
+      segments = inputText.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
+    }
+    if (segments.length <= 1) {
+      segments = inputText.split('\n').map(s => s.trim()).filter(s => s.length > 10)
+    }
+    if (segments.length === 0) segments = [inputText.trim()]
+
+    // 防重复：检查下游是否已有 text 节点
+    const store = useGraphStore.getState()
+    const thisNode = store.nodes.find(n => n.id === id)
+    if (!thisNode) return
+
+    const existingTextDown = store.edges
+      .filter(e => e.source === id)
+      .map(e => store.nodes.find(n => n.id === e.target))
+      .filter(n => n?.type === 'text')
+    if (existingTextDown.length > 0) {
+      setSplitCount(existingTextDown.length)
+      setStatus('done')
+      syncToStore({ status: 'done', splitCount: existingTextDown.length })
+      // 已有下游 → 仍然级联
+      const downId = firstDownstreamExecId(id)
+      if (downId) await runFromNode(downId, { signal: ctrl.signal })
+      return
+    }
+
+    const startX = thisNode.x + 420
+    const startY = thisNode.y
+    const yGap = 180
+
+    store.withBatchUpdates(() => {
+      for (let i = 0; i < segments.length; i++) {
+        const newId = store.addNode('text', { x: startX, y: startY + i * yGap }, {
+          label: `分镜 ${i + 1}`,
+          content: segments[i]
+        })
+        store.addEdge(id, newId, { sourceHandle: 'right', targetHandle: 'left' })
+      }
+    })
+
+    setSplitCount(segments.length)
+    setStatus('done')
+    syncToStore({ status: 'done', splitCount: segments.length })
+
+    // 本节点完成 → 级联下游
+    const downId = firstDownstreamExecId(id)
+    if (downId) {
+      await runFromNode(downId, { signal: ctrl.signal })
     }
   }, [id, syncToStore])
 
@@ -89,7 +178,6 @@ export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, da
         }`}
         style={{ width: 320 }}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
           <div className="flex items-center gap-2">
             <Scissors size={14} className="text-orange-500" />
@@ -113,7 +201,6 @@ export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, da
           </div>
         </div>
 
-        {/* Instruction */}
         <div className="px-3 py-2">
           <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase">拆分规则</label>
           <textarea
@@ -128,7 +215,6 @@ export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, da
           />
         </div>
 
-        {/* Status */}
         <div className="flex items-center justify-between px-3 py-1.5 border-t border-[var(--border-color)]">
           <div className="flex items-center gap-1.5">
             <div className={`w-1.5 h-1.5 rounded-full ${
