@@ -41,6 +41,8 @@ export interface CircuitBreakerState {
 // AI 助手固定使用 gemini-3-pro-preview-thinking
 export const AI_ASSISTANT_MODELS = [
   { key: 'gemini-3-pro-preview-thinking', label: 'Gemini 3 Pro Thinking' },
+  { key: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+  { key: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5' },
 ] as const
 
 export type RegenerateMode = 'replace' | 'create'

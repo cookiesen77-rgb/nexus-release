@@ -665,10 +665,10 @@ export async function* streamAiAssistant(
   const isGeminiModel = modelKey.includes('gemini') || modelCfg?.format === 'gemini-chat'
 
   if (isGeminiModel && modelCfg) {
-    // Gemini 模型：使用 Gemini 原生格式
     yield* streamGeminiChat(modelCfg, messages, apiKey, signal, filterThinking)
+  } else if (modelCfg?.format === 'anthropic-chat') {
+    yield* streamAnthropicChat(modelCfg, messages, apiKey, signal, filterThinking)
   } else {
-    // OpenAI 兼容模型：使用 /chat/completions
     yield* streamOpenAIChat(modelKey, messages, apiKey, signal, filterThinking)
   }
 }
@@ -864,6 +864,97 @@ async function* streamOpenAIChat(
           }
           yield content
         }
+      } catch {}
+    }
+  }
+}
+
+/**
+ * Anthropic Messages API 流式请求
+ */
+async function* streamAnthropicChat(
+  modelCfg: any,
+  messages: ChatMessage[],
+  apiKey: string,
+  signal?: AbortSignal,
+  filterThinking: boolean = true
+): AsyncGenerator<string> {
+  const endpoint = resolveEndpointUrl(modelCfg.endpoint || '/messages')
+
+  const systemMsg = messages.find(m => m.role === 'system')
+  const nonSystemMessages = messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+    }))
+
+  const body: any = {
+    model: modelCfg.key,
+    max_tokens: 16384,
+    messages: nonSystemMessages,
+    stream: true,
+  }
+  if (systemMsg && typeof systemMsg.content === 'string') {
+    body.system = systemMsg.content
+  }
+
+  const fetchOptions: RequestInit = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+  }
+  if (!isTauri && signal) {
+    fetchOptions.signal = signal
+  }
+
+  const response = await safeFetch(endpoint, fetchOptions)
+
+  if (!response.ok) {
+    let errorText = ''
+    try { errorText = await response.text() } catch {}
+    throw new Error(errorText || `Anthropic request failed (${response.status})`)
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) return
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let inThinkingBlock = false
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || !trimmed.startsWith('data:')) continue
+      const payload = trimmed.slice(5).trim()
+      if (payload === '[DONE]') return
+
+      try {
+        const parsed = JSON.parse(payload)
+        if (parsed.type === 'content_block_delta') {
+          const text = parsed.delta?.text
+          if (text) {
+            if (filterThinking) {
+              if (text.includes('<think>') || text.includes('<thinking>')) { inThinkingBlock = true }
+              if (text.includes('</think>') || text.includes('</thinking>')) { inThinkingBlock = false; continue }
+              if (inThinkingBlock) continue
+            }
+            yield text
+          }
+        }
+        if (parsed.type === 'message_stop') return
       } catch {}
     }
   }
