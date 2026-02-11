@@ -1,6 +1,7 @@
-import React, { memo, useState, useCallback, useRef } from 'react'
-import { ChevronDown, ChevronUp, Upload, X } from 'lucide-react'
+import React, { memo, useState, useCallback, useRef, useMemo } from 'react'
+import { ChevronDown, ChevronUp, Upload, X, Image as ImageIcon } from 'lucide-react'
 import { saveMedia } from '@/lib/mediaStorage'
+import { useGraphStore } from '@/graph/store'
 
 interface AdvancedSettingsProps {
   mode: 'image' | 'video'
@@ -178,6 +179,14 @@ function FrameUpload({ url, onChange, onClear }: {
   onClear?: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [showPicker, setShowPicker] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  const canvasImages = useMemo(() => {
+    return useGraphStore.getState().nodes
+      .filter(n => n.type === 'image' && n.data?.url)
+      .map(n => ({ id: n.id, src: String(n.data?.url || ''), title: String(n.data?.label || '画布图片') }))
+  }, [showPicker])
 
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation()
@@ -196,6 +205,11 @@ function FrameUpload({ url, onChange, onClear }: {
     if (inputRef.current) inputRef.current.value = ''
   }, [onChange])
 
+  const handlePickCanvas = useCallback((src: string) => {
+    onChange?.(src)
+    setShowPicker(false)
+  }, [onChange])
+
   if (url) {
     return (
       <div className="relative w-16 h-10 rounded overflow-hidden border border-[var(--border-color)] group">
@@ -211,10 +225,45 @@ function FrameUpload({ url, onChange, onClear }: {
   }
 
   return (
-    <label className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-dashed border-[var(--border-color)] hover:border-[var(--accent-color)] cursor-pointer transition-colors" onClick={e => e.stopPropagation()}>
-      <Upload size={10} />
-      <span className="text-[var(--text-secondary)]">上传</span>
-      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
-    </label>
+    <div className="relative flex items-center gap-1">
+      <label className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-dashed border-[var(--border-color)] hover:border-[var(--accent-color)] cursor-pointer transition-colors" onClick={e => e.stopPropagation()}>
+        <Upload size={10} />
+        <span className="text-[var(--text-secondary)]">上传</span>
+        <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      </label>
+      <button
+        ref={btnRef}
+        onClick={(e) => { e.stopPropagation(); setShowPicker(!showPicker) }}
+        className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-dashed border-[var(--border-color)] hover:border-[var(--accent-color)] transition-colors"
+        title="从画布选择"
+      >
+        <ImageIcon size={10} />
+        <span className="text-[var(--text-secondary)]">画布</span>
+      </button>
+      {showPicker && (
+        <>
+          <div className="fixed inset-0 z-[998]" onClick={(e) => { e.stopPropagation(); setShowPicker(false) }} />
+          <div
+            className="absolute left-0 top-full mt-1 z-[999] bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-xl p-1.5 grid grid-cols-4 gap-1"
+            style={{ width: 220, maxHeight: 180, overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {canvasImages.length === 0 && (
+              <div className="col-span-4 py-3 text-center text-[10px] text-[var(--text-secondary)]">画布无图片</div>
+            )}
+            {canvasImages.map(img => (
+              <button
+                key={img.id}
+                onClick={(e) => { e.stopPropagation(); handlePickCanvas(img.src) }}
+                className="w-full aspect-square rounded overflow-hidden border border-[var(--border-color)] hover:border-[var(--accent-color)] transition-colors bg-black/10"
+                title={img.title}
+              >
+                <img src={img.src} alt="" className="w-full h-full object-cover" draggable={false} />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   )
 }

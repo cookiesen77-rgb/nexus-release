@@ -298,7 +298,7 @@ export default function NodePalettePanel({
   return (
     <div
       ref={panelRef}
-      className="w-[220px] rounded-[14px] border border-[var(--border-color)] bg-[var(--bg-secondary)] p-2"
+      className="w-[220px] rounded-2xl border border-[var(--border-color)]/50 shadow-xl backdrop-blur-xl bg-[var(--bg-secondary)]/95 p-2"
     >
       {/* 隐藏的文件选择器 */}
       <input
@@ -307,15 +307,38 @@ export default function NodePalettePanel({
         className="hidden"
         onChange={handleFileSelect}
       />
-      <div className="flex flex-col gap-1">
-        {options.map((opt) => (
+      <div className="flex flex-col gap-0.5">
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">生成</div>
+        {options.filter(o => ['text', 'llm', 'textSplitter', 'imageConfig', 'videoConfig'].includes(o.type)).map((opt) => (
           <button
             key={opt.type}
             onClick={() => spawn(opt.type)}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
           >
-            <opt.Icon className="h-[20px] w-[20px]" style={{ color: opt.color }} />
-            <span className="truncate text-sm text-[var(--text-primary)]">{opt.name}</span>
+            <opt.Icon className="h-4 w-4 shrink-0" style={{ color: opt.color }} />
+            <span className="truncate text-xs text-[var(--text-primary)]">{opt.name}</span>
+          </button>
+        ))}
+        <div className="px-2.5 pt-2 pb-1.5 text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">工具</div>
+        {options.filter(o => ['klingVideoTool', 'klingImageTool', 'klingAudioTool'].includes(o.type)).map((opt) => (
+          <button
+            key={opt.type}
+            onClick={() => spawn(opt.type)}
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
+          >
+            <opt.Icon className="h-4 w-4 shrink-0" style={{ color: opt.color }} />
+            <span className="truncate text-xs text-[var(--text-primary)]">{opt.name}</span>
+          </button>
+        ))}
+        <div className="px-2.5 pt-2 pb-1.5 text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">素材</div>
+        {options.filter(o => ['image', 'video', 'audio', 'localSave'].includes(o.type)).map((opt) => (
+          <button
+            key={opt.type}
+            onClick={() => spawn(opt.type)}
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
+          >
+            <opt.Icon className="h-4 w-4 shrink-0" style={{ color: opt.color }} />
+            <span className="truncate text-xs text-[var(--text-primary)]">{opt.name}</span>
           </button>
         ))}
       </div>

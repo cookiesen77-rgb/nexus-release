@@ -7,7 +7,7 @@ import React, { useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Upload, Loader2, Copy, Check, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { streamChatCompletions } from '@/api'
+import { streamAiAssistant } from '@/lib/nexusApi'
 
 interface Props {
   open: boolean
@@ -120,7 +120,7 @@ const SYSTEM_PROMPT = `你是一位顶级图像分析与逆向提示词专家。
   "negative_prompt_suggestions": ["建议排除的元素，如变形、低质量等"]
 }`
 
-const DEFAULT_CHAT_MODEL = 'gpt-5-mini'
+const REVERSE_MODEL = 'gemini-3-pro-preview-thinking'
 
 export default function PromptReverseModal({ open, onClose }: Props) {
   const [image, setImage] = useState<string | null>(null)
@@ -170,7 +170,7 @@ export default function PromptReverseModal({ open, onClose }: Props) {
     setJsonPrompt('')
 
     try {
-      const messages = [
+      const messages: any[] = [
         { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
@@ -182,10 +182,7 @@ export default function PromptReverseModal({ open, onClose }: Props) {
       ]
 
       let fullResponse = ''
-      for await (const chunk of streamChatCompletions({
-        model: DEFAULT_CHAT_MODEL,
-        messages
-      })) {
+      for await (const chunk of streamAiAssistant(REVERSE_MODEL, messages, { filterThinking: true })) {
         fullResponse += chunk
 
         // 尝试分离文本和 JSON 部分

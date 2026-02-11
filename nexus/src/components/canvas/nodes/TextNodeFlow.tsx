@@ -8,10 +8,10 @@
  * 3. 完全避免订阅 store
  */
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
-import { Handle, Position, NodeProps } from '@xyflow/react'
+import { Position, NodeProps } from '@xyflow/react'
+import { TapNodeHandle } from './shared/TapNodeHandle'
 import { Copy, Trash2, ImageIcon, Video, Expand, Loader2 } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
-import { useSettingsStore } from '@/store/settings'
 import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS } from '@/config/models'
 import { callAiAssistant } from '@/lib/nexusApi'
 import { 
@@ -185,7 +185,7 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
       const { nodes, edges } = store
       
       // 获取全局 AI 助手模型设置
-      const aiModel = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
+      const aiModel = 'gemini-3-pro-preview-thinking'
       
       // 1. 推断润色模式
       const modeFromGraph = inferPolishModeFromGraph(id, nodes, edges)
@@ -238,43 +238,25 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
   }, [id])
 
   return (
-    // 外层 wrapper 提供悬浮按钮空间（参考 Vue 版本）
-    <div 
+    <div
       className="relative pr-[50px] pt-[20px]"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
       {/* 节点主体 */}
       <div
-        className={`text-node bg-[var(--bg-secondary)] rounded-xl border relative transition-all duration-200 ${
-          selected ? 'border-blue-500 shadow-lg shadow-blue-500/20' : 'border-[var(--border-color)]'
-        } ${isResizing ? 'select-none' : ''}`}
+        className={`group text-node bg-[var(--bg-secondary)] rounded-xl relative transition-all duration-200 shadow-sm hover:shadow-md ${isResizing ? 'select-none' : ''}`}
         style={{ width: nodeWidth, minHeight: nodeHeight }}
       >
-        {/* 头部 */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
-          <span className="text-sm font-medium text-[var(--text-secondary)]">
+        {/* 标签 (小字) */}
+        <div className="px-3 pt-2 pb-0.5">
+          <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wide">
             {nodeData?.label || '文本'}
           </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleDelete}
-              className="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
-              title="删除"
-            >
-              <Trash2 size={14} />
-            </button>
-            <button
-              className="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
-              title="展开"
-            >
-              <Expand size={14} />
-            </button>
-          </div>
         </div>
 
         {/* 内容 */}
-        <div className="p-3 flex flex-col" style={{ height: nodeHeight - 50 }}>
+        <div className="px-3 pb-3 flex flex-col" style={{ height: nodeHeight - 40 }}>
           <textarea
             value={displayContent}
             onChange={(e) => {
@@ -285,35 +267,43 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
             onBlur={handleBlur}
             onMouseDown={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
-            className="nodrag nowheel w-full bg-transparent resize-none outline-none text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] flex-1 select-text"
-            placeholder="请输入文本内容..."
-            style={{ minHeight: Math.max(60, nodeHeight - 100), userSelect: 'text', WebkitUserSelect: 'text' }}
+            className="nodrag nowheel w-full bg-transparent resize-none outline-none text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] placeholder:opacity-40 flex-1 select-text"
+            placeholder="输入描述..."
+            style={{ minHeight: Math.max(60, nodeHeight - 80), userSelect: 'text', WebkitUserSelect: 'text' }}
           />
         </div>
 
-        {/* 左下角 AI 润色按钮 */}
+        {/* AI 润色按钮 */}
         <button
           onClick={handlePolish}
           disabled={!displayContent.trim() || polishing}
-          className="absolute bottom-2 left-2 px-2 py-1 text-xs rounded-md bg-[var(--bg-tertiary)] hover:bg-[var(--accent-color)] hover:text-white border border-[var(--border-color)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+          className="absolute bottom-2 left-4 px-2 py-0.5 text-xs rounded-md bg-[var(--bg-tertiary)] hover:bg-emerald-500 hover:text-white border border-[var(--border-color)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
           title="AI 润色"
         >
           {polishing ? (
-            <Loader2 size={12} className="animate-spin" />
+            <Loader2 size={10} className="animate-spin" />
           ) : (
-            <span className="text-xs">✨ AI 润色</span>
+            <span>✨ AI</span>
           )}
         </button>
 
-        {/* 右下角调整大小手柄 */}
+        {/* Hover: 删除按钮 */}
+        {showActions && (
+          <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5">
+            <button onClick={handleDelete} className="p-1 rounded hover:bg-red-500/20 transition-colors" title="删除">
+              <Trash2 size={12} className="text-[var(--text-secondary)]" />
+            </button>
+          </div>
+        )}
+
+        {/* 调整大小手柄 */}
         <div
           onMouseDown={handleResizeStart}
           className="nodrag absolute bottom-0 right-0 w-4 h-4 cursor-se-resize group"
-          title="拖动调整大小"
         >
-          <svg 
-            className="absolute bottom-1 right-1 w-2.5 h-2.5 text-[var(--text-secondary)] opacity-50 group-hover:opacity-100 transition-opacity"
-            viewBox="0 0 10 10" 
+          <svg
+            className="absolute bottom-1 right-1 w-2 h-2 text-[var(--text-secondary)] opacity-30 group-hover:opacity-60 transition-opacity"
+            viewBox="0 0 10 10"
             fill="currentColor"
           >
             <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
@@ -321,45 +311,28 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
         </div>
 
         {/* 连接点 */}
-        <Handle type="source" position={Position.Right} id="right" className="handle-text" />
-        <Handle type="target" position={Position.Left} id="left" className="handle-text" />
+        <TapNodeHandle type="source" position={Position.Right} id="right" />
+        <TapNodeHandle type="target" position={Position.Left} id="left" />
       </div>
 
-      {/* 悬浮操作按钮 - 复制（右上角偏左，与 Vue 版本一致） */}
       {showActions && (
         <div className="absolute -top-5 right-12 z-[1000]">
-          <button
-            onClick={handleDuplicate}
-            className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max"
-          >
+          <button onClick={handleDuplicate} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
             <Copy size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">
-              复制
-            </span>
+            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
           </button>
         </div>
       )}
 
-      {/* 右侧操作按钮（与 Vue 版本一致：right-10 + translate-x-full） */}
       {showActions && (
         <div className="absolute right-10 top-1/2 -translate-y-1/2 translate-x-full flex flex-col gap-2 z-[1000]">
-          <button
-            onClick={handleImageGen}
-            className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max"
-          >
+          <button onClick={handleImageGen} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
             <ImageIcon size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">
-              图片生成
-            </span>
+            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">图片生成</span>
           </button>
-          <button
-            onClick={handleVideoGen}
-            className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max"
-          >
+          <button onClick={handleVideoGen} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
             <Video size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">
-              视频生成
-            </span>
+            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">视频生成</span>
           </button>
         </div>
       )}

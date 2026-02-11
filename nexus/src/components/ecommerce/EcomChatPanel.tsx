@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { EcomDraftV1, EcomSceneType, EcomChatMessage } from '@/lib/ecommerce/types'
 import { buildEcomSystemPrompt, compactChatHistory, buildMultimodalMessage } from '@/lib/ecommerce/ecomChat'
-import { streamChatCompletions } from '@/api'
-import { useSettingsStore } from '@/store/settings'
+import { streamAiAssistant } from '@/lib/nexusApi'
 import { getMedia } from '@/lib/mediaStorage'
 
 interface Props {
@@ -138,14 +137,14 @@ export default function EcomChatPanel({ draft, setDraftSafe, activeScene, onOpen
     const assistantMsg: EcomChatMessage = { role: 'assistant', content: '', timestamp: Date.now() }
     setDraftSafe(prev => ({ ...prev, chatHistory: [...prev.chatHistory, assistantMsg] }))
 
-    const aiModel = useSettingsStore.getState().aiAssistantModel
+    const aiModel = 'gemini-3-pro-preview-thinking'
     const systemPrompt = buildEcomSystemPrompt(draft, activeScene)
     const history = compactChatHistory([...draft.chatHistory, userMsg])
     const apiMessages = [{ role: 'system' as const, content: systemPrompt }, ...history]
 
     let fullResp = ''
     try {
-      for await (const chunk of streamChatCompletions({ model: aiModel, messages: apiMessages })) {
+      for await (const chunk of streamAiAssistant(aiModel, apiMessages, { filterThinking: true })) {
         fullResp += chunk
         setDraftSafe(prev => {
           const h = [...prev.chatHistory]

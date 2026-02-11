@@ -5,7 +5,8 @@
  * 视频特有的控制（时长、首尾帧、音频）放在可折叠的"高级设置"区
  */
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { Handle, Position, NodeProps } from '@xyflow/react'
+import { Position, NodeProps } from '@xyflow/react'
+import { TapNodeHandle } from './shared/TapNodeHandle'
 import { Trash2, Copy } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { getNodeSize } from '@/graph/nodeSizing'
@@ -134,7 +135,8 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
   const [refImages, setRefImages] = useState(() => getRefImages())
   useEffect(() => {
     let prev = JSON.stringify(refImages)
-    const unsub = useGraphStore.subscribe(() => {
+    const unsub = useGraphStore.subscribe((state, prevState) => {
+      if (state.edges === prevState.edges && state.nodes === prevState.nodes) return
       const next = getRefImages()
       const nextStr = JSON.stringify(next)
       if (nextStr !== prev) { prev = nextStr; setRefImages(next) }
@@ -301,6 +303,13 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
       const okCount = results.filter(r => r.ok).length
       const failCount = results.length - okCount
 
+      // 删除临时输出节点，结果已存入 outputs 数组
+      useGraphStore.getState().withBatchUpdates(() => {
+        for (const outId of outIds) {
+          useGraphStore.getState().removeNode(outId)
+        }
+      })
+
       useGraphStore.getState().updateNode(id, { data: { executed: true, _inlinePrompt: undefined } } as any)
 
       if (failCount === 0) {
@@ -322,16 +331,16 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
 
   return (
     <div
-      className={`rounded-xl overflow-hidden border transition-shadow ${
-        selected ? 'border-purple-500 shadow-lg shadow-purple-500/20' : 'border-[var(--border-color)]'
+      className={`rounded-xl border transition-shadow ${
+        selected ? 'ring-2 ring-purple-500/40 shadow-lg shadow-purple-500/20 border-purple-500/50' : 'border-[var(--border-color)] shadow-sm hover:shadow-md'
       } bg-[var(--bg-primary)]`}
-      style={{ width: 420 }}
+      style={{ width: 420, borderTop: '3px solid #a855f7' }}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       onClick={e => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg-secondary)]">
+      <div className="flex items-center justify-between px-3 py-2 bg-purple-500/10 rounded-t-xl">
         <span className="text-xs font-medium text-[var(--text-primary)]">
           {d?.label || '视频生成'}
         </span>
@@ -349,8 +358,8 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
         </div>
       </div>
 
-      {/* Output Preview */}
-      <div className="px-3 pt-2">
+      {/* Preview Section */}
+      <div className="px-3 py-2">
         <OutputPreview
           outputs={outputs}
           activeIndex={activeOutputIndex}
@@ -362,80 +371,86 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
         />
       </div>
 
-      {/* Style Presets + Ref Images */}
-      <div className="px-3 pt-2">
-        <StylePresetsRow
-          activeStyleId={activeStyleId}
-          onStyleChange={handleStyleChange}
-          refImages={allRefImages}
-          onRefImageRemove={handleRefImageRemove}
-        />
-      </div>
+      {/* Divider */}
+      <div className="mx-3 border-t border-[var(--border-color)]" />
 
-      {/* Prompt Input */}
-      <div className="px-3 pt-2">
-        <PromptInput
-          value={prompt}
-          onChange={handlePromptChange}
-          onSubmit={handleGenerate}
-          disabled={loading}
-          onRefImageAdd={handleRefImageAdd}
-          maxRefImages={videoCaps.maxRefImages}
-          currentRefCount={allRefImages.length}
-        />
-      </div>
+      {/* Control Panel */}
+      <div className="bg-[var(--bg-secondary)]/50 rounded-b-xl">
+        {/* Style Presets + Ref Images */}
+        <div className="px-3 pt-2">
+          <StylePresetsRow
+            activeStyleId={activeStyleId}
+            onStyleChange={handleStyleChange}
+            refImages={allRefImages}
+            onRefImageRemove={handleRefImageRemove}
+          />
+        </div>
 
-      {/* Generation Toolbar */}
-      <div className="px-3 py-2">
-        <GenerationToolbar
-          modelOptions={MODEL_OPTIONS}
-          model={model}
-          onModelChange={handleModelChange}
-          sizeLabel="比例"
-          sizeOptions={ratioOptions}
-          size={ratio}
-          onSizeChange={handleRatioChange}
-          cameraPreset={cameraPreset}
-          onCameraPresetChange={handleCameraChange}
-          loopCount={loopCount}
-          onLoopCountChange={handleLoopCountChange}
-          onGenerate={handleGenerate}
-          loading={loading}
-          disabled={false}
-        />
-      </div>
+        {/* Prompt Input */}
+        <div className="px-3 pt-2">
+          <PromptInput
+            value={prompt}
+            onChange={handlePromptChange}
+            onSubmit={handleGenerate}
+            disabled={loading}
+            onRefImageAdd={handleRefImageAdd}
+            maxRefImages={videoCaps.maxRefImages}
+            currentRefCount={allRefImages.length}
+          />
+        </div>
 
-      {/* Advanced Settings */}
-      <div className="px-3 pb-2">
-        <AdvancedSettings
-          mode="video"
-          durOptions={durOptions}
-          dur={duration}
-          onDurChange={handleDurChange}
-          sizeOptions={sizeOptions.map((s: any) => typeof s === 'string' ? { key: s, label: s } : s)}
-          size={size}
-          onSizeChange={handleSizeChange}
-          resolutionOptions={resolutionOptions}
-          resolution={resolution}
-          onResolutionChange={handleResolutionChange}
-          supportsFirstFrame={!!modelCfg?.supportsFirstFrame}
-          supportsLastFrame={!!modelCfg?.supportsLastFrame}
-          firstFrameUrl={firstFrameUrl}
-          onFirstFrameChange={(url, mediaId) => { setFirstFrameUrl(url); setFirstFrameMediaId(mediaId || ''); debouncedSync({ firstFrameUrl: url, firstFrameMediaId: mediaId }) }}
-          onFirstFrameClear={() => { setFirstFrameUrl(''); setFirstFrameMediaId(''); debouncedSync({ firstFrameUrl: '', firstFrameMediaId: '' }) }}
-          lastFrameUrl={lastFrameUrl}
-          onLastFrameChange={(url, mediaId) => { setLastFrameUrl(url); setLastFrameMediaId(mediaId || ''); debouncedSync({ lastFrameUrl: url, lastFrameMediaId: mediaId }) }}
-          onLastFrameClear={() => { setLastFrameUrl(''); setLastFrameMediaId(''); debouncedSync({ lastFrameUrl: '', lastFrameMediaId: '' }) }}
-          supportsAudio={!!(modelCfg as any)?.supportsAudio || !!(modelCfg as any)?.supportsSound}
-          audioEnabled={viduAudio}
-          onAudioToggle={(v) => { setViduAudio(v); debouncedSync({ viduAudio: v }) }}
-          tips={modelCfg?.tips}
-        />
+        {/* Generation Toolbar */}
+        <div className="px-3 py-2">
+          <GenerationToolbar
+            modelOptions={MODEL_OPTIONS}
+            model={model}
+            onModelChange={handleModelChange}
+            sizeLabel="比例"
+            sizeOptions={ratioOptions}
+            size={ratio}
+            onSizeChange={handleRatioChange}
+            cameraPreset={cameraPreset}
+            onCameraPresetChange={handleCameraChange}
+            loopCount={loopCount}
+            onLoopCountChange={handleLoopCountChange}
+            onGenerate={handleGenerate}
+            loading={loading}
+            disabled={false}
+          />
+        </div>
+
+        {/* Advanced Settings */}
+        <div className="px-3 pb-2">
+          <AdvancedSettings
+            mode="video"
+            durOptions={durOptions}
+            dur={duration}
+            onDurChange={handleDurChange}
+            sizeOptions={sizeOptions.map((s: any) => typeof s === 'string' ? { key: s, label: s } : s)}
+            size={size}
+            onSizeChange={handleSizeChange}
+            resolutionOptions={resolutionOptions}
+            resolution={resolution}
+            onResolutionChange={handleResolutionChange}
+            supportsFirstFrame={!!modelCfg?.supportsFirstFrame}
+            supportsLastFrame={!!modelCfg?.supportsLastFrame}
+            firstFrameUrl={firstFrameUrl}
+            onFirstFrameChange={(url, mediaId) => { setFirstFrameUrl(url); setFirstFrameMediaId(mediaId || ''); debouncedSync({ firstFrameUrl: url, firstFrameMediaId: mediaId }) }}
+            onFirstFrameClear={() => { setFirstFrameUrl(''); setFirstFrameMediaId(''); debouncedSync({ firstFrameUrl: '', firstFrameMediaId: '' }) }}
+            lastFrameUrl={lastFrameUrl}
+            onLastFrameChange={(url, mediaId) => { setLastFrameUrl(url); setLastFrameMediaId(mediaId || ''); debouncedSync({ lastFrameUrl: url, lastFrameMediaId: mediaId }) }}
+            onLastFrameClear={() => { setLastFrameUrl(''); setLastFrameMediaId(''); debouncedSync({ lastFrameUrl: '', lastFrameMediaId: '' }) }}
+            supportsAudio={!!(modelCfg as any)?.supportsAudio || !!(modelCfg as any)?.supportsSound}
+            audioEnabled={viduAudio}
+            onAudioToggle={(v) => { setViduAudio(v); debouncedSync({ viduAudio: v }) }}
+            tips={modelCfg?.tips}
+          />
+        </div>
       </div>
 
       {/* Connection handles */}
-      <Handle type="target" position={Position.Left} id="left" className="!w-3 !h-3 !bg-purple-500 !border-2 !border-[var(--bg-primary)]" />
-      <Handle type="source" position={Position.Right} id="right" className="!w-3 !h-3 !bg-purple-500 !border-2 !border-[var(--bg-primary)]" />
+      <TapNodeHandle type="target" position={Position.Left} id="left" />
+      <TapNodeHandle type="source" position={Position.Right} id="right" />
     </div>
   )
 })

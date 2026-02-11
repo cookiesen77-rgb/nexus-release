@@ -3,14 +3,14 @@ import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Trash2, Play, Loader2, Scissors, ChevronsRight, Sparkles } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { runFromNode } from '@/lib/workflow/run'
-import { CHAT_MODELS } from '@/config/models'
+import { TOOL_CHAT_MODELS } from '@/config/models'
 
-const MODEL_OPTIONS = (CHAT_MODELS as any[]).map((m: any, i: number) => ({
+const MODEL_OPTIONS = (TOOL_CHAT_MODELS as any[]).map((m: any, i: number) => ({
   value: `${m.key}::${i}`,
   key: m.key,
   label: m.label,
 }))
-const DEFAULT_MODEL_KEY = (CHAT_MODELS as any[])[0]?.key || 'gemini-3-pro-preview-thinking'
+const DEFAULT_MODEL_KEY = (TOOL_CHAT_MODELS as any[])[0]?.key || 'gemini-3-pro-preview-thinking'
 const EXEC_TYPES = new Set(['llm', 'textSplitter', 'imageConfig', 'videoConfig'])
 
 interface TextSplitterNodeData {

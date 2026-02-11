@@ -1,4 +1,3 @@
-import { PDFDocument } from 'pdf-lib'
 import { fetchUrlAsBytes } from '@/lib/download'
 
 export type HistoryPdfGridPreset = '3x3' | '2x2' | '4x4'
@@ -176,6 +175,7 @@ export async function exportHistoryImagesToPdf(opts: {
   const note = safeText(opts.note)
   const pages = chunk(items, perPage)
 
+  const { PDFDocument } = await import('pdf-lib')
   const pdf = await PDFDocument.create()
   const failed: Array<{ id: string; title: string; reason: string }> = []
 
@@ -341,6 +341,7 @@ export async function exportPdfFromLayout(opts: {
   const canvasSize = orientation === 'landscape' ? CANVAS_LANDSCAPE : CANVAS_PORTRAIT
   const scale = canvasSize.w / pageSize.w
 
+  const { PDFDocument } = await import('pdf-lib')
   const pdf = await PDFDocument.create()
   const failed: Array<{ id: string; title: string; reason: string }> = []
 

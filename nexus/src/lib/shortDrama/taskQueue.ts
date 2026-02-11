@@ -59,6 +59,8 @@ export class ShortDramaTaskQueue {
   private lastScaleAt: Record<AdaptiveKind, number> = { image: 0, video: 0 }
   private scaleUpBlockedUntil: Record<AdaptiveKind, number> = { image: 0, video: 0 }
 
+  private pendingResults = new Map<string, { kind: ShortDramaTaskKind; result?: any; error?: string }>()
+
   setLimits(limits: Partial<ShortDramaQueueLimits>) {
     this.baseLimits = {
       imageConcurrency: clampInt(limits.imageConcurrency ?? this.baseLimits.imageConcurrency, 1, 12, this.baseLimits.imageConcurrency),
@@ -97,6 +99,24 @@ export class ShortDramaTaskQueue {
       limits: this.getLimits(),
       baseLimits: { ...this.baseLimits },
     }
+  }
+
+  getActiveKeys(): Set<string> {
+    const keys = new Set(this.runningKeys)
+    for (const t of this.queue) {
+      if (!t.cancelled && t.key) keys.add(t.key)
+    }
+    return keys
+  }
+
+  storePendingResult(key: string, kind: ShortDramaTaskKind, result?: any, error?: string) {
+    this.pendingResults.set(key, { kind, result, error })
+  }
+
+  consumePendingResults(): Map<string, { kind: ShortDramaTaskKind; result?: any; error?: string }> {
+    const out = new Map(this.pendingResults)
+    this.pendingResults.clear()
+    return out
   }
 
   enqueue<T>(kind: ShortDramaTaskKind, key: string, run: () => Promise<T>): ShortDramaQueuedTask<T> {

@@ -20,12 +20,12 @@ export const AssetMentionPopover = memo(function AssetMentionPopover({
 
   const historyImages = useAssetsStore(s => s.getAssetsByType('image'))
 
+  const nodes = useGraphStore(s => s.nodes)
   const canvasImages = useMemo(() => {
-    const nodes = useGraphStore.getState().nodes
     return nodes
       .filter(n => n.type === 'image' && n.data?.url)
       .map(n => ({ id: n.id, src: String(n.data?.url || ''), title: String(n.data?.label || '画布图片') }))
-  }, [])
+  }, [nodes])
 
   const q = query.toLowerCase()
 

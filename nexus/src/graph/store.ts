@@ -11,6 +11,7 @@ import {
   type SpatialIndex
 } from '@/graph/spatialIndex'
 import { coerceVideoImageRole, getVideoModelCaps } from '@/lib/modelCaps'
+import { getConnectedComponent } from '@/graph/graphTraversal'
 
 type PersistedCanvasV1 = {
   version: 1
@@ -43,6 +44,7 @@ let compressTimer: number | null = null
 let compressInProgress = false
 let historyTimer: number | null = null
 let historyPending = false
+let hoverRafId = 0
 
 let history: HistoryEntry[] = []
 let historyIndex = -1
@@ -171,7 +173,7 @@ const tryTauriInvoke = async <T,>(command: string, payload?: Record<string, unkn
 }
 
 // 增加保存防抖时间，让它在历史记录推送之后执行
-const SAVE_DEBOUNCE_MS = 1200
+const SAVE_DEBOUNCE_MS = 2000
 
 const scheduleSave = () => {
   if (saveTimer) {
@@ -371,6 +373,9 @@ export type GraphState = {
   selectedNodeId: string | null
   selectedNodeIds: string[]
   selectedEdgeId: string | null
+  hoveredEdgeId: string | null
+  highlightedNodeIds: Set<string>
+  highlightedEdgeIds: Set<string>
   historyIndex: number
   historyLength: number
 
@@ -388,6 +393,7 @@ export type GraphState = {
   toggleSelected: (id: string) => void
   clearSelection: () => void
   setSelectedEdge: (id: string | null) => void
+  setHoveredEdge: (id: string | null) => void
   setViewport: (vp: Viewport) => void
 
   addNode: (type: NodeType | string, pos: { x: number; y: number }, data?: Record<string, unknown>) => string
@@ -403,6 +409,7 @@ export type GraphState = {
   setEdgePromptOrder: (id: string, order: number) => void
   setEdgeImageOrder: (id: string, order: number) => void
   removeEdge: (id: string) => void
+  insertNodeOnEdge: (edgeId: string, nodeType: string, position: { x: number; y: number }) => string | null
 
   clear: () => void
   createBench5k: () => void
@@ -424,6 +431,9 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   selectedNodeId: null,
   selectedNodeIds: [],
   selectedEdgeId: null,
+  hoveredEdgeId: null,
+  highlightedNodeIds: new Set<string>(),
+  highlightedEdgeIds: new Set<string>(),
   historyIndex: -1,
   historyLength: 0,
 
@@ -470,9 +480,12 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
     // 后台迁移：把当前内存中的内联媒体写入 IndexedDB，并写回 mediaId（不进入历史）
     // 注：历史上已经丢失的内联数据无法从持久化画布恢复；这里只覆盖“当前会话仍持有 dataURL”的情况。
-    setTimeout(() => {
-      void migrateInlineMediaToIndexedDb(id)
-    }, 0)
+    const scheduleMedia = () => void migrateInlineMediaToIndexedDb(id)
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(scheduleMedia, { timeout: 5000 })
+    } else {
+      setTimeout(scheduleMedia, 2000)
+    }
   },
 
   saveNow: async () => {
@@ -531,6 +544,23 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   setSelectedEdge: (id) => {
     const next = id ? String(id || '').trim() : null
     set({ selectedEdgeId: next || null, selectedNodeId: null, selectedNodeIds: [] })
+  },
+
+  setHoveredEdge: (id) => {
+    if (!id) {
+      cancelAnimationFrame(hoverRafId)
+      set({ hoveredEdgeId: null, highlightedNodeIds: new Set(), highlightedEdgeIds: new Set() })
+      return
+    }
+    if (id === get().hoveredEdgeId) return
+    cancelAnimationFrame(hoverRafId)
+    hoverRafId = requestAnimationFrame(() => {
+      const s = get()
+      const edge = s.edges.find(e => e.id === id)
+      if (!edge) return
+      const { nodeIds, edgeIds } = getConnectedComponent(edge.source, s.edges)
+      set({ hoveredEdgeId: id, highlightedNodeIds: nodeIds, highlightedEdgeIds: edgeIds })
+    })
   },
 
   setViewport: (vp) => {
@@ -969,6 +999,23 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       return { edges, selectedEdgeId }
     })
     markDirty()
+  },
+
+  insertNodeOnEdge: (edgeId, nodeType, position) => {
+    const s = get()
+    const edge = s.edges.find(e => e.id === edgeId)
+    if (!edge) return null
+    const sourceHandle = (edge.data as any)?.sourceHandle || 'right'
+    const targetHandle = (edge.data as any)?.targetHandle || 'left'
+    let newId: string | null = null
+    s.withBatchUpdates(() => {
+      newId = s.addNode(nodeType, position)
+      s.addEdge(edge.source, newId!, { sourceHandle, targetHandle: 'left' })
+      s.addEdge(newId!, edge.target, { sourceHandle: 'right', targetHandle })
+      s.removeEdge(edgeId)
+      s.setSelected(newId!)
+    })
+    return newId
   },
 
   clear: () => {

@@ -1,4 +1,4 @@
-import React, { memo, useState, useCallback, useMemo } from 'react'
+import React, { memo, useState, useCallback, useMemo, useRef } from 'react'
 import { ArrowUp, Camera, ChevronDown } from 'lucide-react'
 import { CAMERA_PRESETS } from '@/lib/cameraControl/presets'
 
@@ -40,6 +40,7 @@ export const GenerationToolbar = memo(function GenerationToolbar(props: Generati
   } = props
 
   const [showCamera, setShowCamera] = useState(false)
+  const cameraBtnRef = useRef<HTMLButtonElement>(null)
 
   const sizeDisplay = useMemo(() => {
     const s = sizeOptions.find(o => o.key === size)?.label || size
@@ -93,6 +94,7 @@ export const GenerationToolbar = memo(function GenerationToolbar(props: Generati
       {/* Camera presets */}
       <div className="relative">
         <button
+          ref={cameraBtnRef}
           onClick={(e) => { e.stopPropagation(); setShowCamera(!showCamera) }}
           className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors ${
             cameraPreset
@@ -109,6 +111,7 @@ export const GenerationToolbar = memo(function GenerationToolbar(props: Generati
             active={cameraPreset}
             onSelect={(name) => { onCameraPresetChange(name); setShowCamera(false) }}
             onClose={() => setShowCamera(false)}
+            anchorRef={cameraBtnRef}
           />
         )}
       </div>
@@ -173,17 +176,30 @@ function CompactSelect({ value, options, onChange, display, icon, maxWidth }: {
   )
 }
 
-function CameraPresetsPopover({ active, onSelect, onClose }: {
+function CameraPresetsPopover({ active, onSelect, onClose, anchorRef }: {
   active: string | undefined
   onSelect: (name: string | undefined) => void
   onClose: () => void
+  anchorRef: React.RefObject<HTMLButtonElement | null>
 }) {
+  const pos = useMemo(() => {
+    const el = anchorRef.current
+    if (!el) return { top: 0, left: 0 }
+    const rect = el.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const popoverH = 280
+    if (spaceBelow >= popoverH + 8) {
+      return { top: rect.bottom + 4, left: rect.left }
+    }
+    return { top: rect.top - popoverH - 4, left: rect.left }
+  }, [anchorRef])
+
   return (
     <>
       <div className="fixed inset-0 z-[999]" onClick={(e) => { e.stopPropagation(); onClose() }} />
       <div
-        className="absolute top-full left-0 mt-1 z-[1000] bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-xl py-1 overflow-y-auto"
-        style={{ width: 260, maxHeight: 280 }}
+        className="fixed z-[1000] bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg shadow-xl py-1 overflow-y-auto"
+        style={{ width: 260, maxHeight: 280, top: pos.top, left: pos.left }}
         onClick={e => e.stopPropagation()}
       >
         {CAMERA_PRESETS.map(preset => (

@@ -32,7 +32,7 @@ export const OutputPreview = memo(function OutputPreview({
 
   const current = outputs[activeIndex]
   const hasMultiple = outputs.length > 1
-  const previewHeight = Math.round(width * 0.65)
+  const previewHeight = 280
 
   const goPrev = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()

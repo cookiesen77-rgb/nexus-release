@@ -6,7 +6,8 @@
  */
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Handle, Position, NodeProps } from '@xyflow/react'
+import { Position, NodeProps } from '@xyflow/react'
+import { TapNodeHandle } from './shared/TapNodeHandle'
 import { Trash2, Copy, Expand, Video, Image, Eye, Download, X, RefreshCw, Loader2 } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
@@ -490,78 +491,53 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   }, [corsMode, displayUrl, id, nodeData?.sourceUrl, nodeData?.mediaId])
 
   return (
-    // ref 用于懒加载检测
     <div
       ref={inViewRef}
       className="relative pr-[50px] pt-[20px]"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      {/* 节点主体 */}
+      {/* 标签 - TapNow 风格 */}
+      <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap text-sm">{nodeData?.label || '视频'}</div>
+
+      {/* 节点主体 - 纯内容卡片 */}
       <div
-        className={`video-node bg-[var(--bg-secondary)] rounded-xl border w-[400px] relative transition-all duration-200 ${
-          selected ? 'border-blue-500 shadow-lg shadow-blue-500/20' : 'border-[var(--border-color)]'
-        }`}
+        className="group relative overflow-visible rounded-[12px] bg-[var(--bg-secondary)]"
+        style={{ width: '100%', height: '100%', minWidth: 250, minHeight: 250 }}
       >
-        {/* 头部 */}
-        <div className="px-3 py-2 border-b border-[var(--border-color)]">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-[var(--text-secondary)]">
-              {nodeData?.label || '视频'}
-            </span>
-            <div className="flex items-center gap-1">
-              <button onClick={handleDelete} className="p-1 hover:bg-[var(--bg-tertiary)] rounded">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-          {nodeData?.model && (
-            <div className="mt-1 text-xs text-[var(--text-secondary)] truncate">
-              {nodeData.model}
-            </div>
-          )}
-        </div>
-
-        {/* 视频预览区域 - 支持懒加载 */}
-        <div className="p-3">
-          {/* 懒加载占位符：节点不在可视区域且无已有视频时显示 */}
+        {/* 视频内容 - edge-to-edge */}
+        <div className="bg-[var(--bg-secondary)]">
           {!inView && !displayUrl && !nodeData?.loading && (
-            <div className="aspect-video rounded-lg bg-[var(--bg-tertiary)] flex flex-col items-center justify-center gap-2 border border-[var(--border-color)]">
-              <Video size={32} className="text-[var(--text-secondary)] opacity-50" />
-              <span className="text-sm text-[var(--text-secondary)] opacity-50">滚动到此处加载</span>
+            <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-[var(--bg-tertiary)]">
+              <Video size={28} className="text-[var(--text-secondary)] opacity-30" />
+              <span className="text-xs text-[var(--text-secondary)] opacity-40">滚动到此处加载</span>
             </div>
           )}
 
-          {/* 加载状态 */}
           {inView && nodeData?.loading && (
-            <div className="aspect-video rounded-lg bg-gradient-to-br from-cyan-400 via-blue-300 to-amber-200 flex flex-col items-center justify-center gap-3 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-blue-400/20 to-amber-300/20 animate-pulse" />
-              <div className="relative z-10">
-                <Video size={48} className="text-white" />
-              </div>
-              <span className="text-sm text-white font-medium relative z-10">创作中，预计等待 1 分钟</span>
+            <div className="aspect-video bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-blue-500/20 flex flex-col items-center justify-center gap-3 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-blue-500/10 animate-pulse" />
+              <Video size={36} className="text-pink-500 relative z-10" />
+              <span className="text-xs text-[var(--text-primary)] relative z-10">创作中，预计等待 1 分钟</span>
             </div>
           )}
 
-          {/* 错误状态 */}
           {inView && !nodeData?.loading && nodeData?.error && (
-            <div className="aspect-video rounded-lg bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center gap-2 border border-red-200 dark:border-red-800">
-              <X size={32} className="text-red-500" />
-              <span className="text-sm text-red-500">{nodeData.error}</span>
+            <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-red-50 dark:bg-red-900/10">
+              <X size={24} className="text-red-500" />
+              <span className="text-xs text-red-500 px-4 text-center line-clamp-2">{nodeData.error}</span>
             </div>
           )}
 
-          {/* 视频加载错误 */}
           {inView && !nodeData?.loading && !nodeData?.error && videoError && (
-            <div className="aspect-video rounded-lg bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center gap-2 border border-red-200 dark:border-red-800">
-              <X size={32} className="text-red-500" />
-              <span className="text-sm text-red-500">{videoError}</span>
+            <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-red-50 dark:bg-red-900/10">
+              <X size={24} className="text-red-500" />
+              <span className="text-xs text-red-500">{videoError}</span>
             </div>
           )}
 
-          {/* 视频预览 */}
           {(inView || displayUrl) && !nodeData?.loading && !nodeData?.error && !videoError && displayUrl && (
-            <div className="aspect-video rounded-lg overflow-hidden bg-black">
+            <div className="aspect-video bg-black">
               <video
                 key={`${displayUrl}|${corsMode}`}
                 ref={videoRef}
@@ -576,11 +552,10 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
             </div>
           )}
 
-          {/* 空状态 */}
           {inView && !nodeData?.loading && !nodeData?.error && !videoError && !displayUrl && (
-            <div className="aspect-video rounded-lg bg-[var(--bg-tertiary)] flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[var(--border-color)] relative">
-              <Video size={32} className="text-[var(--text-secondary)]" />
-              <span className="text-sm text-[var(--text-secondary)]">拖放视频或点击上传</span>
+            <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-[var(--bg-tertiary)] border-2 border-dashed border-[var(--border-color)] relative">
+              <Video size={28} className="text-[var(--text-secondary)] opacity-40" />
+              <span className="text-xs text-[var(--text-secondary)] opacity-50">拖放视频或点击上传</span>
               <input
                 type="file"
                 accept="video/*"
@@ -591,103 +566,48 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
               />
             </div>
           )}
-
-          {/* 时长信息 */}
-          {nodeData?.duration && (
-            <div className="mt-2 text-xs text-[var(--text-secondary)]">
-              时长: {formatDuration(nodeData.duration)}
-            </div>
-          )}
         </div>
 
-        {/* 连接点 */}
-        <Handle type="target" position={Position.Left} id="left" className="handle-video" />
-        <Handle type="source" position={Position.Right} id="right" className="handle-video" />
+        <TapNodeHandle type="target" position={Position.Left} id="left" />
+        <TapNodeHandle type="source" position={Position.Right} id="right" />
       </div>
 
-      {/* 悬浮操作按钮 - 复制（右上角偏左） */}
       {showActions && (
         <div className="absolute -top-5 right-12 z-[1000]">
-          <button
-            onClick={handleDuplicate}
-            className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max"
-          >
+          <button onClick={handleDuplicate} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
             <Copy size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">
-              复制
-            </span>
+            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
           </button>
         </div>
       )}
 
-      {/* 右侧操作按钮 */}
       {showActions && displayUrl && (
         <div className="absolute right-10 top-20 -translate-y-1/2 translate-x-full flex flex-col gap-2 z-[1000]">
-          {/* 替换 */}
-          <button
-            onClick={handleReplaceClick}
-            className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max"
-          >
+          <button onClick={handleReplaceClick} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
             <RefreshCw size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">
-              替换
-            </span>
+            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">替换</span>
           </button>
-          {/* 提取当前帧 */}
-          <button
-            onClick={handleExtractFrame}
-            className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max"
-          >
+          <button onClick={handleExtractFrame} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
             <Image size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[90px] transition-all duration-200 whitespace-nowrap">
-              提取当前帧
-            </span>
+            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[90px] transition-all duration-200 whitespace-nowrap">提取当前帧</span>
           </button>
-          {/* 预览 */}
-          <button
-            onClick={handlePreview}
-            className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max"
-          >
+          <button onClick={handlePreview} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
             <Eye size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">
-              预览
-            </span>
+            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">预览</span>
           </button>
-          {/* 下载 */}
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className={`group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max ${downloading ? 'opacity-60 cursor-wait' : ''}`}
-          >
-            {downloading
-              ? <Loader2 size={16} className="text-gray-600 dark:text-gray-300 animate-spin" />
-              : <Download size={16} className="text-gray-600 dark:text-gray-300" />}
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">
-              {downloading ? '下载中...' : '下载'}
-            </span>
+          <button onClick={handleDownload} disabled={downloading} className={`group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max ${downloading ? 'opacity-60 cursor-wait' : ''}`}>
+            {downloading ? <Loader2 size={16} className="text-gray-600 dark:text-gray-300 animate-spin" /> : <Download size={16} className="text-gray-600 dark:text-gray-300" />}
+            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">{downloading ? '下载中...' : '下载'}</span>
           </button>
         </div>
       )}
 
-      {/* 预览弹窗 */}
       {previewModalOpen && displayUrl && createPortal(
-        <MediaPreviewModal
-          open={previewModalOpen}
-          url={displayUrl}
-          type="video"
-          onClose={() => setPreviewModalOpen(false)}
-        />,
+        <MediaPreviewModal open={previewModalOpen} url={displayUrl} type="video" onClose={() => setPreviewModalOpen(false)} />,
         document.body
       )}
 
-      {/* 隐藏的替换视频文件选择器 */}
-      <input
-        ref={replaceInputRef}
-        type="file"
-        accept="video/*"
-        className="hidden"
-        onChange={handleReplaceFile}
-      />
+      <input ref={replaceInputRef} type="file" accept="video/*" className="hidden" onChange={handleReplaceFile} />
     </div>
   )
 })

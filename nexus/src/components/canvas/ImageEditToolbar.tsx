@@ -209,16 +209,20 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
       {/* 悬浮工具栏 - 全屏弹窗打开时隐藏 */}
       {showToolbar && (
         <div
-          className="absolute -top-[52px] left-0 right-[50px] flex justify-center z-[1001]"
+          className="absolute left-1/2 z-[1001]"
+          style={{ top: -60, transform: 'translateX(-50%) translateY(-100%)' }}
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
           onMouseEnter={() => onHoverChange?.(true)}
           onMouseLeave={() => onHoverChange?.(false)}
         >
-          <div className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg">
+          <div
+            className="w-fit h-10 p-1 rounded-full flex flex-nowrap items-center gap-0.5 whitespace-nowrap"
+            style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}
+          >
             {loading ? (
-              <div className="flex items-center gap-2 px-3 text-sm text-gray-600 dark:text-gray-300">
-                <Loader2 className="h-5 w-5 animate-spin" />
+              <div className="flex items-center gap-2 px-3 text-xs text-white/80">
+                <Loader2 className="h-4 w-4 animate-spin" />
                 <span>{progress || '处理中...'}</span>
               </div>
             ) : (
@@ -228,13 +232,11 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
                   <button
                     key={tool.key}
                     onClick={() => handleToolClick(tool)}
-                    className="group flex items-center gap-0 hover:gap-1.5 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
+                    className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer"
                     title={tool.label}
                   >
-                    <Icon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                    <span className="text-sm text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[70px] transition-all duration-200 whitespace-nowrap">
-                      {tool.label}
-                    </span>
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{tool.label}</span>
                   </button>
                 )
               })

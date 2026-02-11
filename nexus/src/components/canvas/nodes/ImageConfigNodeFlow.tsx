@@ -4,7 +4,8 @@
  * 合并了提示词输入、配置、风格预设、相机预设、输出预览于一个节点
  */
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { Handle, Position, NodeProps } from '@xyflow/react'
+import { Position, NodeProps } from '@xyflow/react'
+import { TapNodeHandle } from './shared/TapNodeHandle'
 import { Trash2, Copy } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { getNodeSize } from '@/graph/nodeSizing'
@@ -129,7 +130,8 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   const [refImages, setRefImages] = useState(() => getRefImages())
   useEffect(() => {
     let prev = JSON.stringify(refImages)
-    const unsub = useGraphStore.subscribe(() => {
+    const unsub = useGraphStore.subscribe((state, prevState) => {
+      if (state.edges === prevState.edges && state.nodes === prevState.nodes) return
       const next = getRefImages()
       const nextStr = JSON.stringify(next)
       if (nextStr !== prev) { prev = nextStr; setRefImages(next) }
@@ -267,6 +269,13 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
       const okCount = results.filter(r => r.ok).length
       const failCount = results.length - okCount
 
+      // 删除临时输出节点，结果已存入 outputs 数组
+      useGraphStore.getState().withBatchUpdates(() => {
+        for (const outId of outIds) {
+          useGraphStore.getState().removeNode(outId)
+        }
+      })
+
       useGraphStore.getState().updateNode(id, { data: { executed: true, _inlinePrompt: undefined } } as any)
 
       if (failCount === 0) {
@@ -288,16 +297,16 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
 
   return (
     <div
-      className={`rounded-xl overflow-hidden border transition-shadow ${
-        selected ? 'border-[var(--accent-color)] shadow-lg shadow-[var(--accent-color)]/20' : 'border-[var(--border-color)]'
+      className={`rounded-xl border transition-shadow ${
+        selected ? 'ring-2 ring-amber-500/40 shadow-lg shadow-amber-500/20 border-amber-500/50' : 'border-[var(--border-color)] shadow-sm hover:shadow-md'
       } bg-[var(--bg-primary)]`}
-      style={{ width: 420 }}
+      style={{ width: 420, borderTop: '3px solid #f59e0b' }}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       onClick={e => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg-secondary)]">
+      <div className="flex items-center justify-between px-3 py-2 bg-amber-500/10 rounded-t-xl">
         <span className="text-xs font-medium text-[var(--text-primary)]">
           {d?.label || '图片生成'}
         </span>
@@ -315,8 +324,8 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
         </div>
       </div>
 
-      {/* Output Preview */}
-      <div className="px-3 pt-2">
+      {/* Preview Section */}
+      <div className="px-3 py-2">
         <OutputPreview
           outputs={outputs}
           activeIndex={activeOutputIndex}
@@ -328,56 +337,62 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
         />
       </div>
 
-      {/* Style Presets + Ref Images */}
-      <div className="px-3 pt-2">
-        <StylePresetsRow
-          activeStyleId={activeStyleId}
-          onStyleChange={handleStyleChange}
-          refImages={allRefImages}
-          onRefImageRemove={handleRefImageRemove}
-        />
-      </div>
+      {/* Divider */}
+      <div className="mx-3 border-t border-[var(--border-color)]" />
 
-      {/* Prompt Input */}
-      <div className="px-3 pt-2">
-        <PromptInput
-          value={prompt}
-          onChange={handlePromptChange}
-          onSubmit={handleGenerate}
-          disabled={loading}
-          onRefImageAdd={handleRefImageAdd}
-          maxRefImages={caps.maxRefImages}
-          currentRefCount={allRefImages.length}
-        />
-      </div>
+      {/* Control Panel */}
+      <div className="bg-[var(--bg-secondary)]/50 rounded-b-xl">
+        {/* Style Presets + Ref Images */}
+        <div className="px-3 pt-2">
+          <StylePresetsRow
+            activeStyleId={activeStyleId}
+            onStyleChange={handleStyleChange}
+            refImages={allRefImages}
+            onRefImageRemove={handleRefImageRemove}
+          />
+        </div>
 
-      {/* Generation Toolbar */}
-      <div className="px-3 py-2">
-        <GenerationToolbar
-          modelOptions={MODEL_OPTIONS}
-          model={model}
-          onModelChange={handleModelChange}
-          sizeLabel="比例"
-          sizeOptions={sizeOptions}
-          size={size}
-          onSizeChange={handleSizeChange}
-          qualityOptions={qualityOptions}
-          quality={quality}
-          onQualityChange={handleQualityChange}
-          qualityLabel={qualityLabel}
-          cameraPreset={cameraPreset}
-          onCameraPresetChange={handleCameraChange}
-          loopCount={loopCount}
-          onLoopCountChange={handleLoopCountChange}
-          onGenerate={handleGenerate}
-          loading={loading}
-          disabled={false}
-        />
+        {/* Prompt Input */}
+        <div className="px-3 pt-2">
+          <PromptInput
+            value={prompt}
+            onChange={handlePromptChange}
+            onSubmit={handleGenerate}
+            disabled={loading}
+            onRefImageAdd={handleRefImageAdd}
+            maxRefImages={caps.maxRefImages}
+            currentRefCount={allRefImages.length}
+          />
+        </div>
+
+        {/* Generation Toolbar */}
+        <div className="px-3 py-2">
+          <GenerationToolbar
+            modelOptions={MODEL_OPTIONS}
+            model={model}
+            onModelChange={handleModelChange}
+            sizeLabel="比例"
+            sizeOptions={sizeOptions}
+            size={size}
+            onSizeChange={handleSizeChange}
+            qualityOptions={qualityOptions}
+            quality={quality}
+            onQualityChange={handleQualityChange}
+            qualityLabel={qualityLabel}
+            cameraPreset={cameraPreset}
+            onCameraPresetChange={handleCameraChange}
+            loopCount={loopCount}
+            onLoopCountChange={handleLoopCountChange}
+            onGenerate={handleGenerate}
+            loading={loading}
+            disabled={false}
+          />
+        </div>
       </div>
 
       {/* Connection handles */}
-      <Handle type="target" position={Position.Left} id="left" className="!w-3 !h-3 !bg-[var(--accent-color)] !border-2 !border-[var(--bg-primary)]" />
-      <Handle type="source" position={Position.Right} id="right" className="!w-3 !h-3 !bg-[var(--accent-color)] !border-2 !border-[var(--bg-primary)]" />
+      <TapNodeHandle type="target" position={Position.Left} id="left" />
+      <TapNodeHandle type="source" position={Position.Right} id="right" />
     </div>
   )
 })

@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import {
-  Archive, Brush, Camera, ChevronDown, Film, Hand, LayoutGrid, Link2,
+  Archive, Brush, Camera, Film, Hand, LayoutGrid, Link2,
   MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch,
-  Save, Wand2, ShoppingBag, Sparkles
+  Save, Wand2, ShoppingBag, Sparkles, Clapperboard, MessageCircle,
+  History, ImageIcon, ChevronDown
 } from 'lucide-react'
 
 export type CanvasTool = 'select' | 'pan' | 'connect'
@@ -31,160 +32,118 @@ type Props = {
   canRedo?: boolean
 }
 
-const IconButton = ({
-  active,
-  disabled,
-  title,
-  onClick,
-  children
-}: {
-  active?: boolean
-  disabled?: boolean
-  title: string
-  onClick: () => void
-  children: React.ReactNode
+const DockIcon = ({ title, onClick, active, children }: {
+  title: string; onClick: () => void; active?: boolean; children: React.ReactNode
 }) => (
-  <button
-    className={[
-      'flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
-      disabled
-        ? 'opacity-30 cursor-not-allowed'
-        : active
-          ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-          : 'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
-    ].join(' ')}
-    onClick={disabled ? undefined : onClick}
+  <div
+    className={`rounded-md w-full aspect-square flex justify-center items-center cursor-pointer transition-colors ${
+      active
+        ? 'text-[var(--text-primary)] bg-[var(--bg-tertiary)]'
+        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+    }`}
+    onClick={onClick}
     title={title}
-    type="button"
-    disabled={disabled}
   >
     {children}
-  </button>
+  </div>
 )
 
 export default function CanvasSidebar({
-  activeTool,
-  nodeMenuOpen,
-  onChangeTool,
-  onToggleNodeMenu,
-  onOpenWorkflow,
-  onOpenShortDrama,
-  onOpenDirector,
-  onOpenSketch,
-  onOpenAudio,
-  onOpenBlend,
-  onOpenPromptLibrary,
-  onOpenPromptReverse,
-  onOpenCameraControl,
-  onOpenEcomStudio,
-  onOpenAssetLibrary,
-  onOpenPromptAgent,
-  onSaveAsTemplate,
-  onUndo,
-  onRedo,
-  canUndo,
-  canRedo
+  activeTool, nodeMenuOpen, onChangeTool, onToggleNodeMenu,
+  onOpenWorkflow, onOpenShortDrama, onOpenDirector, onOpenSketch, onOpenAudio, onOpenBlend,
+  onOpenPromptLibrary, onOpenPromptReverse, onOpenCameraControl,
+  onOpenEcomStudio, onOpenAssetLibrary, onOpenPromptAgent, onSaveAsTemplate,
+  onUndo, onRedo, canUndo, canRedo,
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false)
 
   return (
-    <div className="pointer-events-auto absolute left-4 top-4 bottom-4 z-30 flex w-[52px] flex-col gap-2">
-      {/* 上段：功能工具（可滚动） */}
-      <div className="flex flex-col rounded-[14px] border border-[var(--border-color)] bg-[var(--bg-secondary)] p-1.5 overflow-y-auto overflow-x-hidden scrollbar-thin flex-1 min-h-0">
+    <div className="pointer-events-auto absolute left-[15px] top-4 bottom-4 z-30 flex flex-col items-center gap-2">
+      {/* TapNow Dockbar: 54px宽, 32px圆角, 深色毛玻璃 */}
+      <div
+        className="flex flex-col gap-1 items-center rounded-[32px] relative p-1.5 box-border"
+        style={{ width: 54, backgroundColor: 'var(--bg-secondary)', backdropFilter: 'blur(24px)', border: '1px solid rgba(128,128,128,0.15)' }}
+        data-testid="canvas-dockbar-container"
+      >
+        {/* ⊕ 添加节点 - TapNow: 40x40 白色圆形 */}
         <button
-          className={[
-            'flex h-9 w-9 items-center justify-center rounded-lg transition-colors shrink-0',
-            nodeMenuOpen ? 'bg-[var(--accent-hover)] text-white' : 'bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)]'
-          ].join(' ')}
+          className="flex items-center justify-center shadow cursor-pointer transition-all duration-300"
+          style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)' }}
           onClick={() => onToggleNodeMenu()}
           title="添加节点"
-          type="button"
         >
-          <Plus className="h-5 w-5" />
+          <Plus className={`!w-5 !h-5 transition-transform duration-300 ${nodeMenuOpen ? 'rotate-45' : 'rotate-0'}`} />
         </button>
 
-        <IconButton title="工作流模板" onClick={() => onOpenWorkflow?.()}>
-          <LayoutGrid className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="短剧制作" onClick={() => onOpenShortDrama?.()}>
-          <Film className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="电商工具台" onClick={() => onOpenEcomStudio?.()}>
-          <ShoppingBag className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="导演台" onClick={() => onOpenDirector?.()}>
-          <Video className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="草图编辑器" onClick={() => onOpenSketch?.()}>
-          <Brush className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="音频工作室" onClick={() => onOpenAudio?.()}>
-          <Music className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="图像融合" onClick={() => onOpenBlend?.()}>
-          <Wand2 className="h-4.5 w-4.5" />
-        </IconButton>
+        {/* 主功能区 */}
+        <div className="w-full flex flex-col gap-1.5 pt-1 px-px">
+          {/* 素材库 */}
+          <DockIcon title="素材库" onClick={() => onOpenAssetLibrary?.()}>
+            <Archive size={20} />
+          </DockIcon>
 
-        {/* 折叠区：提示词/素材/模板 */}
-        <div className="my-0.5 h-px w-7 bg-[var(--border-color)] shrink-0" />
-        <IconButton title="提示词Agent" onClick={() => onOpenPromptAgent?.()}>
-          <Sparkles className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="提示词库" onClick={() => onOpenPromptLibrary?.()}>
-          <BookOpen className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="提示词逆推" onClick={() => onOpenPromptReverse?.()}>
-          <ScanSearch className="h-4.5 w-4.5" />
-        </IconButton>
+          {/* 工作流模板 */}
+          <DockIcon title="工作流模板" onClick={() => onOpenWorkflow?.()}>
+            <LayoutGrid size={20} />
+          </DockIcon>
 
-        {/* 更多工具（折叠） */}
-        <button
-          className={[
-            'flex h-9 w-9 items-center justify-center rounded-lg transition-colors shrink-0',
-            moreOpen
-              ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-              : 'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
-          ].join(' ')}
-          onClick={() => setMoreOpen(!moreOpen)}
-          title={moreOpen ? '收起更多' : '展开更多'}
-          type="button"
-        >
-          <ChevronDown className={`h-4 w-4 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
-        </button>
+          {/* 提示词 Agent */}
+          <DockIcon title="提示词 Agent" onClick={() => onOpenPromptAgent?.()}>
+            <Sparkles size={20} />
+          </DockIcon>
 
-        {moreOpen && (
-          <>
-            <IconButton title="多角度相机控制" onClick={() => onOpenCameraControl?.()}>
-              <Camera className="h-4.5 w-4.5" />
-            </IconButton>
-            <IconButton title="保存为模板" onClick={() => onSaveAsTemplate?.()}>
-              <Save className="h-4.5 w-4.5" />
-            </IconButton>
-            <IconButton title="素材库" onClick={() => onOpenAssetLibrary?.()}>
-              <Archive className="h-4.5 w-4.5" />
-            </IconButton>
-          </>
-        )}
+          {/* 历史 / 提示词库 */}
+          <DockIcon title="提示词库" onClick={() => onOpenPromptLibrary?.()}>
+            <BookOpen size={20} />
+          </DockIcon>
+
+          {/* 图片编辑器 / 草图 */}
+          <DockIcon title="草图编辑器" onClick={() => onOpenSketch?.()}>
+            <Brush size={20} />
+          </DockIcon>
+        </div>
+
+        {/* 更多工具 (折叠) */}
+        <div className="w-full border-t border-[var(--border-color)]/30 pt-1 mt-0.5">
+          <DockIcon title={moreOpen ? '收起' : '更多工具'} onClick={() => setMoreOpen(p => !p)}>
+            <ChevronDown size={16} className={`transition-transform duration-200 ${moreOpen ? 'rotate-180' : ''}`} />
+          </DockIcon>
+          {moreOpen && (
+            <div className="flex flex-col gap-1 mt-1">
+              <DockIcon title="短剧制作" onClick={() => onOpenShortDrama?.()}><Film size={18} /></DockIcon>
+              <DockIcon title="电商工具" onClick={() => onOpenEcomStudio?.()}><ShoppingBag size={18} /></DockIcon>
+              <DockIcon title="导演台" onClick={() => onOpenDirector?.()}><Video size={18} /></DockIcon>
+              <DockIcon title="音频工作室" onClick={() => onOpenAudio?.()}><Music size={18} /></DockIcon>
+              <DockIcon title="图像融合" onClick={() => onOpenBlend?.()}><Wand2 size={18} /></DockIcon>
+              <DockIcon title="逆推提示词" onClick={() => onOpenPromptReverse?.()}><ScanSearch size={18} /></DockIcon>
+              <DockIcon title="相机控制" onClick={() => onOpenCameraControl?.()}><Camera size={18} /></DockIcon>
+              <DockIcon title="保存为模板" onClick={() => onSaveAsTemplate?.()}><Save size={18} /></DockIcon>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 下段：画布工具 + 撤销重做（固定底部） */}
-      <div className="flex flex-col rounded-[14px] border border-[var(--border-color)] bg-[var(--bg-secondary)] p-1.5 shrink-0">
-        <IconButton title="选择" active={activeTool === 'select'} onClick={() => onChangeTool('select')}>
-          <MousePointer className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="平移" active={activeTool === 'pan'} onClick={() => onChangeTool('pan')}>
-          <Hand className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="连线" active={activeTool === 'connect'} onClick={() => onChangeTool('connect')}>
-          <Link2 className="h-4.5 w-4.5" />
-        </IconButton>
-        <div className="my-0.5 h-px w-7 bg-[var(--border-color)]" />
-        <IconButton title="撤销 (Ctrl+Z)" onClick={() => onUndo?.()} disabled={!canUndo}>
-          <Undo2 className="h-4.5 w-4.5" />
-        </IconButton>
-        <IconButton title="重做 (Ctrl+Shift+Z)" onClick={() => onRedo?.()} disabled={!canRedo}>
-          <Redo2 className="h-4.5 w-4.5" />
-        </IconButton>
+      {/* 底部: 画布工具 + 撤销重做 - TapNow 风格圆角容器 */}
+      <div
+        className="flex flex-col gap-0.5 items-center p-1 box-border"
+        style={{ borderRadius: 20, backgroundColor: 'var(--bg-secondary)', backdropFilter: 'blur(24px)', border: '1px solid rgba(128,128,128,0.15)' }}
+      >
+        <DockIcon title="选择 (V)" onClick={() => onChangeTool('select')} active={activeTool === 'select'}>
+          <MousePointer size={16} />
+        </DockIcon>
+        <DockIcon title="平移 (H)" onClick={() => onChangeTool('pan')} active={activeTool === 'pan'}>
+          <Hand size={16} />
+        </DockIcon>
+        <DockIcon title="连线 (L)" onClick={() => onChangeTool('connect')} active={activeTool === 'connect'}>
+          <Link2 size={16} />
+        </DockIcon>
+        <div className="w-5 h-px bg-[var(--border-color)]/30 my-0.5" />
+        <DockIcon title="撤销 (Ctrl+Z)" onClick={() => onUndo?.()}>
+          <Undo2 size={14} className={canUndo ? '' : 'opacity-25'} />
+        </DockIcon>
+        <DockIcon title="重做 (Ctrl+Shift+Z)" onClick={() => onRedo?.()}>
+          <Redo2 size={14} className={canRedo ? '' : 'opacity-25'} />
+        </DockIcon>
       </div>
     </div>
   )

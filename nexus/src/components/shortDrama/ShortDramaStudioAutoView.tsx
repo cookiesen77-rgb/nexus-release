@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { CHAT_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS } from '@/config/models'
+import { CHAT_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS, TOOL_MODEL_KEYS } from '@/config/models'
 import * as modelsConfig from '@/config/models'
 import { cn } from '@/lib/utils'
 import { importShortDramaScriptFile } from '@/lib/shortDrama/scriptImport'
@@ -210,7 +210,12 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   const pickerTargetRef = useRef<PickerTarget | null>(null)
   pickerTargetRef.current = pickerTarget
 
-  const [busySlotIds, setBusySlotIds] = useState<Record<string, boolean>>({})
+  const [busySlotIds, setBusySlotIds] = useState<Record<string, boolean>>(() => {
+    const active = queue.getActiveKeys()
+    const init: Record<string, boolean> = {}
+    for (const k of active) init[k] = true
+    return init
+  })
   const [staleTick, setStaleTick] = useState(0)
   const busySlotsRef = useRef(busySlotIds)
   busySlotsRef.current = busySlotIds
@@ -229,6 +234,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     (slotId: string, minAgeMs = 3000) => {
       if (!slotId) return
       if (busySlotsRef.current[slotId]) return
+      if (queue.getActiveKeys().has(slotId)) return
       const now = Date.now()
       setDraft((prev) =>
         updateSlotById(prev, slotId, (slot) => {
@@ -256,7 +262,30 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     [setDraft]
   )
 
-  // 自动清理“无任务在跑但仍显示 running”的陈旧版本（例如：刷新/重启后遗留的状态）。
+  // 组件挂载时消费队列中的待处理结果（任务在组件卸载期间完成的）
+  useEffect(() => {
+    const pending = queue.consumePendingResults()
+    if (pending.size === 0) return
+    setDraft((prev) => {
+      let next = prev
+      for (const [slotId, { error }] of pending) {
+        if (error) {
+          next = updateSlotById(next, slotId, (slot) => {
+            const variants = (slot.variants || []).map((v) =>
+              v.status === 'running' ? { ...v, status: 'error', error } as typeof v : v
+            )
+            return { ...slot, variants }
+          })
+        }
+        // 成功的结果已经通过 setDraft 写入（如果组件还活着的话）
+        // 如果组件已卸载，running variant 会在后续 stale 检测中处理
+        setBusySlotIds((p) => ({ ...p, [slotId]: false }))
+      }
+      return next
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 自动清理"无任务在跑但仍显示 running"的陈旧版本（例如：刷新/重启后遗留的状态）。
   useEffect(() => {
     const minAgeMs = 20_000
     const now = Date.now()
@@ -925,9 +954,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         } catch {
           // ignore
         }
+        queue.storePendingResult(slotId, 'image', { variantId: running.id, sourceUrl: safeSourceUrl, displayUrl, mediaId })
       } catch (err: any) {
         const msg = err instanceof Error ? err.message : String(err || '生成失败')
         setDraft((prev) => updateVariantInSlot(prev, slotId, running.id, { status: 'error', error: msg }))
+        queue.storePendingResult(slotId, 'image', undefined, msg)
         throw err
       } finally {
         setSlotBusy(slotId, false)
@@ -994,9 +1025,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         } catch {
           // ignore
         }
+        queue.storePendingResult(slotId, 'video', { variantId: running.id, taskId: result.taskId, videoUrl: result.videoUrl, displayUrl: result.displayUrl })
       } catch (err: any) {
         const msg = err instanceof Error ? err.message : String(err || '生成失败')
         setDraft((prev) => updateVariantInSlot(prev, slotId, running.id, { status: 'error', error: msg }))
+        queue.storePendingResult(slotId, 'video', undefined, msg)
         throw err
       } finally {
         setSlotBusy(slotId, false)
@@ -1356,7 +1389,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                     onChange={(e) => patchModels({ analysisModelKey: e.target.value })}
                     className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
                   >
-                    {(CHAT_MODELS as any[]).filter((m: any) => ['gemini-3-pro-preview-thinking', 'claude-opus-4-6', 'claude-opus-4-5-20251101'].includes(m.key)).map((m: any) => (
+                    {(CHAT_MODELS as any[]).filter((m: any) => TOOL_MODEL_KEYS.includes(m.key)).map((m: any) => (
                       <option key={m.key} value={m.key}>
                         {m.label}
                       </option>

@@ -234,7 +234,7 @@ const TextNodeContent = memo(function TextNodeContent({ node }: { node: GraphNod
     try {
       const store = useGraphStore.getState()
       const { nodes, edges } = store
-      const aiModel = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
+      const aiModel = 'gemini-3-pro-preview-thinking'
 
       const modeFromGraph = inferPolishModeFromGraph(node.id, nodes, edges)
       const mode = modeFromGraph || inferPolishModeFromText(text)

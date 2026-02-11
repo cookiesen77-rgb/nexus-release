@@ -1,9 +1,9 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { ShortDramaDraftV2 } from './types'
 
 const toPdfText = (value: string) => String(value || '').replace(/[^\x00-\x7F]/g, '?')
 
 export async function exportStoryboardPdf(draft: ShortDramaDraftV2): Promise<Uint8Array> {
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
   const doc = await PDFDocument.create()
   const font = await doc.embedFont(StandardFonts.Helvetica)
 

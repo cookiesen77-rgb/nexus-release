@@ -13,6 +13,7 @@ import {
 } from '@xyflow/react'
 import { ChevronDown } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
+import { getEdgeColor } from '@/graph/edgeColors'
 import { coerceVideoImageRole, getAllowedVideoImageRoles, getVideoModelCaps } from '@/lib/modelCaps'
 
 type ImageRole = 'first_frame_image' | 'last_frame_image' | 'input_reference'
@@ -44,6 +45,10 @@ export const ImageRoleEdge = memo(function ImageRoleEdge({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const edgeData = data as ImageRoleEdgeData | undefined
   const { setEdges } = useReactFlow()
+
+  const hoveredEdgeId = useGraphStore(s => s.hoveredEdgeId)
+  const isHighlighted = !hoveredEdgeId || useGraphStore.getState().highlightedEdgeIds.has(id)
+  const color = getEdgeColor('imageRole')
 
   // 订阅目标 videoConfig 节点的模型（用于动态过滤角色选项）
   const targetModelKey = useGraphStore((s) => {
@@ -152,16 +157,36 @@ export const ImageRoleEdge = memo(function ImageRoleEdge({
     setShowDropdown((prev) => !prev)
   }, [])
 
+  const gradientId = `gradient-${id}`
+
   return (
     <>
-      {/* 边线 */}
-      <BaseEdge
-        path={edgePath}
+      {/* TapNow: SVG 渐变流光边线 */}
+      <defs>
+        <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={sourceX} y1={sourceY} x2={targetX} y2={targetY}>
+          <stop offset="0%" stopColor={color} stopOpacity="0">
+            <animate attributeName="offset" values="-0.5;1" dur="2s" repeatCount="indefinite" />
+          </stop>
+          <stop offset="0%" stopColor={color} stopOpacity="1">
+            <animate attributeName="offset" values="-0.3;1.2" dur="2s" repeatCount="indefinite" />
+          </stop>
+          <stop offset="0%" stopColor={color} stopOpacity="0">
+            <animate attributeName="offset" values="-0.1;1.4" dur="2s" repeatCount="indefinite" />
+          </stop>
+        </linearGradient>
+      </defs>
+      <path
+        d={edgePath}
+        fill="none"
+        className="react-flow__edge-path"
         style={{
-          stroke: selected ? '#3b82f6' : '#6366f1',
-          strokeWidth: selected ? 3 : 2,
+          strokeWidth: 2.5,
+          strokeOpacity: isHighlighted ? 0.8 : 0.1,
+          transition: 'stroke 0.3s, stroke-opacity 0.3s',
+          stroke: selected ? color : `url(#${gradientId})`,
         }}
       />
+      <path d={edgePath} fill="none" strokeOpacity="0" strokeWidth="20" className="react-flow__edge-interaction" />
 
       {/* 边标签（角色选择器） */}
       <EdgeLabelRenderer>

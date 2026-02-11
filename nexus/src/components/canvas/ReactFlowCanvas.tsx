@@ -43,6 +43,10 @@ import { TextSplitterNodeComponent } from './nodes/TextSplitterNodeFlow'
 
 // 导入自定义边组件
 import { ImageRoleEdge } from './edges/ImageRoleEdge'
+import { PromptOrderEdge } from './edges/PromptOrderEdge'
+import { ImageOrderEdge } from './edges/ImageOrderEdge'
+import { DefaultColoredEdge } from './edges/DefaultColoredEdge'
+import { NodeTypePickerPopover } from './NodeTypePickerPopover'
 
 // 定义节点类型映射 - 必须在模块级别定义，避免每次渲染重新创建
 const nodeTypes: NodeTypes = {
@@ -63,13 +67,16 @@ const nodeTypes: NodeTypes = {
 // 定义边类型映射
 const edgeTypes: EdgeTypes = {
   imageRole: ImageRoleEdge,
+  promptOrder: PromptOrderEdge,
+  imageOrder: ImageOrderEdge,
+  default: DefaultColoredEdge,
 }
 
-// React Flow 只认识 edgeTypes 里注册过的 type；未注册的类型会触发 warning 并回退。
-// 这里做降级：保留 store 中的语义 type/data，但在 React Flow 层用 default 渲染，避免运行期噪音与不一致。
+const REGISTERED_EDGE_TYPES = new Set(Object.keys(edgeTypes))
+
 const normalizeFlowEdgeType = (t: unknown) => {
   const key = String(t || '').trim()
-  if (key && (edgeTypes as any)[key]) return key
+  if (key && REGISTERED_EDGE_TYPES.has(key)) return key
   return 'default'
 }
 
@@ -765,6 +772,28 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     store.clearSelection()
   }, [])
 
+  // 处理边 hover
+  const handleEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: any) => {
+    useGraphStore.getState().setHoveredEdge(edge.id)
+  }, [])
+
+  const handleEdgeMouseLeave = useCallback(() => {
+    useGraphStore.getState().setHoveredEdge(null)
+  }, [])
+
+  // 处理边双击 - 线上插入节点
+  const [nodePickerState, setNodePickerState] = React.useState<{
+    edgeId: string; position: { x: number; y: number }
+  } | null>(null)
+
+  const handleEdgeDoubleClick = useCallback((event: React.MouseEvent, edge: any) => {
+    event.stopPropagation()
+    setNodePickerState({
+      edgeId: edge.id,
+      position: { x: event.clientX, y: event.clientY },
+    })
+  }, [])
+
   // 处理画布点击 - 延迟处理
   const handlePaneClick = useCallback(() => {
     setTimeout(() => {
@@ -994,6 +1023,9 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         onPaneContextMenu={handlePaneContextMenu}
         onNodeContextMenu={handleNodeContextMenu}
         onEdgeContextMenu={handleEdgeContextMenu}
+        onEdgeMouseEnter={handleEdgeMouseEnter}
+        onEdgeMouseLeave={handleEdgeMouseLeave}
+        onEdgeDoubleClick={handleEdgeDoubleClick}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -1011,6 +1043,17 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
       >
         {/* MiniMap 和 Controls 已移除（用户要求删除左下角缩放控件） */}
       </ReactFlow>
+      {nodePickerState && (
+        <NodeTypePickerPopover
+          position={nodePickerState.position}
+          onSelect={(nodeType) => {
+            const flowPos = screenToFlowPosition(nodePickerState.position)
+            useGraphStore.getState().insertNodeOnEdge(nodePickerState.edgeId, nodeType, flowPos)
+            setNodePickerState(null)
+          }}
+          onClose={() => setNodePickerState(null)}
+        />
+      )}
       {debugFlags.perfProbe && <div id="rf-perf-hud" className="rf-perf-hud" />}
     </div>
   )

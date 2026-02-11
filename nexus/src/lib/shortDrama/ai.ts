@@ -99,7 +99,7 @@ const callChatModel = async (modelKey: string, messages: ChatMessage[]): Promise
     })
     const content = rsp?.content
     if (Array.isArray(content)) {
-      return normalizeText(content.map((b: any) => b?.text || '').filter(Boolean).join(''))
+      return normalizeText(content.filter((b: any) => b?.type === 'text').map((b: any) => b?.text || '').filter(Boolean).join(''))
     }
     return normalizeText(String(content || ''))
   }
@@ -121,7 +121,10 @@ const callChatModel = async (modelKey: string, messages: ChatMessage[]): Promise
 }
 
 const stripCodeFences = (raw: string) => {
-  const t = String(raw || '').trim()
+  let t = String(raw || '').trim()
+  // Strip thinking blocks (Anthropic models)
+  t = t.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
+  t = t.replace(/<\/?thinking>/gi, '').trim()
   return t.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
 }
 

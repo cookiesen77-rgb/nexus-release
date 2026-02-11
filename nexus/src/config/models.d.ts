@@ -63,6 +63,9 @@ export const KLING_AUDIO_TOOLS: KlingTool[]
 export const DEFAULT_IMAGE_MODEL: string
 export const DEFAULT_VIDEO_MODEL: string
 export const DEFAULT_CHAT_MODEL: string
+export const DEFAULT_TOOL_MODEL: string
+export const TOOL_MODEL_KEYS: string[]
+export const TOOL_CHAT_MODELS: ChatModel[]
 export const DEFAULT_IMAGE_SIZE: string
 export const DEFAULT_VIDEO_RATIO: string
 export const DEFAULT_VIDEO_DURATION: number

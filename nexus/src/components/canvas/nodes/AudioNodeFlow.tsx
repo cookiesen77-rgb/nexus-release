@@ -3,7 +3,8 @@
  * 完全对齐 Vue 版本 AudioNode.vue 实现
  */
 import React, { memo, useState, useCallback, useEffect, useRef } from 'react'
-import { Handle, Position, NodeProps } from '@xyflow/react'
+import { Position, NodeProps } from '@xyflow/react'
+import { TapNodeHandle } from './shared/TapNodeHandle'
 import { Trash2, Download, Music, X } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
@@ -160,78 +161,62 @@ export const AudioNodeComponent = memo(function AudioNode({ id, data, selected }
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      {/* 节点主体 */}
       <div
-        className={`audio-node bg-[var(--bg-secondary)] rounded-xl border w-[360px] transition-all duration-200 ${
-          selected ? 'border-blue-500 shadow-lg shadow-blue-500/20' : 'border-[var(--border-color)]'
+        className={`audio-node bg-[var(--bg-secondary)] rounded-xl w-[360px] transition-all duration-200 ${
+          selected ? 'ring-2 ring-yellow-500/40 shadow-lg shadow-yellow-500/20' : 'shadow-sm hover:shadow-md'
         }`}
+        style={{ borderTop: '3px solid #eab308' }}
       >
         {/* 头部 */}
-        <div className="px-3 py-2 border-b border-[var(--border-color)]">
+        <div className="px-3 py-2 bg-yellow-500/10 rounded-t-xl">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-[var(--text-secondary)]">
+            <span className="text-xs font-medium text-[var(--text-primary)]">
               {nodeData?.label || '音频'}
             </span>
             <div className="flex items-center gap-1">
-              {displayUrl && (
-                <button 
-                  onClick={handleDownload} 
-                  className="p-1 hover:bg-[var(--bg-tertiary)] rounded"
-                  title="下载"
-                >
-                  <Download size={14} />
+              {showActions && displayUrl && (
+                <button onClick={handleDownload} className="p-1 hover:bg-[var(--bg-tertiary)] rounded" title="下载">
+                  <Download size={12} className="text-[var(--text-secondary)]" />
                 </button>
               )}
-              <button 
-                onClick={handleDelete} 
-                className="p-1 hover:bg-[var(--bg-tertiary)] rounded"
-                title="删除"
-              >
-                <Trash2 size={14} />
-              </button>
+              {showActions && (
+                <button onClick={handleDelete} className="p-1 hover:bg-red-500/20 rounded" title="删除">
+                  <Trash2 size={12} className="text-[var(--text-secondary)]" />
+                </button>
+              )}
             </div>
           </div>
           {nodeData?.model && (
-            <div className="mt-1 text-xs text-[var(--text-secondary)] truncate">
-              {nodeData.model}
-            </div>
+            <div className="mt-0.5 text-[10px] text-[var(--text-secondary)] truncate">{nodeData.model}</div>
           )}
         </div>
 
         {/* 内容 */}
-        <div className="p-3 space-y-3">
-          {/* 加载状态 */}
+        <div className="p-3 space-y-2">
           {nodeData?.loading && (
-            <div className="h-24 rounded-lg bg-[var(--bg-tertiary)] flex flex-col items-center justify-center gap-2 border border-[var(--border-color)]">
-              <span className="animate-spin text-xl">⟳</span>
+            <div className="h-16 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center gap-2">
+              <span className="animate-spin text-lg">⟳</span>
               <span className="text-xs text-[var(--text-secondary)]">生成中...</span>
             </div>
           )}
 
-          {/* 错误状态 */}
           {!nodeData?.loading && nodeData?.error && (
-            <div className="h-24 rounded-lg bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center gap-2 border border-red-200 dark:border-red-800">
-              <X size={28} className="text-red-500" />
-              <span className="text-xs text-red-500">{nodeData.error}</span>
+            <div className="h-16 rounded-lg bg-red-50 dark:bg-red-900/10 flex items-center justify-center gap-2">
+              <X size={20} className="text-red-500" />
+              <span className="text-xs text-red-500 line-clamp-1">{nodeData.error}</span>
             </div>
           )}
 
-          {/* 音频播放器 */}
           {!nodeData?.loading && !nodeData?.error && displayUrl && (
             <div className="rounded-lg bg-[var(--bg-tertiary)] p-2">
-              <audio
-                src={displayUrl}
-                controls
-                className="w-full nodrag"
-              />
+              <audio src={displayUrl} controls className="w-full nodrag" />
             </div>
           )}
 
-          {/* 空状态 */}
           {!nodeData?.loading && !nodeData?.error && !displayUrl && (
-            <div className="h-24 rounded-lg bg-[var(--bg-tertiary)] flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[var(--border-color)] relative">
-              <Music size={28} className="text-[var(--text-secondary)]" />
-              <span className="text-xs text-[var(--text-secondary)]">拖放音频或点击上传</span>
+            <div className="h-16 rounded-lg bg-[var(--bg-tertiary)] flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--border-color)] relative">
+              <Music size={20} className="text-[var(--text-secondary)] opacity-40" />
+              <span className="text-[10px] text-[var(--text-secondary)] opacity-50">拖放音频或点击上传</span>
               <input
                 type="file"
                 accept="audio/*"
@@ -243,17 +228,15 @@ export const AudioNodeComponent = memo(function AudioNode({ id, data, selected }
             </div>
           )}
 
-          {/* 时长信息 */}
           {nodeData?.duration && (
-            <div className="text-xs text-[var(--text-secondary)]">
+            <div className="text-[10px] text-[var(--text-secondary)]">
               时长: {formatDuration(nodeData.duration)}
             </div>
           )}
         </div>
 
-        {/* 连接点 */}
-        <Handle type="target" position={Position.Left} id="left" className="handle-audio" />
-        <Handle type="source" position={Position.Right} id="right" className="handle-audio" />
+        <TapNodeHandle type="target" position={Position.Left} id="left" />
+        <TapNodeHandle type="source" position={Position.Right} id="right" />
       </div>
     </div>
   )
