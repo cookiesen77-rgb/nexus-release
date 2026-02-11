@@ -10,7 +10,6 @@ import { streamChatCompletions, chatCompletions } from '@/api'
 import { streamAiAssistant } from '@/lib/nexusApi'
 import { generateImage } from '@/api/image'
 import { postJson } from '@/lib/workflow/request'
-import { useSettingsStore } from '@/store/settings'
 import { useGraphStore } from '@/graph/store'
 import {
   X,
@@ -773,7 +772,7 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
 
     let raw = ''
     try {
-      const aiModel = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
+      const aiModel = 'gemini-3-pro-preview-thinking'
 
       const messages: any[] = [
         { role: 'system', content: currentPreset.systemPrompt || POLISH_SYSTEM_PROMPT }

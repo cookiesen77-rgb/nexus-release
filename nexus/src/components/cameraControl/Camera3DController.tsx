@@ -4,12 +4,16 @@
  * 参考 TapNow 的交互设计
  */
 
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RotateCcw, Move, ZoomIn } from 'lucide-react'
 import type { CameraParams } from '@/lib/cameraControl/promptBuilder'
 import { DEFAULT_CAMERA_PARAMS } from '@/lib/cameraControl/promptBuilder'
+
+export interface Camera3DControllerHandle {
+  getCurrentParams: () => CameraParams
+}
 
 type Props = {
   imageUrl?: string
@@ -59,7 +63,7 @@ function getViewDescription(azimuth: number, polar: number, distance: number): s
   return parts.join(' · ')
 }
 
-export default function Camera3DController({ imageUrl, value, onChange, disabled }: Props) {
+const Camera3DController = forwardRef<Camera3DControllerHandle, Props>(function Camera3DController({ imageUrl, value, onChange, disabled }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneDataRef = useRef<{
     scene: THREE.Scene
@@ -74,10 +78,28 @@ export default function Camera3DController({ imageUrl, value, onChange, disabled
   const [viewDesc, setViewDesc] = useState('')
   const isUpdatingFromProps = useRef(false)
 
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+
+  const localParamsRef = useRef(localParams)
+  localParamsRef.current = localParams
+
+  useImperativeHandle(ref, () => ({
+    getCurrentParams: () => localParamsRef.current
+  }), [])
+
   // 同步外部值到控件
   useEffect(() => {
     const data = sceneDataRef.current
     if (!data || isUpdatingFromProps.current) return
+
+    const lp = localParamsRef.current
+    if (Math.abs(lp.rotateAngle - value.rotateAngle) < 2 &&
+        Math.abs(lp.verticalAngle - value.verticalAngle) < 0.02 &&
+        Math.abs(lp.moveForward - value.moveForward) < 0.15 &&
+        lp.wideAngle === value.wideAngle) {
+      return
+    }
 
     isUpdatingFromProps.current = true
 
@@ -232,11 +254,20 @@ export default function Camera3DController({ imageUrl, value, onChange, disabled
     }
 
     // 控件变化时更新参数
+    let syncTimer: ReturnType<typeof setTimeout> | null = null
+
     const handleControlChange = () => {
       if (disabled || isUpdatingFromProps.current) return
 
       const params = extractParamsFromCamera(camera)
       setLocalParams(params)
+      localParamsRef.current = params
+
+      if (syncTimer) clearTimeout(syncTimer)
+      syncTimer = setTimeout(() => {
+        onChangeRef.current(params)
+        syncTimer = null
+      }, 80)
 
       // 更新视角描述
       const distance = camera.position.length()
@@ -247,8 +278,9 @@ export default function Camera3DController({ imageUrl, value, onChange, disabled
 
     const handleControlEnd = () => {
       if (disabled || isUpdatingFromProps.current) return
+      if (syncTimer) { clearTimeout(syncTimer); syncTimer = null }
       const params = extractParamsFromCamera(camera)
-      onChange(params)
+      onChangeRef.current(params)
     }
 
     controls.addEventListener('change', handleControlChange)
@@ -276,6 +308,7 @@ export default function Camera3DController({ imageUrl, value, onChange, disabled
     window.addEventListener('resize', handleResize)
 
     return () => {
+      if (syncTimer) clearTimeout(syncTimer)
       window.removeEventListener('resize', handleResize)
       controls.removeEventListener('change', handleControlChange)
       controls.removeEventListener('end', handleControlEnd)
@@ -453,4 +486,6 @@ export default function Camera3DController({ imageUrl, value, onChange, disabled
       </div>
     </div>
   )
-}
+})
+
+export default Camera3DController

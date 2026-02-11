@@ -6,7 +6,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { X, Upload, Image as ImageIcon, Loader2, ArrowUpToLine, Download, Camera, Aperture, ZoomIn } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import Camera3DController from './Camera3DController'
+import Camera3DController, { Camera3DControllerHandle } from './Camera3DController'
 import ShortDramaMediaPickerModal from '@/components/shortDrama/ShortDramaMediaPickerModal'
 import { useGraphStore } from '@/graph/store'
 import { useAssetsStore } from '@/store/assets'
@@ -46,6 +46,7 @@ export default function CameraControlModal({ open, onClose, projectId }: Props) 
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const camera3DRef = useRef<Camera3DControllerHandle>(null)
 
   const handleConfirmPicker = useCallback((items: any[]) => {
     if (items.length > 0) {
@@ -109,7 +110,8 @@ export default function CameraControlModal({ open, onClose, projectId }: Props) 
     setGeneratedImage(null)
 
     try {
-      const cameraPrompt = buildCameraPrompt(cameraParams)
+      const currentParams = camera3DRef.current?.getCurrentParams() || cameraParams
+      const cameraPrompt = buildCameraPrompt(currentParams)
       const inlineData = await resolveImageToInlineData(sourceImage.url)
       if (!inlineData) throw new Error('无法处理参考图片')
 
@@ -226,6 +228,7 @@ export default function CameraControlModal({ open, onClose, projectId }: Props) 
             {/* 3D相机控制 - 主角 */}
             <div className="flex-1 rounded-xl overflow-hidden bg-[#111111]">
               <Camera3DController
+                ref={camera3DRef}
                 imageUrl={sourceImage?.url}
                 value={cameraParams}
                 onChange={setCameraParams}

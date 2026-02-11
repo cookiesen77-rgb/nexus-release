@@ -790,6 +790,30 @@ const getConnectedInputs = async (configId: string) => {
     refImages: Array.from(new Set(refImages)),
     refVideos: Array.from(new Set(refVideos))
   }
+
+  // 支持 all-in-one 节点的内联提示词（_inlinePrompt）
+  const cfgNode = byId.get(configId)
+  const inlinePrompt = String((cfgNode?.data as any)?._inlinePrompt || '').replace(/\r\n/g, '\n').trim()
+  if (inlinePrompt) {
+    result.prompt = result.prompt ? inlinePrompt + '\n\n' + result.prompt : inlinePrompt
+  }
+
+  // 支持 all-in-one 节点内联首尾帧
+  if (!result.firstFrame && cfgNode && (cfgNode.data as any)?.firstFrameUrl) {
+    result.firstFrame = String((cfgNode.data as any).firstFrameUrl)
+  }
+  if (!result.lastFrame && cfgNode && (cfgNode.data as any)?.lastFrameUrl) {
+    result.lastFrame = String((cfgNode.data as any).lastFrameUrl)
+  }
+
+  // 支持 all-in-one 节点的内联参考图（_inlineRefImages）
+  const inlineRefs: string[] = cfgNode && (cfgNode.data as any)?._inlineRefImages || []
+  if (Array.isArray(inlineRefs)) {
+    for (const url of inlineRefs) {
+      if (url && typeof url === 'string') result.refImages.push(url)
+    }
+  }
+
   console.log('[getConnectedInputs] 汇总结果:', {
     promptLen: result.prompt?.length || 0,
     firstFrameLen: result.firstFrame?.length || 0,

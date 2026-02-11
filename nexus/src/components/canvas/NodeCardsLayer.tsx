@@ -489,11 +489,13 @@ const LlmContent = memo(function LlmContent({ node }: { node: GraphNode }) {
   const d = node.data as any || {}
   const status = getString(d.status, 'idle')
   const output = getString(d.output)
+  const rounds = Array.isArray(d.history) ? Math.floor(d.history.length / 2) : 0
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-500">LLM</span>
         <span className="text-[11px] text-[var(--text-secondary)] truncate">{getString(d.model, 'model')}</span>
+        {rounds > 0 && <span className="text-[10px] px-1 py-0.5 rounded-full bg-blue-500/10 text-blue-400">{rounds} 轮</span>}
       </div>
       {d.instruction && <div className="text-xs text-[var(--text-secondary)] line-clamp-2">{getString(d.instruction)}</div>}
       {output && <div className="text-xs text-[var(--text-primary)] line-clamp-3 bg-[var(--bg-primary)] rounded p-1.5">{output}</div>}
@@ -509,13 +511,18 @@ const LlmContent = memo(function LlmContent({ node }: { node: GraphNode }) {
 const TextSplitterContent = memo(function TextSplitterContent({ node }: { node: GraphNode }) {
   const d = node.data as any || {}
   const status = getString(d.status, 'idle')
+  const phase = getString(d.phase)
   const count = Number(d.splitCount) || 0
+  const statusText = status === 'running' && phase === 'splitting' ? '拆分中...'
+    : status === 'running' && phase === 'polishing' ? `润色 ${getString(d.phaseProgress)}`
+    : status === 'done' ? `已拆分 ${count} 段`
+    : status === 'error' ? '错误' : '就绪'
   return (
     <div className="flex flex-col gap-1.5">
       <div className="text-xs text-[var(--text-secondary)]">{getString(d.instruction, '按分镜拆分')}</div>
       <div className="flex items-center gap-1">
-        <div className={`w-1.5 h-1.5 rounded-full ${status === 'done' ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-        <span className="text-[10px] text-[var(--text-secondary)]">{status === 'done' ? `已拆分 ${count} 段` : '就绪'}</span>
+        <div className={`w-1.5 h-1.5 rounded-full ${status === 'running' ? 'bg-amber-500 animate-pulse' : status === 'done' ? 'bg-emerald-500' : status === 'error' ? 'bg-red-500' : 'bg-gray-400'}`} />
+        <span className="text-[10px] text-[var(--text-secondary)]">{statusText}</span>
       </div>
     </div>
   )

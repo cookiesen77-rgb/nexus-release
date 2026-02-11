@@ -13,8 +13,8 @@ const NODE_OPTIONS: { type: NodeType; name: string; Icon: React.ComponentType<{ 
   { type: 'text', name: '文本节点', Icon: Type, color: '#3b82f6' },
   { type: 'llm', name: 'LLM 文本生成', Icon: BrainCircuit, color: '#22d37e' },
   { type: 'textSplitter', name: '文本拆分', Icon: Scissors, color: '#f97316' },
-  { type: 'imageConfig', name: '文生图配置', Icon: SlidersHorizontal, color: '#22c55e' },
-  { type: 'videoConfig', name: '视频生成配置', Icon: Settings2, color: '#f59e0b' },
+  { type: 'imageConfig', name: '图片生成', Icon: SlidersHorizontal, color: '#22c55e' },
+  { type: 'videoConfig', name: '视频生成', Icon: Settings2, color: '#f59e0b' },
   { type: 'klingVideoTool', name: 'Kling 视频工具', Icon: Clapperboard, color: '#f97316' },
   { type: 'klingImageTool', name: 'Kling 图片工具', Icon: Sparkles, color: '#22c55e' },
   { type: 'klingAudioTool', name: 'Kling 音频工具', Icon: Mic, color: '#0ea5e9' },
@@ -26,8 +26,8 @@ const NODE_OPTIONS: { type: NodeType; name: string; Icon: React.ComponentType<{ 
 
 const defaultLabelFor = (type: NodeType) => {
   if (type === 'text') return '文本'
-  if (type === 'imageConfig') return '生图配置'
-  if (type === 'videoConfig') return '视频配置'
+  if (type === 'imageConfig') return '图片生成'
+  if (type === 'videoConfig') return '视频生成'
   if (type === 'klingVideoTool') return 'Kling 视频工具'
   if (type === 'klingImageTool') return 'Kling 图片工具'
   if (type === 'klingAudioTool') return 'Kling 音频工具'

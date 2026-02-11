@@ -3,8 +3,8 @@ import type { NodeType } from '@/graph/types'
 // 节点宽度配置（高度改为自适应）
 export const NODE_WIDTHS: Record<string, number> = {
   text: 280,
-  imageConfig: 300,
-  videoConfig: 300,
+  imageConfig: 420,
+  videoConfig: 420,
   blendConfig: 300,
   image: 260,
   video: 320,
@@ -13,15 +13,15 @@ export const NODE_WIDTHS: Record<string, number> = {
   klingVideoTool: 320,
   klingImageTool: 320,
   klingAudioTool: 320,
-  llm: 360,
+  llm: 380,
   textSplitter: 320,
 }
 
 // 节点最小高度（用于空间索引估算）
 export const NODE_MIN_HEIGHTS: Record<string, number> = {
   text: 140,
-  imageConfig: 200,
-  videoConfig: 200,
+  imageConfig: 480,
+  videoConfig: 480,
   blendConfig: 200,
   image: 200,
   video: 240,
@@ -30,8 +30,8 @@ export const NODE_MIN_HEIGHTS: Record<string, number> = {
   klingVideoTool: 220,
   klingImageTool: 220,
   klingAudioTool: 220,
-  llm: 280,
-  textSplitter: 200,
+  llm: 380,
+  textSplitter: 260,
 }
 
 export const getNodeWidth = (type: string) => NODE_WIDTHS[type] || 260
