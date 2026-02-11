@@ -507,7 +507,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   return (
     <div
       ref={inViewRef}
-      className="relative pr-[50px] pt-[20px]"
+      className="relative"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => !editToolbarBusy && !editToolbarHover && setShowActions(false)}
     >
@@ -621,39 +621,6 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
       )}
 
       <input ref={replaceInputRef} type="file" accept="image/*" className="hidden" onChange={handleReplaceFile} />
-
-      {showActions && nodeData?.url && (
-        <div className="absolute right-10 top-1/2 -translate-y-1/2 translate-x-full flex flex-col gap-2 z-[1000]">
-          <button onClick={handleReplaceClick} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <RefreshCw size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">替换</span>
-          </button>
-          <button onClick={handleDuplicate} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Copy size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
-          </button>
-          <button onClick={handleImageGen} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <ImageIcon size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">图片生图</span>
-          </button>
-          <button onClick={handleCrop} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Crop size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">裁剪</span>
-          </button>
-          <button onClick={handlePreview} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Eye size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">预览</span>
-          </button>
-          <button onClick={handleDownload} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Download size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">下载</span>
-          </button>
-          <button onClick={handleVideoGen} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Video size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">视频生成</span>
-          </button>
-        </div>
-      )}
 
       {cropModalOpen && nodeData?.url && createPortal(
         <ImageCropModal

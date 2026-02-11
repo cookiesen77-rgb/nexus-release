@@ -426,40 +426,23 @@ export default function Canvas() {
     })
   }, [])
 
-  // 根据来源节点类型过滤可选目标节点
+  // 根据来源节点类型过滤可选目标节点 — TapNow 风格: "引用该节点生成"
   const getConnectMenuOptions = useCallback((sourceType: string) => {
-    // 智能过滤：根据来源节点类型推荐合适的目标节点
-    const allOptions = [
-      { type: 'text', name: '文本节点', Icon: Type, color: '#3b82f6' },
-      { type: 'llm', name: 'LLM 文本生成', Icon: BrainCircuit, color: '#22d37e' },
-      { type: 'textSplitter', name: '文本拆分', Icon: Scissors, color: '#f97316' },
-      { type: 'imageConfig', name: '文生图配置', Icon: SlidersHorizontal, color: '#22c55e' },
-      { type: 'videoConfig', name: '视频生成配置', Icon: Settings2, color: '#f59e0b' },
-      { type: 'image', name: '图片节点', Icon: Image, color: '#8b5cf6' },
-      { type: 'video', name: '视频节点', Icon: Video, color: '#ef4444' },
-      { type: 'audio', name: '音频节点', Icon: Music, color: '#0ea5e9' }
-    ]
+    const textGen = { type: 'text', name: '文本生成', desc: '脚本、广告词、品牌文案', Icon: Type, color: '#3b82f6' }
+    const imageGen = { type: 'imageConfig', name: '图片生成', Icon: Image, color: '#22c55e' }
+    const videoGen = { type: 'videoConfig', name: '视频生成', Icon: Video, color: '#f59e0b' }
+    const imageEditor = { type: 'klingImageTool', name: '图片编辑器', Icon: SlidersHorizontal, color: '#8b5cf6' }
 
-    // 根据来源节点类型过滤
     switch (sourceType) {
-      case 'text':
-        return allOptions.filter(o => ['llm', 'textSplitter', 'imageConfig', 'videoConfig'].includes(o.type))
-      case 'llm':
-        return allOptions.filter(o => ['textSplitter', 'imageConfig', 'text'].includes(o.type))
-      case 'textSplitter':
-        return allOptions.filter(o => ['text', 'imageConfig'].includes(o.type))
-      case 'imageConfig':
-        // 生图配置 → 图片节点
-        return allOptions.filter(o => o.type === 'image')
-      case 'videoConfig':
-        // 视频配置 → 视频节点
-        return allOptions.filter(o => o.type === 'video')
       case 'image':
-        // 图片节点 → 视频配置、生图配置（参考图）
-        return allOptions.filter(o => ['videoConfig', 'imageConfig'].includes(o.type))
+        return [textGen, imageGen, videoGen, imageEditor]
+      case 'video':
+        return [textGen, imageGen, videoGen]
+      case 'text':
+      case 'llm':
+        return [imageGen, videoGen, textGen]
       default:
-        // 其他情况显示所有选项
-        return allOptions
+        return [textGen, imageGen, videoGen, imageEditor]
     }
   }, [])
 
@@ -1933,32 +1916,27 @@ export default function Canvas() {
         </div>
       )}
 
-      {/* 连接线拖拽菜单 - 快速添加并连接节点 */}
+      {/* 连接线拖拽菜单 - TapNow 风格: "引用该节点生成" */}
       {connectMenu && (
         <div
-          className="fixed z-[9999] w-[200px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl py-1"
-          style={{ left: connectMenu.x, top: connectMenu.y }}
+          className="fixed z-[9999] w-[260px] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-2xl py-2 overflow-hidden"
+          style={{ left: connectMenu.x, top: connectMenu.y, backdropFilter: 'blur(20px)' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-3 py-2 text-xs text-[var(--text-secondary)] font-medium">连接到新节点</div>
+          <div className="px-4 py-2 text-xs text-[var(--text-secondary)] font-medium">引用该节点生成</div>
           {getConnectMenuOptions(connectMenu.sourceNodeType).map((opt) => (
             <button
               key={opt.type}
               onClick={() => spawnNodeFromConnectMenu(opt.type)}
-              className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
             >
-              <opt.Icon className="h-4 w-4" style={{ color: opt.color }} />
-              <span className="text-sm text-[var(--text-primary)]">{opt.name}</span>
+              <opt.Icon className="h-5 w-5 shrink-0" style={{ color: opt.color }} />
+              <div className="flex flex-col">
+                <span className="text-sm text-[var(--text-primary)] font-medium">{opt.name}</span>
+                {(opt as any).desc && <span className="text-xs text-[var(--text-secondary)]">{(opt as any).desc}</span>}
+              </div>
             </button>
           ))}
-          <div className="border-t border-[var(--border-color)] mt-1 pt-1">
-            <button
-              onClick={() => setConnectMenu(null)}
-              className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[var(--bg-tertiary)] transition-colors text-[var(--text-secondary)]"
-            >
-              <span className="text-sm">取消</span>
-            </button>
-          </div>
         </div>
       )}
 

@@ -239,7 +239,7 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
 
   return (
     <div
-      className="relative pr-[50px] pt-[20px]"
+      className="relative"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
@@ -315,27 +315,6 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
         <TapNodeHandle type="target" position={Position.Left} id="left" />
       </div>
 
-      {showActions && (
-        <div className="absolute -top-5 right-12 z-[1000]">
-          <button onClick={handleDuplicate} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Copy size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
-          </button>
-        </div>
-      )}
-
-      {showActions && (
-        <div className="absolute right-10 top-1/2 -translate-y-1/2 translate-x-full flex flex-col gap-2 z-[1000]">
-          <button onClick={handleImageGen} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <ImageIcon size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">图片生成</span>
-          </button>
-          <button onClick={handleVideoGen} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Video size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">视频生成</span>
-          </button>
-        </div>
-      )}
     </div>
   )
 })

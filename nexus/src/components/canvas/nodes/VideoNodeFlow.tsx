@@ -493,7 +493,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   return (
     <div
       ref={inViewRef}
-      className="relative pr-[50px] pt-[20px]"
+      className="relative"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
@@ -571,36 +571,6 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
         <TapNodeHandle type="target" position={Position.Left} id="left" />
         <TapNodeHandle type="source" position={Position.Right} id="right" />
       </div>
-
-      {showActions && (
-        <div className="absolute -top-5 right-12 z-[1000]">
-          <button onClick={handleDuplicate} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Copy size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
-          </button>
-        </div>
-      )}
-
-      {showActions && displayUrl && (
-        <div className="absolute right-10 top-20 -translate-y-1/2 translate-x-full flex flex-col gap-2 z-[1000]">
-          <button onClick={handleReplaceClick} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <RefreshCw size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">替换</span>
-          </button>
-          <button onClick={handleExtractFrame} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Image size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[90px] transition-all duration-200 whitespace-nowrap">提取当前帧</span>
-          </button>
-          <button onClick={handlePreview} className="group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max">
-            <Eye size={16} className="text-gray-600 dark:text-gray-300" />
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">预览</span>
-          </button>
-          <button onClick={handleDownload} disabled={downloading} className={`group p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-0 hover:gap-1.5 transition-all shadow-sm w-max ${downloading ? 'opacity-60 cursor-wait' : ''}`}>
-            {downloading ? <Loader2 size={16} className="text-gray-600 dark:text-gray-300 animate-spin" /> : <Download size={16} className="text-gray-600 dark:text-gray-300" />}
-            <span className="text-xs text-gray-600 dark:text-gray-300 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">{downloading ? '下载中...' : '下载'}</span>
-          </button>
-        </div>
-      )}
 
       {previewModalOpen && displayUrl && createPortal(
         <MediaPreviewModal open={previewModalOpen} url={displayUrl} type="video" onClose={() => setPreviewModalOpen(false)} />,
