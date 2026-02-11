@@ -585,9 +585,21 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
               </button>
             </>
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-[var(--text-secondary)] rounded-lg bg-[var(--bg-tertiary)] border-2 border-dashed border-[var(--border-color)]">
-              <ImageIcon size={32} className="opacity-20" />
-              <span className="text-xs opacity-40">暂无图片</span>
+            <div className="w-full h-full flex flex-col items-start justify-center gap-3 rounded-lg bg-[var(--bg-tertiary)] px-6 py-8">
+              <span className="text-xs text-[var(--text-secondary)] opacity-50">尝试：</span>
+              <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors w-full">
+                <Upload size={14} className="shrink-0 opacity-60" />
+                <span>图生图</span>
+              </button>
+              <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors w-full">
+                <Upload size={14} className="shrink-0 opacity-60" />
+                <span>图生视频</span>
+                <span className="ml-auto text-[10px] text-[var(--text-secondary)] opacity-40">图片大小不能超过 30 MB</span>
+              </button>
+              <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors w-full">
+                <ImageIcon size={14} className="shrink-0 opacity-60" />
+                <span>图片换背景</span>
+              </button>
             </div>
           )}
         </div>

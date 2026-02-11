@@ -19,6 +19,7 @@ import { useProjectsStore } from '@/store/projects'
 import { useAssetsStore } from '@/store/assets'
 import { syncAssetHistoryFromCanvasNodes } from '@/lib/assets/syncFromCanvas'
 import CanvasAssistantDrawer from '@/components/canvas/CanvasAssistantDrawer'
+import CanvasBottomPanel from '@/components/canvas/CanvasBottomPanel'
 import NodeRemarkModal from '@/components/canvas/NodeRemarkModal'
 import DownloadModal from '@/components/canvas/DownloadModal'
 import HistoryPanel from '@/components/canvas/HistoryPanel'
@@ -1543,6 +1544,8 @@ export default function Canvas() {
                 />
               </div>
             ) : null}
+
+            <CanvasBottomPanel />
 
             <CanvasAssistantDrawer open={assistantOpen} onOpenChange={setAssistantOpen} onOpenSettings={() => setSettingsOpen(true)} />
 
