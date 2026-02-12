@@ -16,7 +16,12 @@ import {
   Scissors,
   Eraser,
   Loader2,
-  PaintBucket
+  PaintBucket,
+  Sun,
+  PencilLine,
+  Crop,
+  Download,
+  Maximize2
 } from 'lucide-react'
 import ImageEditModal from './ImageEditModal'
 import GridCropModal, { type CropAreaPx } from './GridCropModal'
@@ -39,6 +44,10 @@ interface Props {
   visible: boolean
   onBusyChange?: (busy: boolean) => void
   onHoverChange?: (hovering: boolean) => void
+  onReplace?: () => void
+  onCrop?: () => void
+  onDownload?: () => void
+  onPreview?: () => void
 }
 
 type EditAction = 'pose' | 'angle' | 'expand' | 'cutout' | 'erase' | 'grid4' | 'grid9' | 'inpaint'
@@ -53,17 +62,16 @@ interface ToolButton {
 }
 
 const TOOLS: ToolButton[] = [
-  { key: 'pose', icon: Move, label: '姿态', needsInput: true, placeholder: '输入想要的姿态（如：站立、跑步、坐下）' },
-  { key: 'angle', icon: RotateCcw, label: '角度', needsInput: true, placeholder: '输入想要的角度（如：俯视、侧面、仰视）' },
-  { key: 'grid4', icon: Grid2x2, label: '四宫格', needsInput: false },
-  { key: 'grid9', icon: Grid3x3, label: '九宫格', needsInput: false },
-  { key: 'expand', icon: Expand, label: '扩图', needsInput: false },
-  { key: 'cutout', icon: Scissors, label: '抠图', needsInput: true, placeholder: '输入要抠出的对象（如：人物、猫、杯子）' },
   { key: 'inpaint', icon: PaintBucket, label: '重绘', needsInput: false, needsMask: true },
   { key: 'erase', icon: Eraser, label: '擦除', needsInput: false, needsMask: true },
+  { key: 'grid4', icon: Grid2x2, label: '增强', needsInput: false },
+  { key: 'expand', icon: Expand, label: '扩图', needsInput: false },
+  { key: 'cutout', icon: Scissors, label: '抠图', needsInput: true, placeholder: '输入要抠出的对象（如：人物、猫、杯子）' },
+  { key: 'pose', icon: Move, label: '多角度', needsInput: true, placeholder: '输入想要的姿态（如：站立、跑步、坐下）' },
+  { key: 'angle', icon: Sun, label: '打光', needsInput: true, placeholder: '输入光照描述（如：逆光、侧光、柔光）' },
 ]
 
-export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBusyChange, onHoverChange }: Props) {
+export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBusyChange, onHoverChange, onReplace, onCrop, onDownload, onPreview }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
   const [currentAction, setCurrentAction] = useState<EditAction | null>(null)
   const [gridCropOpen, setGridCropOpen] = useState(false)
@@ -226,20 +234,44 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
                 <span>{progress || '处理中...'}</span>
               </div>
             ) : (
-              TOOLS.map((tool) => {
-                const Icon = tool.icon
-                return (
-                  <button
-                    key={tool.key}
-                    onClick={() => handleToolClick(tool)}
-                    className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer"
-                    title={tool.label}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span>{tool.label}</span>
+              <>
+                {TOOLS.map((tool) => {
+                  const Icon = tool.icon
+                  return (
+                    <button
+                      key={tool.key}
+                      onClick={() => handleToolClick(tool)}
+                      className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer"
+                      title={tool.label}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span>{tool.label}</span>
+                    </button>
+                  )
+                })}
+                {/* 分隔线 + icon-only 工具 */}
+                <div className="w-px h-5 bg-white/15 mx-1 shrink-0" />
+                {onReplace && (
+                  <button onClick={onReplace} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="替换">
+                    <PencilLine className="h-4 w-4" />
                   </button>
-                )
-              })
+                )}
+                {onCrop && (
+                  <button onClick={onCrop} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="裁剪">
+                    <Crop className="h-4 w-4" />
+                  </button>
+                )}
+                {onDownload && (
+                  <button onClick={onDownload} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="下载">
+                    <Download className="h-4 w-4" />
+                  </button>
+                )}
+                {onPreview && (
+                  <button onClick={onPreview} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="全屏">
+                    <Maximize2 className="h-4 w-4" />
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

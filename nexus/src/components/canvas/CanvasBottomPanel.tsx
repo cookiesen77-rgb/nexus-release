@@ -243,8 +243,15 @@ function VideoPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
   const defaultModel = useSettingsStore(s => s.defaultVideoModel) || DEFAULT_VIDEO_MODEL
   const [model, setModel] = useState(nodeData?.params?.model || defaultModel)
   const [ratio, setRatio] = useState(nodeData?.params?.aspectRatio || '16:9')
-  const [prompt, setPrompt] = useState(nodeData?.prompt || '')
+  const [prompt, setPrompt] = useState(nodeData?.prompt || (hasImageSource ? '根据图片生成视频。' : ''))
   const [loading, setLoading] = useState(false)
+
+  // 检测是否有图片源节点连接（图生视频模式）
+  const hasImageSource = useMemo(() => {
+    const s = useGraphStore.getState()
+    return s.edges.some(e => e.target === nodeId && s.nodes.find(n => n.id === e.source)?.type === 'image')
+  }, [nodeId])
+  const panelLabel = hasImageSource ? '图生视频' : '文生视频'
 
   const modelCfg = useMemo(() => (VIDEO_MODELS as any[]).find((m: any) => m.key === model) || VIDEO_MODELS[0], [model]) as any
   const ratioOptions = useMemo(() => (modelCfg?.ratios || ['16:9','9:16']).map((r: string) => ({ key: r, label: r })), [modelCfg])
@@ -294,7 +301,7 @@ function VideoPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
     <PanelShell>
       {/* 类型标签 */}
       <div className="flex items-center gap-2 px-4 pt-3 pb-1">
-        <span className="text-xs font-medium text-white/50 bg-white/8 px-2 py-0.5 rounded">文生视频</span>
+        <span className="text-xs font-medium text-white/50 bg-white/8 px-2 py-0.5 rounded">{panelLabel}</span>
         <button className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/8 hover:bg-white/12 transition-colors shrink-0">
           <Sparkles size={12} className="text-white/50" />
         </button>

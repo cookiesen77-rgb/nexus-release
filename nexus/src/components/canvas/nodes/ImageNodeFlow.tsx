@@ -268,40 +268,15 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     }
   }, [id, nodeData?.url])
 
-  // 图片生图 - 创建文本节点 + imageConfig 节点并连接
+  // TapNow: 图生图 — 创建 Image→Image 连接
   const handleImageGen = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find((n) => n.id === id)
     if (node) {
-      const baseModelCfg: any = (IMAGE_MODELS as any[]).find((m: any) => m.key === DEFAULT_IMAGE_MODEL) || (IMAGE_MODELS as any[])[0]
-      
-      // 创建文本节点（提示词输入）
-      const textNodeId = store.addNode(
-        'text',
-        { x: node.x + 350, y: node.y - 120 },
-        { label: '提示词', content: '' }
-      )
-      
-      // 创建 imageConfig 节点
-      const configNodeId = store.addNode(
-        'imageConfig',
-        { x: node.x + 350, y: node.y + 80 },
-        { 
-          label: '图生图',
-          model: DEFAULT_IMAGE_MODEL,
-          size: '1:1',
-          quality: baseModelCfg?.defaultParams?.quality,
-        }
-      )
-      
-      // 连接：文本节点 → imageConfig（提示词）
-      store.addEdge(textNodeId, configNodeId, { sourceHandle: 'right', targetHandle: 'left' })
-      // 连接：图片节点 → imageConfig（参考图）
-      store.addEdge(id, configNodeId, { sourceHandle: 'right', targetHandle: 'left' })
-      
-      // 选中文本节点，方便用户直接输入
-      store.setSelected(textNodeId)
+      const newImageId = store.addNode('image', { x: node.x + 350, y: node.y }, { label: 'Image' })
+      store.addEdge(id, newImageId, { sourceHandle: 'right', targetHandle: 'left' })
+      store.setSelected(newImageId)
     }
   }, [id])
 
@@ -344,41 +319,27 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     setPreviewModalOpen(true)
   }, [nodeData?.url])
 
-  // 视频生成 - 创建文本节点 + videoConfig 节点并连接
+  // TapNow: 图生视频 — 创建 Image→Video 连接
   const handleVideoGen = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find((n) => n.id === id)
     if (node) {
-      const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === DEFAULT_VIDEO_MODEL) || (VIDEO_MODELS as any[])[0]
-      
-      // 创建文本节点（提示词输入）
-      const textNodeId = store.addNode(
-        'text',
-        { x: node.x + 350, y: node.y - 120 },
-        { label: '提示词', content: '' }
-      )
-      
-      // 创建 videoConfig 节点
-      const configNodeId = store.addNode(
-        'videoConfig',
-        { x: node.x + 350, y: node.y + 80 },
-        { 
-          label: '图生视频',
-          model: DEFAULT_VIDEO_MODEL,
-          ratio: baseModelCfg?.defaultParams?.ratio,
-          dur: baseModelCfg?.defaultParams?.duration,
-          size: baseModelCfg?.defaultParams?.size,
-        }
-      )
-      
-      // 连接：文本节点 → videoConfig（提示词）
-      store.addEdge(textNodeId, configNodeId, { sourceHandle: 'right', targetHandle: 'left' })
-      // 连接：图片节点 → videoConfig（首帧图片）
-      store.addEdge(id, configNodeId, { sourceHandle: 'right', targetHandle: 'left' })
-      
-      // 选中文本节点，方便用户直接输入
-      store.setSelected(textNodeId)
+      const videoId = store.addNode('video', { x: node.x + 350, y: node.y }, { label: 'Video' })
+      store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left' })
+      store.setSelected(videoId)
+    }
+  }, [id])
+
+  // TapNow: 首帧图生视频 — 同图生视频
+  const handleFirstFrameVideo = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const store = useGraphStore.getState()
+    const node = store.nodes.find((n) => n.id === id)
+    if (node) {
+      const videoId = store.addNode('video', { x: node.x + 350, y: node.y }, { label: 'Video' })
+      store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left' })
+      store.setSelected(videoId)
     }
   }, [id])
 
@@ -585,21 +546,26 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
               </button>
             </>
           ) : (
-            <div className="w-full h-full flex flex-col items-start justify-center gap-3 rounded-lg bg-[var(--bg-tertiary)] px-6 py-8">
-              <span className="text-xs text-[var(--text-secondary)] opacity-50">尝试：</span>
-              <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors w-full">
-                <Upload size={14} className="shrink-0 opacity-60" />
-                <span>图生图</span>
-              </button>
-              <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors w-full">
-                <Upload size={14} className="shrink-0 opacity-60" />
-                <span>图生视频</span>
-                <span className="ml-auto text-[10px] text-[var(--text-secondary)] opacity-40">图片大小不能超过 30 MB</span>
-              </button>
-              <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors w-full">
-                <ImageIcon size={14} className="shrink-0 opacity-60" />
-                <span>图片换背景</span>
-              </button>
+            <div className="w-full h-full flex flex-col justify-center gap-2 px-6 py-8">
+              <span className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</span>
+              <div className="w-full space-y-1">
+                <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Upload size={14} className="shrink-0 opacity-50" />
+                  图生图
+                </button>
+                <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Upload size={14} className="shrink-0 opacity-50" />
+                  图生视频
+                </button>
+                <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <ImageIcon size={14} className="shrink-0 opacity-50" />
+                  图片换背景
+                </button>
+                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Video size={14} className="shrink-0 opacity-50" />
+                  首帧图生视频
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -617,6 +583,10 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
           visible={showActions || editToolbarBusy || editToolbarHover}
           onBusyChange={setEditToolbarBusy}
           onHoverChange={setEditToolbarHover}
+          onReplace={() => handleReplaceClick({} as any)}
+          onCrop={() => handleCrop({} as any)}
+          onDownload={() => handleDownload({} as any)}
+          onPreview={() => handlePreview({} as any)}
         />
       )}
 
