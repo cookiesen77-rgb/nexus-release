@@ -273,6 +273,11 @@ export default memo(function MaskEditorModal({ open, imageUrl, mode, onClose, on
         outputData.data[i + 1] = 255
         outputData.data[i + 2] = 255
         outputData.data[i + 3] = 255
+      } else {
+        outputData.data[i] = 0
+        outputData.data[i + 1] = 0
+        outputData.data[i + 2] = 0
+        outputData.data[i + 3] = 255
       }
     }
 

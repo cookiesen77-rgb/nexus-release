@@ -6,6 +6,7 @@ import { useGraphStore } from '@/graph/store'
 import { buildCanvasContext, buildChatMessages, type ChatMessage } from '@/lib/contextEngine'
 import { loadMemoryState, saveMemoryState, searchMemory, type MemoryItem } from '@/lib/memory'
 import { streamResponses } from '@/lib/nexusApi'
+import { useSettingsStore } from '@/store/settings'
 import {
   buildPolishSystemPrompt,
   buildPolishUserText,
@@ -288,7 +289,7 @@ export default function Assistant() {
         config: { maxChars: 12000, maxHistory: 16, maxMemoryItems: 6, maxCanvasChars: 1200 }
       })
 
-      for await (const chunk of streamResponses({ model: 'gpt-5-mini', input: finalMsgList }, controllerRef.current.signal)) {
+      for await (const chunk of streamResponses({ model: useSettingsStore.getState().aiAssistantModel, input: finalMsgList }, controllerRef.current.signal)) {
         pendingTextRef.current += chunk
         scheduleFlush()
       }

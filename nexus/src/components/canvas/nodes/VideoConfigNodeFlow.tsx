@@ -1,456 +1,384 @@
 /**
- * VideoConfigNodeFlow - All-in-one 视频生成节点
+ * VideoConfigNodeFlow - TapNow 风格视频生成节点
  *
- * 合并了提示词输入、配置、风格预设、相机预设、输出预览于一个节点
- * 视频特有的控制（时长、首尾帧、音频）放在可折叠的"高级设置"区
+ * 和 Video 节点外观一致的纯内容卡片，但自带生成能力：
+ * 空节点 → 显示"尝试"菜单 → 选中后底部面板配置+生成 → 结果写入自身
  */
-import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Position, NodeProps } from '@xyflow/react'
 import { TapNodeHandle } from './shared/TapNodeHandle'
-import { Trash2, Copy } from 'lucide-react'
+import { Video, X, Loader2, Sparkles, Image, RefreshCw, Download, Eye } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
-import { getNodeSize } from '@/graph/nodeSizing'
-import { generateVideoFromConfigNode } from '@/lib/workflow/video'
-import { DEFAULT_VIDEO_MODEL, VIDEO_MODELS } from '@/config/models'
-import * as modelsConfig from '@/config/models'
-import { getVideoModelCaps, coerceVideoImageRole } from '@/lib/modelCaps'
-import { useSettingsStore } from '@/store/settings'
-import { usePresetsStore } from '@/store/presets'
-import { CAMERA_PRESETS } from '@/lib/cameraControl/presets'
+import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
+import { downloadFile } from '@/lib/download'
+import { resolveCachedMediaUrl } from '@/lib/workflow/cache'
+import MediaPreviewModal from '@/components/canvas/MediaPreviewModal'
 
-import { OutputPreview, type OutputEntry } from './shared/OutputPreview'
-import { PromptInput } from './shared/PromptInput'
-import { StylePresetsRow } from './shared/StylePresetsRow'
-import { GenerationToolbar } from './shared/GenerationToolbar'
-import { AdvancedSettings } from './shared/AdvancedSettings'
+const isHttpUrl = (v: string) => /^https?:\/\//i.test(String(v || '').trim())
+const isApiRelativeUrl = (v: string) => { const u = String(v || '').trim(); return u.startsWith('/v1/') || u.startsWith('/v1beta') || u.startsWith('/kling') || u.startsWith('/tencent-vod') || u.startsWith('/video') }
+const isRecoverableSourceUrl = (v: string) => isHttpUrl(v) || isApiRelativeUrl(v)
 
-const getDefaultVideoModel = (): string => {
-  const userDefault = useSettingsStore.getState().defaultVideoModel
-  if (userDefault && VIDEO_MODELS.some((m: any) => m.key === userDefault)) return userDefault
-  return DEFAULT_VIDEO_MODEL
+const formatDuration = (seconds: number) => {
+  if (!seconds || !Number.isFinite(seconds)) return '0:00'
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-const MODEL_OPTIONS = VIDEO_MODELS.map((m: any) => ({ key: m.key, label: m.label }))
-const VALID_MODEL_KEYS = new Set(VIDEO_MODELS.map((m: any) => m.key))
-
-const getValidModel = (v: string | undefined): string => {
-  if (v && VALID_MODEL_KEYS.has(v)) return v
-  const resolved: any = v ? (modelsConfig as any)?.getModelByName?.(v) : null
-  if (resolved && VALID_MODEL_KEYS.has(resolved.key)) return resolved.key
-  return getDefaultVideoModel()
-}
-
-const getModelConfig = (key: string) => {
-  const resolved: any = (modelsConfig as any)?.getModelByName?.(key) || null
-  if (resolved && String(resolved?.format || '').includes('video')) return resolved
-  return VIDEO_MODELS.find((m: any) => m.key === key) || VIDEO_MODELS[0]
-}
-
-const getModelRatioOptions = (key: string) => {
-  const cfg = getModelConfig(key) as any
-  return (cfg?.ratios || ['16:9', '9:16']).map((r: string) => ({ key: r, label: r }))
-}
-
-const getModelDurationOptions = (key: string) => {
-  const cfg = getModelConfig(key) as any
-  return cfg?.durs || [{ label: '5 秒', key: 5 }]
-}
-
-const getModelSizeOptions = (key: string) => {
-  const cfg = getModelConfig(key) as any
-  return cfg?.sizes || []
-}
-
-const getModelResolutionOptions = (key: string) => {
-  const cfg = getModelConfig(key) as any
-  return (cfg?.resolutions || []).map((r: string) => ({ key: r, label: r }))
+interface ConfigData {
+  label?: string
+  url?: string
+  sourceUrl?: string
+  mediaId?: string
+  loading?: boolean
+  error?: string
+  _fromWorkflow?: boolean
 }
 
 export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data, selected }: NodeProps) {
-  const d = data as Record<string, any>
-  const [model, setModel] = useState(() => getValidModel(d?.model))
-  const [ratio, setRatio] = useState(d?.ratio || '16:9')
-  const [duration, setDuration] = useState(d?.dur || 5)
-  const [size, setSize] = useState(d?.size || '')
-  const [resolution, setResolution] = useState(d?.resolution || '')
-  const [loopCount, setLoopCount] = useState(d?.loopCount || 1)
-  const [prompt, setPrompt] = useState(d?.prompt || '')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [outputs, setOutputs] = useState<OutputEntry[]>(d?.outputs || [])
-  const [activeOutputIndex, setActiveOutputIndex] = useState(d?.activeOutputIndex || 0)
-  const [activeStyleId, setActiveStyleId] = useState<string | undefined>(d?.activeStyleId)
-  const [cameraPreset, setCameraPreset] = useState<string | undefined>(d?.cameraPreset)
-  const [inlineRefImages, setInlineRefImages] = useState<Array<{ url: string; label?: string }>>(d?.inlineRefImages || [])
-  const [viduAudio, setViduAudio] = useState(d?.viduAudio || false)
-  const [viduVoiceId, setViduVoiceId] = useState(d?.viduVoiceId || '')
-  const [klingVoiceIds, setKlingVoiceIds] = useState(d?.klingVoiceIds || '')
-  const [firstFrameUrl, setFirstFrameUrl] = useState(d?.firstFrameUrl || '')
-  const [firstFrameMediaId, setFirstFrameMediaId] = useState(d?.firstFrameMediaId || '')
-  const [lastFrameUrl, setLastFrameUrl] = useState(d?.lastFrameUrl || '')
-  const [lastFrameMediaId, setLastFrameMediaId] = useState(d?.lastFrameMediaId || '')
+  const nodeData = data as ConfigData
   const [showActions, setShowActions] = useState(false)
+  const [videoError, setVideoError] = useState('')
+  const [previewModalOpen, setPreviewModalOpen] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [corsMode, setCorsMode] = useState<'anonymous' | 'none'>('anonymous')
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const loadAttemptedRef = useRef(false)
+  const persistAttemptedRef = useRef<string>('')
+  const loadErrorFallbackRef = useRef<string>('')
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
 
-  const updateTimerRef = useRef<number>(0)
+  const isFromWorkflow = !!nodeData?._fromWorkflow
+  const isAwaitingGeneration = !!(nodeData as any)?._awaitingGeneration
 
-  // Sync external data changes
+  // Local mode state — 即时切换 UI
+  const [mode, setMode] = useState<'menu' | 'upload' | 'awaiting'>(() => {
+    if (isAwaitingGeneration) return 'awaiting'
+    if (isFromWorkflow) return 'upload'
+    if (nodeData?.url) return 'upload'
+    return 'menu'
+  })
+
+  const displayUrl = nodeData?.url || ''
+  const previewUrl = displayUrl || (nodeData?.sourceUrl && isRecoverableSourceUrl(nodeData.sourceUrl) ? nodeData.sourceUrl : '')
+
+  useEffect(() => { setVideoError(''); setCorsMode('anonymous'); loadErrorFallbackRef.current = '' }, [displayUrl])
+
+  // 从 IndexedDB / sourceUrl 恢复
   useEffect(() => {
-    const m = getValidModel(d?.model); if (m !== model) setModel(m)
-    if (d?.ratio && d.ratio !== ratio) setRatio(d.ratio)
-    if (d?.dur !== undefined && d.dur !== duration) setDuration(d.dur)
-    if (d?.loopCount && d.loopCount !== loopCount) setLoopCount(d.loopCount)
-    if (d?.prompt !== undefined && d.prompt !== prompt) setPrompt(d.prompt)
-    if (d?.outputs && JSON.stringify(d.outputs) !== JSON.stringify(outputs)) setOutputs(d.outputs)
-  }, [d?.model, d?.ratio, d?.dur, d?.loopCount, d?.prompt, d?.outputs])
-
-  useEffect(() => () => { if (updateTimerRef.current) clearTimeout(updateTimerRef.current) }, [])
-
-  const debouncedSync = useCallback((patch: Record<string, any>) => {
-    if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
-    updateTimerRef.current = window.setTimeout(() => {
-      useGraphStore.getState().updateNode(id, { data: patch })
-    }, 300)
-  }, [id])
-
-  // Model config
-  const ratioOptions = useMemo(() => getModelRatioOptions(model), [model])
-  const durOptions = useMemo(() => getModelDurationOptions(model), [model])
-  const sizeOptions = useMemo(() => getModelSizeOptions(model), [model])
-  const resolutionOptions = useMemo(() => getModelResolutionOptions(model), [model])
-  const modelCfg = useMemo(() => getModelConfig(model) as any, [model])
-
-  // Connected ref images
-  const getRefImages = useCallback(() => {
-    const s = useGraphStore.getState()
-    return s.edges
-      .filter(e => e.target === id)
-      .map(e => {
-        const n = s.nodes.find(nd => nd.id === e.source)
-        if (!n || n.type !== 'image' || !n.data?.url) return null
-        return { url: String(n.data.url), label: String(n.data.label || '') }
-      })
-      .filter((x): x is NonNullable<typeof x> => !!x)
-  }, [id])
-
-  const [refImages, setRefImages] = useState(() => getRefImages())
-  useEffect(() => {
-    let prev = JSON.stringify(refImages)
-    const unsub = useGraphStore.subscribe((state, prevState) => {
-      if (state.edges === prevState.edges && state.nodes === prevState.nodes) return
-      const next = getRefImages()
-      const nextStr = JSON.stringify(next)
-      if (nextStr !== prev) { prev = nextStr; setRefImages(next) }
-    })
-    return unsub
-  }, [getRefImages])
-
-  // Handlers
-  const handleModelChange = useCallback((key: string) => {
-    setModel(key)
-    const cfg = getModelConfig(key) as any
-    const defaultRatio = cfg?.defaultParams?.ratio || '16:9'
-    const defaultDur = cfg?.defaultParams?.duration || 5
-    const defaultSize = cfg?.defaultParams?.size || ''
-    const defaultRes = cfg?.defaultParams?.resolution || ''
-    setRatio(defaultRatio)
-    setDuration(defaultDur)
-    setSize(defaultSize)
-    setResolution(defaultRes)
-    debouncedSync({ model: key, ratio: defaultRatio, dur: defaultDur, size: defaultSize, resolution: defaultRes })
-
-    // 切换模型后重新校验已连接图片的 imageRole
-    const caps = getVideoModelCaps(key)
-    const store = useGraphStore.getState()
-    const edges = store.edges.filter(e => e.target === id && e.type === 'imageRole')
-    if (edges.length > 0) {
-      let hasFirst = false
-      let hasLast = false
-      store.withBatchUpdates(() => {
-        for (const edge of edges) {
-          const curRole = String((edge.data as any)?.imageRole || 'first_frame_image').trim()
-          let nextRole = coerceVideoImageRole(curRole, caps)
-          if (nextRole === 'first_frame_image') {
-            if (hasFirst) nextRole = caps.supportsLastFrame && !hasLast ? 'last_frame_image' : (caps.supportsReferenceImages ? 'input_reference' : 'first_frame_image')
-            else hasFirst = true
-          }
-          if (nextRole === 'last_frame_image') {
-            if (hasLast) nextRole = caps.supportsReferenceImages ? 'input_reference' : 'first_frame_image'
-            else hasLast = true
-          }
-          if (nextRole !== curRole) store.setEdgeImageRole(edge.id, nextRole)
+    const currentUrl = String(nodeData?.url || '').trim()
+    if ((currentUrl && !currentUrl.startsWith('blob:') && currentUrl.length > 10) || nodeData?.loading) return
+    if (!nodeData?.mediaId && !nodeData?.sourceUrl) return
+    if (loadAttemptedRef.current) return
+    loadAttemptedRef.current = true
+    void (async () => {
+      try {
+        if (nodeData?.mediaId) {
+          const record = await getMedia(nodeData.mediaId)
+          if (record?.data) { useGraphStore.getState().updateNode(id, { data: { url: record.data, loading: false } } as any); return }
         }
-      })
+        const recordByNode = await getMediaByNodeId(id)
+        if (recordByNode?.data) { useGraphStore.getState().updateNode(id, { data: { url: recordByNode.data, mediaId: recordByNode.id, loading: false } } as any); return }
+        const sourceUrl = String(nodeData?.sourceUrl || '').trim()
+        if (isRecoverableSourceUrl(sourceUrl)) {
+          const cached = await resolveCachedMediaUrl(sourceUrl)
+          const nextUrl = String(cached?.displayUrl || '').trim() || sourceUrl
+          useGraphStore.getState().updateNode(id, { data: { url: nextUrl, loading: false } } as any)
+        }
+      } catch {}
+    })()
+  }, [id, nodeData?.url, nodeData?.mediaId, nodeData?.sourceUrl, nodeData?.loading])
+
+  // 持久化 data URL
+  useEffect(() => {
+    const url = String(nodeData?.url || '').trim()
+    if (!url || nodeData?.mediaId || persistAttemptedRef.current === url) return
+    if (!url.startsWith('data:') && !(!isHttpUrl(url) && url.length > 50000)) return
+    persistAttemptedRef.current = url
+    void (async () => {
+      try {
+        const store = useGraphStore.getState()
+        const mediaId = await saveMedia({ nodeId: id, projectId: store.projectId || 'default', type: 'video', data: url })
+        if (mediaId) store.patchNodeDataSilent(id, { mediaId })
+      } catch {}
+    })()
+  }, [id, nodeData?.url, nodeData?.mediaId])
+
+  // 播放控制
+  const togglePlay = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const v = videoRef.current
+    if (!v) return
+    if (v.paused) { v.play().catch(() => {}); setIsPlaying(true) } else { v.pause(); setIsPlaying(false) }
+  }, [])
+
+  const handleTimeUpdate = useCallback(() => { const v = videoRef.current; if (v) setCurrentTime(v.currentTime) }, [])
+  const handleLoadedMetadata = useCallback(() => { const v = videoRef.current; if (v) setDuration(v.duration) }, [])
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => { const v = videoRef.current; if (!v) return; v.currentTime = Number(e.target.value); setCurrentTime(v.currentTime) }, [])
+
+  const handleVideoError = useCallback(() => {
+    if (corsMode === 'anonymous' && isHttpUrl(displayUrl)) { setCorsMode('none'); return }
+    if (nodeData?.mediaId && isHttpUrl(displayUrl)) {
+      void (async () => {
+        try { const record = await getMedia(nodeData.mediaId!); if (record?.data && record.data !== displayUrl) { useGraphStore.getState().updateNode(id, { data: { url: record.data, loading: false } } as any); setVideoError(''); return } } catch {}
+        setVideoError('视频加载失败')
+      })()
+      return
     }
-  }, [id, debouncedSync])
+    setVideoError('视频加载失败')
+  }, [corsMode, displayUrl, id, nodeData?.mediaId])
 
-  const handleRatioChange = useCallback((v: string) => { setRatio(v); debouncedSync({ ratio: v }) }, [debouncedSync])
-  const handleDurChange = useCallback((v: number) => { setDuration(v); debouncedSync({ dur: v }) }, [debouncedSync])
-  const handleSizeChange = useCallback((v: string) => { setSize(v); debouncedSync({ size: v }) }, [debouncedSync])
-  const handleResolutionChange = useCallback((v: string) => { setResolution(v); debouncedSync({ resolution: v }) }, [debouncedSync])
-  const handleLoopCountChange = useCallback((n: number) => { setLoopCount(n); debouncedSync({ loopCount: n }) }, [debouncedSync])
-  const handlePromptChange = useCallback((v: string) => { setPrompt(v); debouncedSync({ prompt: v }) }, [debouncedSync])
-  const handleStyleChange = useCallback((id_: string | undefined) => { setActiveStyleId(id_); debouncedSync({ activeStyleId: id_ }) }, [debouncedSync])
-  const handleCameraChange = useCallback((name: string | undefined) => { setCameraPreset(name); debouncedSync({ cameraPreset: name }) }, [debouncedSync])
-
-  const handleRefImageAdd = useCallback((url: string) => {
-    setInlineRefImages(prev => {
-      const next = [...prev, { url }]
-      debouncedSync({ inlineRefImages: next })
-      return next
-    })
-  }, [debouncedSync])
-
-  const handleRefImageRemove = useCallback((index: number) => {
-    setInlineRefImages(prev => {
-      const next = prev.filter((_, i) => i !== index)
-      debouncedSync({ inlineRefImages: next })
-      return next
-    })
-  }, [debouncedSync])
-
-  const allRefImages = useMemo(() => [...inlineRefImages, ...refImages], [inlineRefImages, refImages])
-  const videoCaps = useMemo(() => getVideoModelCaps(model), [model])
-
-  const handleDelete = useCallback((e: React.MouseEvent) => { e.stopPropagation(); useGraphStore.getState().removeNode(id) }, [id])
-  const handleDuplicate = useCallback((e: React.MouseEvent) => {
+  // "尝试" handlers — 原节点变待生成，上游创建输入源
+  const handleStartEndVideo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find(n => n.id === id)
-    if (node) store.addNode('videoConfig', { x: node.x + 50, y: node.y + 50 }, { ...node.data })
+    if (!node) return
+    setMode('awaiting')
+    store.patchNodeDataSilent(id, { _awaitingGeneration: true })
+    const firstId = store.addNode('imageConfig', { x: node.x - 350, y: node.y - 160 }, { label: '首帧', _fromWorkflow: true })
+    const lastId = store.addNode('imageConfig', { x: node.x - 350, y: node.y + 160 }, { label: '尾帧', _fromWorkflow: true })
+    store.addEdge(firstId, id, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
+    store.addEdge(lastId, id, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'last_frame_image' } })
   }, [id])
 
-  const handleGenerate = useCallback(async () => {
-    let effectivePrompt = prompt.trim()
-    if (cameraPreset) {
-      const preset = CAMERA_PRESETS.find(p => p.name === cameraPreset)
-      if (preset) effectivePrompt += ', ' + preset.promptSuffix
-    }
-    if (activeStyleId) {
-      const style = usePresetsStore.getState().getStylePresetById(activeStyleId)
-      if (style) effectivePrompt += ', ' + style.promptSuffix
-    }
+  const handleFirstFrameVideo = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const store = useGraphStore.getState()
+    const node = store.nodes.find(n => n.id === id)
+    if (!node) return
+    setMode('awaiting')
+    store.patchNodeDataSilent(id, { _awaitingGeneration: true })
+    const firstId = store.addNode('imageConfig', { x: node.x - 350, y: node.y }, { label: '首帧', _fromWorkflow: true })
+    store.addEdge(firstId, id, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
+  }, [id])
 
-    const caps = getVideoModelCaps(model)
-    const refs = getRefImages()
-    if (!effectivePrompt && refs.length === 0 && !firstFrameUrl) {
-      window.$message?.warning?.('请输入提示词或连接图片')
-      return
-    }
-    if (caps.requiresPrompt && !effectivePrompt) {
-      window.$message?.warning?.('当前模型需要提示词')
-      return
-    }
-
-    setLoading(true)
-    setError('')
-
+  // 截帧
+  const handleExtractFrame = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!displayUrl || !videoRef.current) return
     try {
-      if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
-      useGraphStore.getState().updateNode(id, {
-        data: { model, ratio, dur: duration, size, loopCount, resolution, viduAudio, viduVoiceId, klingVoiceIds, prompt, firstFrameUrl, firstFrameMediaId, lastFrameUrl, lastFrameMediaId, _inlinePrompt: effectivePrompt, _inlineRefImages: inlineRefImages.map(r => r.url) }
-      } as any)
+      const video = videoRef.current
+      if (!video.paused) video.pause()
+      const canvas = document.createElement('canvas')
+      canvas.width = video.videoWidth || 640
+      canvas.height = video.videoHeight || 360
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+      const store = useGraphStore.getState()
+      const node = store.nodes.find(n => n.id === id)
+      const imageId = store.addNode('image', { x: (node?.x || 0) + 450, y: node?.y || 0 }, { label: '视频帧', url: dataUrl })
+      store.addEdge(id, imageId, {})
+    } catch {}
+  }, [id, displayUrl])
 
-      const actualLoopCount = Math.max(1, Math.min(10, loopCount))
-      const outIds: string[] = []
-      const s0 = useGraphStore.getState()
-      const cfgNode = s0.nodes.find(n => n.id === id)
-      if (!cfgNode) throw new Error('节点不存在')
+  const handlePreview = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    if (!previewUrl) {
+      window.$message?.warning?.("暂无视频可预览")
+      return
+    }
+    setPreviewModalOpen(true)
+  }, [previewUrl])
 
-      const baseX = (cfgNode.x || 0) + 500
-      const baseY = (cfgNode.y || 0)
-      const outSize = getNodeSize('video')
-      const spacingY = Math.max(36, (outSize?.h || 240) + 60)
+  const handleDownload = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    if (downloading) return
+    const candidates = [displayUrl, nodeData?.sourceUrl]
+      .map(v => String(v || "").trim())
+      .filter((v, i, arr) => v && arr.indexOf(v) === i)
 
-      useGraphStore.getState().withBatchUpdates(() => {
-        for (let i = 0; i < actualLoopCount; i++) {
-          const outId = useGraphStore.getState().addNode('video', { x: baseX, y: baseY + i * spacingY }, {
-            url: '', loading: true, error: '', label: '视频生成结果'
+    if (candidates.length === 0) {
+      window.$message?.warning?.("暂无视频可下载")
+      return
+    }
+
+    setDownloading(true)
+    let lastErr: any = null
+    try {
+      for (const url of candidates) {
+        try {
+          const success = await downloadFile({
+            url,
+            filename: `video_${Date.now()}.mp4`,
+            mimeType: "video/mp4"
           })
-          outIds.push(outId)
-          useGraphStore.getState().addEdge(id, outId, { sourceHandle: 'right', targetHandle: 'left' })
-        }
-      })
-
-      if (actualLoopCount > 1) window.$message?.info?.(`开始并发生成 ${actualLoopCount} 个视频...`)
-
-      const tasks = outIds.map(outId =>
-        generateVideoFromConfigNode(id, { model, ratio, duration, size }, { outputNodeId: outId, selectOutput: false, markConfigExecuted: false })
-          .then(() => {
-            const outNode = useGraphStore.getState().nodes.find(n => n.id === outId)
-            if (outNode?.data?.url) {
-              const entry: OutputEntry = {
-                id: outId,
-                url: String(outNode.data.url),
-                sourceUrl: String(outNode.data.sourceUrl || ''),
-                mediaId: String(outNode.data.mediaId || ''),
-                model,
-                createdAt: Date.now(),
-                duration: Number(outNode.data.duration || duration),
-              }
-              setOutputs(prev => {
-                const next = [entry, ...prev].slice(0, 20)
-                useGraphStore.getState().updateNode(id, { data: { outputs: next, activeOutputIndex: 0 } })
-                return next
-              })
-              setActiveOutputIndex(0)
-            }
-            return { ok: true as const, outId }
-          })
-          .catch(err => ({ ok: false as const, outId, err }))
-      )
-
-      const results = await Promise.all(tasks)
-      const okCount = results.filter(r => r.ok).length
-      const failCount = results.length - okCount
-
-      // 删除临时输出节点，结果已存入 outputs 数组
-      useGraphStore.getState().withBatchUpdates(() => {
-        for (const outId of outIds) {
-          useGraphStore.getState().removeNode(outId)
-        }
-      })
-
-      useGraphStore.getState().updateNode(id, { data: { executed: true, _inlinePrompt: undefined } } as any)
-
-      if (failCount === 0) {
-        window.$message?.success?.(actualLoopCount > 1 ? `成功生成 ${okCount} 个视频` : '视频生成成功')
-      } else {
-        window.$message?.warning?.(`成功 ${okCount}，失败 ${failCount}`)
-        if (failCount === results.length) {
-          const firstErr = results.find(r => !r.ok) as any
-          setError(firstErr?.err?.message || '生成失败')
+          if (success) {
+            window.$message?.success?.("下载成功")
+            return
+          }
+        } catch (err: any) {
+          lastErr = err
         }
       }
+      if (lastErr) throw lastErr
+      throw new Error("下载失败")
     } catch (err: any) {
-      setError(err?.message || '生成失败')
-      window.$message?.error?.(`生成失败: ${err?.message || '未知错误'}`)
+      const errMsg = err?.message || String(err) || "未知错误"
+      if (errMsg.includes("CORS") || errMsg.includes("Failed to fetch")) {
+        const fallback = candidates[0]
+        const link = document.createElement("a")
+        link.href = fallback
+        link.target = "_blank"
+        link.rel = "noopener noreferrer"
+        document.body.appendChild(link)
+        link.click()
+        setTimeout(() => document.body.removeChild(link), 100)
+      } else {
+        window.$message?.error?.(`下载失败: ${errMsg}`)
+      }
     } finally {
-      setLoading(false)
+      setDownloading(false)
     }
-  }, [id, model, ratio, duration, size, loopCount, resolution, viduAudio, viduVoiceId, klingVoiceIds, prompt, cameraPreset, activeStyleId, firstFrameUrl, firstFrameMediaId, lastFrameUrl, lastFrameMediaId, getRefImages])
+  }, [displayUrl, nodeData?.sourceUrl, downloading])
+
 
   return (
     <div
-      className={`rounded-xl border transition-shadow ${
-        selected ? 'ring-2 ring-purple-500/40 shadow-lg shadow-purple-500/20 border-purple-500/50' : 'border-[var(--border-color)] shadow-sm hover:shadow-md'
-      } bg-[var(--bg-primary)]`}
-      style={{ width: 420, borderTop: '3px solid #a855f7' }}
+      className="relative"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
-      onClick={e => e.stopPropagation()}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-purple-500/10 rounded-t-xl">
-        <span className="text-xs font-medium text-[var(--text-primary)]">
-          {d?.label || '视频生成'}
-        </span>
-        <div className="flex items-center gap-1">
-          {showActions && (
-            <>
-              <button onClick={handleDuplicate} className="p-1 rounded hover:bg-[var(--bg-tertiary)]" title="复制">
-                <Copy size={12} className="text-[var(--text-secondary)]" />
-              </button>
-              <button onClick={handleDelete} className="p-1 rounded hover:bg-red-500/20" title="删除">
-                <Trash2 size={12} className="text-[var(--text-secondary)]" />
-              </button>
-            </>
+      {/* 标签 */}
+      <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontSize: '17.1429px' }}>
+        {nodeData?.label || '视频生成'}
+      </div>
+
+      {/* 节点主体 */}
+      <div
+        className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
+        style={{ width: 320 }}
+      >
+        <div className="bg-[var(--bg-secondary)] rounded-2xl overflow-hidden">
+          {nodeData?.loading && (
+            <div className="aspect-video bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-blue-500/20 flex flex-col items-center justify-center gap-3 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-blue-500/10 animate-pulse" />
+              <Video size={36} className="text-pink-500 relative z-10" />
+              <span className="text-xs text-[var(--text-primary)] relative z-10">创作中，预计等待 1 分钟</span>
+            </div>
+          )}
+
+          {!nodeData?.loading && (nodeData?.error || videoError) && (
+            <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-red-50 dark:bg-red-900/10">
+              <X size={24} className="text-red-500" />
+              <span className="text-xs text-red-500 px-4 text-center line-clamp-2">{nodeData?.error || videoError}</span>
+            </div>
+          )}
+
+          {!nodeData?.loading && !nodeData?.error && !videoError && displayUrl && (
+            <div className="aspect-video bg-black relative" onDoubleClick={togglePlay}>
+              <video
+                key={`${displayUrl}|${corsMode}`}
+                ref={videoRef}
+                src={displayUrl}
+                crossOrigin={corsMode === 'anonymous' && isHttpUrl(displayUrl) ? 'anonymous' : undefined}
+                playsInline preload="auto"
+                className="w-full h-full object-contain pointer-events-none select-none"
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
+                onError={handleVideoError}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={() => setIsPlaying(false)}
+              />
+              <div className="absolute inset-0 z-10" />
+              {/* 控制栏 */}
+              <div className="video-controls-bar nodrag absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2.5 pt-8 flex items-center gap-2.5 opacity-0 translate-y-1 pointer-events-none">
+                <button onClick={togglePlay} className="h-6 w-6 p-0 flex items-center justify-center text-white hover:text-white/80 bg-transparent border-none cursor-pointer shrink-0">
+                  {isPlaying ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" /></svg>
+                  )}
+                </button>
+                <span className="text-[11px] text-white/90 tabular-nums min-w-[34px] text-right shrink-0 leading-none">{formatDuration(currentTime)}</span>
+                <div className="flex-1 flex items-center">
+                  <input type="range" min={0} max={duration || 0} step={0.1} value={currentTime} onChange={handleSeek} className="w-full h-1 appearance-none bg-white/30 rounded-full cursor-pointer nodrag [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer" />
+                </div>
+                <span className="text-[11px] text-white/90 tabular-nums min-w-[34px] shrink-0 leading-none">{formatDuration(duration)}</span>
+                <button onClick={handleExtractFrame} title="截帧" className="h-6 w-6 p-0 flex items-center justify-center text-white hover:text-white/80 bg-transparent border-none cursor-pointer shrink-0">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 待生成占位 */}
+          {!nodeData?.loading && !nodeData?.error && !videoError && !displayUrl && mode === 'awaiting' && (
+            <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[var(--bg-tertiary)]">
+              <Video size={28} className="text-[var(--text-secondary)] opacity-20" />
+              <span className="text-xs text-[var(--text-secondary)] opacity-30">待生成</span>
+            </div>
+          )}
+
+          {/* 上传占位 */}
+          {!nodeData?.loading && !nodeData?.error && !videoError && !displayUrl && mode === 'upload' && (
+            <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-[var(--bg-tertiary)]">
+              <Video size={28} className="text-[var(--text-secondary)] opacity-20" />
+            </div>
+          )}
+
+          {/* "尝试"菜单 */}
+          {!nodeData?.loading && !nodeData?.error && !videoError && !displayUrl && mode === 'menu' && (
+            <div className="w-full flex flex-col justify-center gap-2 px-6 py-8" style={{ minHeight: 180 }}>
+              <p className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</p>
+              <div className="w-full space-y-1">
+                <button onClick={handleStartEndVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Video size={14} className="opacity-50 shrink-0" />首尾帧生成视频
+                </button>
+                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Sparkles size={14} className="opacity-50 shrink-0" />首帧生成视频
+                </button>
+              </div>
+            </div>
           )}
         </div>
+
+        <TapNodeHandle type="target" position={Position.Left} id="left" />
+        <TapNodeHandle type="source" position={Position.Right} id="right" />
       </div>
 
-      {/* Preview Section */}
-      <div className="px-3 py-2">
-        <OutputPreview
-          outputs={outputs}
-          activeIndex={activeOutputIndex}
-          onActiveIndexChange={setActiveOutputIndex}
-          loading={loading}
-          error={error}
-          mode="video"
-          width={394}
-        />
-      </div>
-
-      {/* Divider */}
-      <div className="mx-3 border-t border-[var(--border-color)]" />
-
-      {/* Control Panel */}
-      <div className="bg-[var(--bg-secondary)]/50 rounded-b-xl">
-        {/* Style Presets + Ref Images */}
-        <div className="px-3 pt-2">
-          <StylePresetsRow
-            activeStyleId={activeStyleId}
-            onStyleChange={handleStyleChange}
-            refImages={allRefImages}
-            onRefImageRemove={handleRefImageRemove}
-          />
+      {/* 悬浮工具栏 */}
+      {showActions && displayUrl && !nodeData?.loading && (
+        <div className="absolute left-1/2 z-[1001]" style={{ top: -56, transform: 'translateX(-50%)' }} onPointerDown={e => e.stopPropagation()}>
+          <div className="w-fit h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap" style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleExtractFrame(e) }}
+              className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer"
+            >
+              <Image size={14} /><span>截帧</span>
+            </button>
+            <div className="w-px h-5 bg-white/15 mx-1 shrink-0" />
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDownload(e) }}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors"
+              title="下载"
+            >
+              <Download size={14} />
+            </button>
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePreview(e) }}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors"
+              title="预览"
+            >
+              <Eye size={14} />
+            </button>
+          </div>
         </div>
+      )}
 
-        {/* Prompt Input */}
-        <div className="px-3 pt-2">
-          <PromptInput
-            value={prompt}
-            onChange={handlePromptChange}
-            onSubmit={handleGenerate}
-            disabled={loading}
-            onRefImageAdd={handleRefImageAdd}
-            maxRefImages={videoCaps.maxRefImages}
-            currentRefCount={allRefImages.length}
-          />
-        </div>
-
-        {/* Generation Toolbar */}
-        <div className="px-3 py-2">
-          <GenerationToolbar
-            modelOptions={MODEL_OPTIONS}
-            model={model}
-            onModelChange={handleModelChange}
-            sizeLabel="比例"
-            sizeOptions={ratioOptions}
-            size={ratio}
-            onSizeChange={handleRatioChange}
-            cameraPreset={cameraPreset}
-            onCameraPresetChange={handleCameraChange}
-            loopCount={loopCount}
-            onLoopCountChange={handleLoopCountChange}
-            onGenerate={handleGenerate}
-            loading={loading}
-            disabled={false}
-          />
-        </div>
-
-        {/* Advanced Settings */}
-        <div className="px-3 pb-2">
-          <AdvancedSettings
-            mode="video"
-            durOptions={durOptions}
-            dur={duration}
-            onDurChange={handleDurChange}
-            sizeOptions={sizeOptions.map((s: any) => typeof s === 'string' ? { key: s, label: s } : s)}
-            size={size}
-            onSizeChange={handleSizeChange}
-            resolutionOptions={resolutionOptions}
-            resolution={resolution}
-            onResolutionChange={handleResolutionChange}
-            supportsFirstFrame={!!modelCfg?.supportsFirstFrame}
-            supportsLastFrame={!!modelCfg?.supportsLastFrame}
-            firstFrameUrl={firstFrameUrl}
-            onFirstFrameChange={(url, mediaId) => { setFirstFrameUrl(url); setFirstFrameMediaId(mediaId || ''); debouncedSync({ firstFrameUrl: url, firstFrameMediaId: mediaId }) }}
-            onFirstFrameClear={() => { setFirstFrameUrl(''); setFirstFrameMediaId(''); debouncedSync({ firstFrameUrl: '', firstFrameMediaId: '' }) }}
-            lastFrameUrl={lastFrameUrl}
-            onLastFrameChange={(url, mediaId) => { setLastFrameUrl(url); setLastFrameMediaId(mediaId || ''); debouncedSync({ lastFrameUrl: url, lastFrameMediaId: mediaId }) }}
-            onLastFrameClear={() => { setLastFrameUrl(''); setLastFrameMediaId(''); debouncedSync({ lastFrameUrl: '', lastFrameMediaId: '' }) }}
-            supportsAudio={!!(modelCfg as any)?.supportsAudio || !!(modelCfg as any)?.supportsSound}
-            audioEnabled={viduAudio}
-            onAudioToggle={(v) => { setViduAudio(v); debouncedSync({ viduAudio: v }) }}
-            tips={modelCfg?.tips}
-          />
-        </div>
-      </div>
-
-      {/* Connection handles */}
-      <TapNodeHandle type="target" position={Position.Left} id="left" />
-      <TapNodeHandle type="source" position={Position.Right} id="right" />
+      {previewModalOpen && previewUrl && createPortal(
+        <MediaPreviewModal open={previewModalOpen} url={previewUrl} type="video" onClose={() => setPreviewModalOpen(false)} />,
+        document.body
+      )}
     </div>
   )
 })

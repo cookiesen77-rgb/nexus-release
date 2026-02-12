@@ -37,8 +37,11 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   const [showActions, setShowActions] = useState(false)
   const [editToolbarBusy, setEditToolbarBusy] = useState(false)
   const [editToolbarHover, setEditToolbarHover] = useState(false)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const toolbarHoverRef = useRef(false)
   const [cropModalOpen, setCropModalOpen] = useState(false)
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
+  const [imgHeight, setImgHeight] = useState(250)
   const persistAttemptedRef = React.useRef<string>('')
   const loadErrorFallbackRef = React.useRef<string>('')
   
@@ -235,8 +238,8 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     }
   }, [id])
 
-  const handleDownload = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleDownload = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     if (!nodeData?.url) {
       window.$message?.warning?.('暂无图片可下载')
       return
@@ -268,21 +271,22 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     }
   }, [id, nodeData?.url])
 
-  // TapNow: 图生图 — 创建 Image→Image 连接
+  // TapNow: 图生图 — 创建 Image→ImageConfig 连接
   const handleImageGen = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find((n) => n.id === id)
     if (node) {
-      const newImageId = store.addNode('image', { x: node.x + 350, y: node.y }, { label: 'Image' })
-      store.addEdge(id, newImageId, { sourceHandle: 'right', targetHandle: 'left' })
-      store.setSelected(newImageId)
+      store.patchNodeDataSilent(id, { _fromWorkflow: true })
+      const newId = store.addNode('imageConfig', { x: node.x + 350, y: node.y }, { label: '图片生成', _awaitingGeneration: true })
+      store.addEdge(id, newId, { sourceHandle: 'right', targetHandle: 'left' })
+      store.setSelected(newId)
     }
   }, [id])
 
   // 裁剪功能
-  const handleCrop = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleCrop = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
     if (!nodeData?.url) {
       window.$message?.warning?.('暂无图片可裁剪')
       return
@@ -310,8 +314,8 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     ? nodeData.sourceUrl 
     : nodeData?.url
   
-  const handlePreview = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handlePreview = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
     if (!nodeData?.url) {
       window.$message?.warning?.('暂无图片可预览')
       return
@@ -319,26 +323,28 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     setPreviewModalOpen(true)
   }, [nodeData?.url])
 
-  // TapNow: 图生视频 — 创建 Image→Video 连接
+  // TapNow: 图生视频 — 创建 Image→VideoConfig 连接
   const handleVideoGen = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find((n) => n.id === id)
     if (node) {
-      const videoId = store.addNode('video', { x: node.x + 350, y: node.y }, { label: 'Video' })
+      store.patchNodeDataSilent(id, { _fromWorkflow: true })
+      const videoId = store.addNode('videoConfig', { x: node.x + 350, y: node.y }, { label: '视频生成', _awaitingGeneration: true })
       store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left' })
       store.setSelected(videoId)
     }
   }, [id])
 
-  // TapNow: 首帧图生视频 — 同图生视频
+  // 首帧图生视频: 搭建 Image→VideoConfig 工作流, edge标记first_frame角色
   const handleFirstFrameVideo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find((n) => n.id === id)
     if (node) {
-      const videoId = store.addNode('video', { x: node.x + 350, y: node.y }, { label: 'Video' })
-      store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left' })
+      store.patchNodeDataSilent(id, { _fromWorkflow: true })
+      const videoId = store.addNode('videoConfig', { x: node.x + 350, y: node.y }, { label: '视频生成', _awaitingGeneration: true })
+      store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
       store.setSelected(videoId)
     }
   }, [id])
@@ -346,8 +352,8 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   // 替换图片功能
   const replaceInputRef = useRef<HTMLInputElement>(null)
 
-  const handleReplaceClick = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleReplaceClick = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     
     if (isTauri) {
       // Tauri 环境：使用 dialog API
@@ -465,20 +471,40 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     e.target.value = ''
   }, [id, nodeData?.label])
 
+  const cancelHide = useCallback(() => {
+    if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }
+  }, [])
+
+  const scheduleHide = useCallback(() => {
+    cancelHide()
+    hideTimerRef.current = setTimeout(() => {
+      if (!toolbarHoverRef.current && !editToolbarBusy) setShowActions(false)
+    }, 200)
+  }, [cancelHide, editToolbarBusy])
+
+  const handleToolbarHoverChange = useCallback((hovering: boolean) => {
+    toolbarHoverRef.current = hovering
+    setEditToolbarHover(hovering)
+    if (hovering) { cancelHide(); setShowActions(true) }
+    else scheduleHide()
+  }, [cancelHide, scheduleHide])
+
+  useEffect(() => () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }, [])
+
   return (
     <div
       ref={inViewRef}
       className="relative"
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => !editToolbarBusy && !editToolbarHover && setShowActions(false)}
+      onMouseEnter={() => { cancelHide(); setShowActions(true) }}
+      onMouseLeave={scheduleHide}
     >
       {/* TapNow: 节点主体 */}
       <div
-        className="group relative overflow-visible rounded-[12px] bg-[var(--bg-secondary)]"
-        style={{ width: '100%', height: '100%', minWidth: 250, minHeight: 250 }}
+        className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
+        style={{ width: '100%', minWidth: 250, height: imgHeight, minHeight: 120 }}
       >
         {/* TapNow: 标签浮在节点上方 */}
-        <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap text-sm">
+        <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontSize: '17.1429px' }}>
           {nodeData?.label || '图片'}
           {refIndex && (
             <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-blue-500 text-white rounded">
@@ -490,27 +516,42 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
         {/* TapNow: 内容区 edge-to-edge */}
         <div className="absolute inset-0 w-full h-full overflow-visible">
           {!inView && !nodeData?.url && !nodeData?.loading ? (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-[var(--text-secondary)] rounded-lg bg-[var(--bg-tertiary)]">
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-[var(--text-secondary)] rounded-2xl bg-[var(--bg-tertiary)]">
               <ImageIcon size={32} className="opacity-20" />
             </div>
           ) : nodeData?.loading ? (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-3 rounded-lg bg-[var(--bg-tertiary)]">
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)]">
               <Loader2 size={28} className="animate-spin text-[var(--text-secondary)]" />
               <span className="text-xs text-[var(--text-secondary)]">生成中...</span>
             </div>
           ) : nodeData?.error ? (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-red-500 rounded-lg bg-[var(--bg-tertiary)]">
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-red-500 rounded-2xl bg-[var(--bg-tertiary)]">
               <span className="text-xl">⚠</span>
               <span className="text-xs text-center px-4 line-clamp-2">{nodeData.error}</span>
+            </div>
+          ) : (data as any)?._fromWorkflow && !nodeData?.url ? (
+            <div
+              className="w-full h-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)] cursor-pointer hover:bg-[var(--bg-tertiary)]/80 transition-colors"
+              onClick={handleReplaceClick}
+              onPointerDown={e => e.stopPropagation()}
+            >
+              <Upload size={28} className="text-[var(--text-secondary)] opacity-30" />
+              <span className="text-xs text-[var(--text-secondary)] opacity-40">点击上传图片</span>
             </div>
           ) : nodeData?.url ? (
             <>
               <img
                 src={nodeData.url}
                 alt={nodeData.label || '图片'}
-                className="w-full h-full object-cover rounded-lg"
+                className="w-full h-full object-cover rounded-2xl"
                 draggable={false}
                 loading="lazy"
+                onLoad={(e) => {
+                  const img = e.currentTarget
+                  if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                    setImgHeight(Math.round(250 * (img.naturalHeight / img.naturalWidth)))
+                  }
+                }}
                 onError={() => {
                   try {
                     const store = useGraphStore.getState()
@@ -549,19 +590,19 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
             <div className="w-full h-full flex flex-col justify-center gap-2 px-6 py-8">
               <span className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</span>
               <div className="w-full space-y-1">
-                <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <Upload size={14} className="shrink-0 opacity-50" />
                   图生图
                 </button>
-                <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <Upload size={14} className="shrink-0 opacity-50" />
                   图生视频
                 </button>
-                <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <ImageIcon size={14} className="shrink-0 opacity-50" />
                   图片换背景
                 </button>
-                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <Video size={14} className="shrink-0 opacity-50" />
                   首帧图生视频
                 </button>
@@ -582,11 +623,11 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
           imageUrl={nodeData.url}
           visible={showActions || editToolbarBusy || editToolbarHover}
           onBusyChange={setEditToolbarBusy}
-          onHoverChange={setEditToolbarHover}
-          onReplace={() => handleReplaceClick({} as any)}
-          onCrop={() => handleCrop({} as any)}
-          onDownload={() => handleDownload({} as any)}
-          onPreview={() => handlePreview({} as any)}
+          onHoverChange={handleToolbarHoverChange}
+          onReplace={() => handleReplaceClick()}
+          onCrop={() => handleCrop()}
+          onDownload={() => handleDownload()}
+          onPreview={() => handlePreview()}
         />
       )}
 

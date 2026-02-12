@@ -223,8 +223,7 @@ const getConnectedInputs = (configId: string) => {
       promptEdges.push({ edge, idx, order: Number.isFinite(order) && order > 0 ? order : 999999 })
       continue
     }
-    if (sourceNode?.type === 'image') {
-      const order = Number((edge.data as any)?.imageOrder)
+    if (sourceNode?.type === 'image' || sourceNode?.type === 'imageConfig') {
       imageEdges.push({ edge, idx, order: Number.isFinite(order) && order > 0 ? order : 999999 })
       continue
     }
@@ -246,8 +245,7 @@ const getConnectedInputs = (configId: string) => {
       const text = normalizeText((sourceNode.data as any)?.content || '')
       console.log('[getConnectedInputs] 提取到文本:', text?.slice(0, 50))
       if (text) promptParts.push(text)
-    } else if (sourceNode.type === 'image') {
-      // 优先 base64，其次 url（与 Vue 版本一致）
+    } else if (sourceNode.type === 'image' || sourceNode.type === 'imageConfig') {
       const imageData = (sourceNode.data as any)?.base64 || (sourceNode.data as any)?.url || (sourceNode.data as any)?.sourceUrl || ''
       if (imageData) refImages.push(imageData)
     }
@@ -396,7 +394,7 @@ export const generateImageFromConfigNode = async (
   let forceOutput = false
   if (forcedOutputId) {
     const forcedNode = store.nodes.find((n) => n.id === forcedOutputId)
-    if (forcedNode?.type === 'image') {
+    if (forcedNode?.type === 'image' || forcedNode?.type === 'imageConfig') {
       forceOutput = true
       // 强制使用指定输出节点
       store.updateNode(forcedOutputId, { data: { loading: true, error: '' } } as any)

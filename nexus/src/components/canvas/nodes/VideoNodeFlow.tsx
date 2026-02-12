@@ -8,7 +8,7 @@ import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from '
 import { createPortal } from 'react-dom'
 import { Position, NodeProps } from '@xyflow/react'
 import { TapNodeHandle } from './shared/TapNodeHandle'
-import { Trash2, Copy, Expand, Video, Image, Eye, Download, X, RefreshCw, Loader2 } from 'lucide-react'
+import { Trash2, Copy, Expand, Video, Image, Eye, Download, X, RefreshCw, Loader2, Sparkles } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
 import { downloadFile } from '@/lib/download'
@@ -55,6 +55,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   const [corsMode, setCorsMode] = useState<'anonymous' | 'none'>('anonymous')
   const [downloading, setDownloading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistAttemptedRef = useRef<string>('')
   const loadErrorFallbackRef = useRef<string>('')
   const [isPlaying, setIsPlaying] = useState(false)
@@ -68,6 +69,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   })
 
   const displayUrl = nodeData?.url || ''
+  const previewUrl = displayUrl || (nodeData?.sourceUrl && isRecoverableSourceUrl(nodeData.sourceUrl) ? nodeData.sourceUrl : '')
 
   // URL 变化时：清理错误并重置 CORS 策略（先尝试 anonymous，失败再降级）
   useEffect(() => {
@@ -187,11 +189,11 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     void persist()
   }, [id, nodeData?.url, nodeData?.mediaId, nodeData?.sourceUrl, nodeData?.model])
 
-  const togglePlay = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
+  const togglePlay = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
     const v = videoRef.current
     if (!v) return
-    if (v.paused) { v.play(); setIsPlaying(true) }
+    if (v.paused) { v.play().catch(() => {}); setIsPlaying(true) }
     else { v.pause(); setIsPlaying(false) }
   }, [])
 
@@ -216,13 +218,13 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     setIsPlaying(false)
   }, [])
 
-  const handleDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleDelete = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
     useGraphStore.getState().removeNode(id)
   }, [id])
 
-  const handleDuplicate = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleDuplicate = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find((n) => n.id === id)
     if (node) {
@@ -233,8 +235,8 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   // 替换视频功能
   const replaceInputRef = useRef<HTMLInputElement>(null)
 
-  const handleReplaceClick = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleReplaceClick = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     
     if (isTauri) {
       // Tauri 环境：使用 dialog API
@@ -349,8 +351,8 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     e.target.value = ''
   }, [id, nodeData?.label])
 
-  const handleExtractFrame = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleExtractFrame = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     if (!displayUrl || !videoRef.current) {
       window.$message?.warning?.('视频未就绪，请稍后再试')
       return
@@ -383,51 +385,64 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   }, [id, displayUrl])
 
   // 预览功能 - 在应用内模态框中显示
-  const handlePreview = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!displayUrl) {
+  const handlePreview = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    if (!previewUrl) {
       window.$message?.warning?.('暂无视频可预览')
       return
     }
     setPreviewModalOpen(true)
-  }, [displayUrl])
+  }, [previewUrl])
 
-  const handleDownload = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleDownload = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     if (downloading) return
-    if (!displayUrl) {
+    const candidates = [displayUrl, nodeData?.sourceUrl]
+      .map(v => String(v || '').trim())
+      .filter((v, i, arr) => v && arr.indexOf(v) === i)
+
+    if (candidates.length === 0) {
       window.$message?.warning?.('暂无视频可下载')
       return
     }
 
-    const downloadUrl = (nodeData?.sourceUrl && isRecoverableSourceUrl(nodeData.sourceUrl))
-      ? nodeData.sourceUrl
-      : displayUrl
-
-    console.log('[VideoNode] 下载视频, URL类型:',
-      downloadUrl.startsWith('data:') ? 'data:' :
-      downloadUrl.startsWith('asset:') ? 'asset:' :
-      downloadUrl.startsWith('http') ? 'http' : 'unknown',
-      'URL长度:', downloadUrl.length
-    )
-
     setDownloading(true)
+    let lastErr: any = null
     try {
-      const success = await downloadFile({
-        url: downloadUrl,
-        filename: `video_${Date.now()}.mp4`,
-        mimeType: 'video/mp4'
-      })
-      if (success) {
-        window.$message?.success?.('下载成功')
+      for (const url of candidates) {
+        console.log('[VideoNode] 下载视频尝试:',
+          url.startsWith('data:') ? 'data:' :
+          url.startsWith('asset:') ? 'asset:' :
+          url.startsWith('http') ? 'http' : 'unknown',
+          'URL长度:', url.length
+        )
+
+        try {
+          const success = await downloadFile({
+            url,
+            filename: `video_${Date.now()}.mp4`,
+            mimeType: 'video/mp4'
+          })
+          if (success) {
+            window.$message?.success?.('下载成功')
+            return
+          }
+        } catch (err: any) {
+          lastErr = err
+          continue
+        }
       }
+
+      if (lastErr) throw lastErr
+      throw new Error('下载失败')
     } catch (err: any) {
       console.error('[VideoNode] 下载失败:', err)
       const errMsg = err?.message || String(err) || '未知错误'
       if (errMsg.includes('CORS') || errMsg.includes('Failed to fetch')) {
         window.$message?.warning?.('跨域限制，正在尝试直接打开...')
+        const fallback = candidates[0]
         const link = document.createElement('a')
-        link.href = downloadUrl
+        link.href = fallback
         link.target = '_blank'
         link.rel = 'noopener noreferrer'
         document.body.appendChild(link)
@@ -478,6 +493,30 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     reader.readAsDataURL(file)
   }, [id])
 
+  // 首尾帧生成视频: 创建2个ImageConfig节点(首帧+尾帧) + 两条连线
+  const handleStartEndVideo = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const store = useGraphStore.getState()
+    const node = store.nodes.find(n => n.id === id)
+    if (!node) return
+    store.patchNodeDataSilent(id, { _awaitingGeneration: true })
+    const firstId = store.addNode('imageConfig', { x: node.x - 350, y: node.y - 160 }, { label: '首帧', _fromWorkflow: true })
+    const lastId = store.addNode('imageConfig', { x: node.x - 350, y: node.y + 160 }, { label: '尾帧', _fromWorkflow: true })
+    store.addEdge(firstId, id, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
+    store.addEdge(lastId, id, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'last_frame_image' } })
+  }, [id])
+
+  // 首帧生成视频: 创建1个ImageConfig节点(首帧) + 连线
+  const handleFirstFrameVideo = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const store = useGraphStore.getState()
+    const node = store.nodes.find(n => n.id === id)
+    if (!node) return
+    store.patchNodeDataSilent(id, { _awaitingGeneration: true })
+    const firstId = store.addNode('imageConfig', { x: node.x - 350, y: node.y }, { label: '首帧', _fromWorkflow: true })
+    store.addEdge(firstId, id, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
+  }, [id])
+
   const handleVideoError = useCallback(() => {
     const url = String(displayUrl || '').trim()
     if (corsMode === 'anonymous' && /^https?:\/\//i.test(url)) {
@@ -522,23 +561,24 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     setVideoError('视频加载失败')
   }, [corsMode, displayUrl, id, nodeData?.sourceUrl, nodeData?.mediaId])
 
+  const showToolbar = (showActions || selected) && displayUrl && !nodeData?.loading
+
   return (
     <div
       ref={inViewRef}
       className="relative"
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
+      onMouseEnter={() => { if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }; setShowActions(true) }}
+      onMouseLeave={() => { hideTimerRef.current = setTimeout(() => setShowActions(false), 200) }}
     >
-      {/* 标签 - TapNow 风格 */}
-      <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap text-sm">{nodeData?.label || '视频'}</div>
-
       {/* 节点主体 - 纯内容卡片 */}
       <div
-        className="group relative overflow-visible rounded-[12px] bg-[var(--bg-secondary)]"
-        style={{ width: '100%', height: '100%', minWidth: 250, minHeight: 250 }}
+        className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
+        style={{ width: 444, minHeight: 250 }}
       >
+        {/* 标签 - TapNow 风格 */}
+        <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontSize: '17.1429px' }}>{nodeData?.label || '视频'}</div>
         {/* 视频内容 - edge-to-edge */}
-        <div className="bg-[var(--bg-secondary)]">
+        <div className="bg-[var(--bg-secondary)] rounded-2xl overflow-hidden relative">
           {!inView && !displayUrl && !nodeData?.loading && (
             <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-[var(--bg-tertiary)]">
               <Video size={28} className="text-[var(--text-secondary)] opacity-30" />
@@ -569,7 +609,10 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
           )}
 
           {(inView || displayUrl) && !nodeData?.loading && !nodeData?.error && !videoError && displayUrl && (
-            <div className="aspect-video bg-black relative">
+            <div
+              className="aspect-video bg-black relative"
+              onDoubleClick={(e) => { e.stopPropagation(); togglePlay() }}
+            >
               <video
                 key={`${displayUrl}|${corsMode}`}
                 ref={videoRef}
@@ -577,13 +620,15 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
                 crossOrigin={corsMode === 'anonymous' && isHttpUrl(displayUrl) ? 'anonymous' : undefined}
                 playsInline
                 preload="auto"
-                className="w-full h-full object-contain nodrag"
+                className="w-full h-full object-contain pointer-events-none select-none"
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
                 onError={handleVideoError}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
                 onEnded={handleVideoEnded}
-                onClick={togglePlay}
               />
+              <div className="absolute inset-0 z-10" />
               {/* TapNow-style hover control bar */}
               <div className="video-controls-bar nodrag absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2.5 pt-8 flex items-center gap-2.5 opacity-0 translate-y-1 pointer-events-none">
                 <button onClick={togglePlay} className="h-6 w-6 p-0 flex items-center justify-center text-white hover:text-white/80 bg-transparent border-none cursor-pointer shrink-0">
@@ -613,21 +658,26 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
             </div>
           )}
 
-          {inView && !nodeData?.loading && !nodeData?.error && !videoError && !displayUrl && (
+          {inView && !nodeData?.loading && !nodeData?.error && !videoError && !displayUrl && ((data as any)?._fromWorkflow || (data as any)?._awaitingGeneration) && (
+            <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-[var(--bg-tertiary)]">
+              <Video size={28} className="text-[var(--text-secondary)] opacity-20" />
+              {(data as any)?._awaitingGeneration && <span className="text-xs text-[var(--text-secondary)] opacity-30">待生成</span>}
+            </div>
+          )}
+
+          {inView && !nodeData?.loading && !nodeData?.error && !videoError && !displayUrl && !(data as any)?._fromWorkflow && !(data as any)?._awaitingGeneration && (
             <div className="w-full h-full flex flex-col justify-center gap-2 px-6 py-8">
               <p className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</p>
               <div className="w-full space-y-1">
-                <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors">首尾帧生成视频</button>
-                <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors">首帧生成视频</button>
+                <button onClick={handleStartEndVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Video size={14} className="opacity-50 shrink-0" />
+                  首尾帧生成视频
+                </button>
+                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Sparkles size={14} className="opacity-50 shrink-0" />
+                  首帧生成视频
+                </button>
               </div>
-              <input
-                type="file"
-                accept="video/*"
-                className="absolute inset-0 opacity-0 cursor-pointer nodrag"
-                onChange={handleFileUpload}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-              />
             </div>
           )}
         </div>
@@ -637,37 +687,60 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       </div>
 
       {/* TapNow: 视频悬浮工具栏 (选中有内容时显示) */}
-      {showActions && displayUrl && !nodeData?.loading && (
+      {showToolbar && (
         <div
-          className="absolute left-1/2 z-[1001]"
+          className="absolute left-1/2 z-[1001] nodrag"
           style={{ top: -56, transform: 'translateX(-50%)' }}
+          onMouseDown={e => e.stopPropagation()}
           onPointerDown={e => e.stopPropagation()}
+          onMouseEnter={() => { if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }; setShowActions(true) }}
+          onMouseLeave={() => { hideTimerRef.current = setTimeout(() => setShowActions(false), 200) }}
         >
           <div
             className="w-fit h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap"
             style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}
           >
-            <button onClick={handleExtractFrame} className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer" title="截帧">
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleExtractFrame() }}
+              className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer"
+              title="截帧"
+            >
               <Image size={14} />
               <span>截帧</span>
             </button>
-            <button onClick={handleReplaceClick} className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer" title="替换">
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleReplaceClick() }}
+              className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer"
+              title="替换"
+            >
               <RefreshCw size={14} />
               <span>替换</span>
             </button>
             <div className="w-px h-5 bg-white/15 mx-1 shrink-0" />
-            <button onClick={handleDownload} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="下载">
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDownload() }}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors"
+              title="下载"
+            >
               <Download size={14} />
             </button>
-            <button onClick={handlePreview} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="预览">
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePreview() }}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors"
+              title="预览"
+            >
               <Eye size={14} />
             </button>
           </div>
         </div>
       )}
 
-      {previewModalOpen && displayUrl && createPortal(
-        <MediaPreviewModal open={previewModalOpen} url={displayUrl} type="video" onClose={() => setPreviewModalOpen(false)} />,
+      {previewModalOpen && previewUrl && createPortal(
+        <MediaPreviewModal open={previewModalOpen} url={previewUrl} type="video" onClose={() => setPreviewModalOpen(false)} />,
         document.body
       )}
 

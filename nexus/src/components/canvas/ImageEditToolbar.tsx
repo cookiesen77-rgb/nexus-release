@@ -9,7 +9,6 @@ import React, { memo, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Move,
-  RotateCcw,
   Grid2x2,
   Grid3x3,
   Expand,
@@ -21,7 +20,7 @@ import {
   PencilLine,
   Crop,
   Download,
-  Maximize2
+  Eye
 } from 'lucide-react'
 import ImageEditModal from './ImageEditModal'
 import GridCropModal, { type CropAreaPx } from './GridCropModal'
@@ -64,7 +63,8 @@ interface ToolButton {
 const TOOLS: ToolButton[] = [
   { key: 'inpaint', icon: PaintBucket, label: '重绘', needsInput: false, needsMask: true },
   { key: 'erase', icon: Eraser, label: '擦除', needsInput: false, needsMask: true },
-  { key: 'grid4', icon: Grid2x2, label: '增强', needsInput: false },
+  { key: 'grid4', icon: Grid2x2, label: '四宫格', needsInput: false },
+  { key: 'grid9', icon: Grid3x3, label: '九宫格', needsInput: false },
   { key: 'expand', icon: Expand, label: '扩图', needsInput: false },
   { key: 'cutout', icon: Scissors, label: '抠图', needsInput: true, placeholder: '输入要抠出的对象（如：人物、猫、杯子）' },
   { key: 'pose', icon: Move, label: '多角度', needsInput: true, placeholder: '输入想要的姿态（如：站立、跑步、坐下）' },
@@ -267,8 +267,8 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
                   </button>
                 )}
                 {onPreview && (
-                  <button onClick={onPreview} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="全屏">
-                    <Maximize2 className="h-4 w-4" />
+                  <button onClick={onPreview} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="预览">
+                    <Eye className="h-4 w-4" />
                   </button>
                 )}
               </>

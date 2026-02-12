@@ -46,6 +46,7 @@ import {
 } from '@/lib/directorPresets'
 import { IMAGE_MODELS, DEFAULT_IMAGE_MODEL, DEFAULT_CHAT_MODEL, SEEDREAM_SIZE_OPTIONS, SEEDREAM_4K_SIZE_OPTIONS } from '@/config/models'
 import { useAssetsStore } from '@/store/assets'
+import { useSettingsStore } from '@/store/settings'
 
 interface HistoryEntry {
   storyIdea: string
@@ -772,7 +773,7 @@ export default function DirectorConsole({ open, onClose, onCreateNodes }: Props)
 
     let raw = ''
     try {
-      const aiModel = 'gemini-3-pro-preview-thinking'
+      const aiModel = useSettingsStore.getState().aiAssistantModel
 
       const messages: any[] = [
         { role: 'system', content: currentPreset.systemPrompt || POLISH_SYSTEM_PROMPT }

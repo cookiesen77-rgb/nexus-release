@@ -1,4 +1,5 @@
 import { chatCompletions } from '@/lib/nexusApi'
+import { useSettingsStore } from '@/store/settings'
 import { postJson } from '@/lib/workflow/request'
 import { safeFetch } from '@/lib/safeFetch'
 
@@ -51,7 +52,7 @@ export async function analyzeMultiRefImages(
   secondaryUrls: string[],
   productContext: string,
 ): Promise<{ mainAnalysis: string; secondaryAnalyses: string[]; fusionStrategy: string }> {
-  const model = 'gemini-3-pro-preview-thinking'
+  const model = useSettingsStore.getState().aiAssistantModel
 
   const analyzeOne = (url: string) =>
     chatCompletions({
@@ -85,7 +86,7 @@ export async function buildFusionPrompt(
   secondaryAnalyses: string[],
   userRequest: string,
 ): Promise<string> {
-  const model = 'gemini-3-pro-preview-thinking'
+  const model = useSettingsStore.getState().aiAssistantModel
   return chatCompletions({
     model,
     messages: [
@@ -106,7 +107,7 @@ export async function buildTryOnPrompt(
   productAnalysis: string,
   userRequest: string,
 ): Promise<string> {
-  const model = 'gemini-3-pro-preview-thinking'
+  const model = useSettingsStore.getState().aiAssistantModel
   const raw = await chatCompletions({
     model,
     messages: [

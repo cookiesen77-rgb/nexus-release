@@ -3,7 +3,7 @@ import type { NodeType } from '@/graph/types'
 import { useGraphStore } from '@/graph/store'
 import { getNodeSize } from '@/graph/nodeSizing'
 import { CHAT_MODELS } from '@/config/models'
-import { Clapperboard, Image, Mic, Music, Save, Sparkles, Type, Video, BrainCircuit, Scissors } from 'lucide-react'
+import { Clapperboard, Image, Mic, Music, Save, Sparkles, Type, Video, BrainCircuit, Scissors, Wand2, Film } from 'lucide-react'
 import { saveMedia } from '@/lib/mediaStorage'
 
 // 检测 Tauri 环境
@@ -11,6 +11,8 @@ const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTER
 
 const NODE_OPTIONS: { type: NodeType; name: string; Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; color: string }[] = [
   { type: 'text', name: '文本节点', Icon: Type, color: '#3b82f6' },
+  { type: 'imageConfig', name: '图片生成', Icon: Wand2, color: '#f9a611' },
+  { type: 'videoConfig', name: '视频生成', Icon: Film, color: '#c75efa' },
   { type: 'llm', name: 'LLM 文本生成', Icon: BrainCircuit, color: '#22d37e' },
   { type: 'textSplitter', name: '文本拆分', Icon: Scissors, color: '#f97316' },
   { type: 'klingVideoTool', name: 'Kling 视频工具', Icon: Clapperboard, color: '#f97316' },
@@ -27,6 +29,8 @@ const defaultLabelFor = (type: NodeType) => {
   if (type === 'klingVideoTool') return 'Kling 视频工具'
   if (type === 'klingImageTool') return 'Kling 图片工具'
   if (type === 'klingAudioTool') return 'Kling 音频工具'
+  if (type === 'imageConfig') return '图片生成'
+  if (type === 'videoConfig') return '视频生成'
   if (type === 'image') return '图片'
   if (type === 'video') return '视频'
   if (type === 'audio') return '音频'
@@ -254,7 +258,7 @@ export default function NodePalettePanel({
   }, [spawnAt, onSpawned, onClose])
 
   const spawn = (type: NodeType) => {
-    // 图片/视频/音频节点触发文件选择器
+    // 素材节点走文件选择器
     if (type === 'image' || type === 'video' || type === 'audio') {
       triggerFileUpload(type)
       return
@@ -292,7 +296,7 @@ export default function NodePalettePanel({
       />
       <div className="flex flex-col gap-0.5">
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">生成</div>
-        {options.filter(o => ['text', 'llm', 'textSplitter'].includes(o.type)).map((opt) => (
+        {options.filter(o => ['text', 'imageConfig', 'videoConfig'].includes(o.type)).map((opt) => (
           <button
             key={opt.type}
             onClick={() => spawn(opt.type)}
@@ -302,19 +306,8 @@ export default function NodePalettePanel({
             <span className="truncate text-xs text-[var(--text-primary)]">{opt.name}</span>
           </button>
         ))}
-        <div className="px-2.5 pt-2 pb-1.5 text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">工具</div>
-        {options.filter(o => ['klingVideoTool', 'klingImageTool', 'klingAudioTool'].includes(o.type)).map((opt) => (
-          <button
-            key={opt.type}
-            onClick={() => spawn(opt.type)}
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
-          >
-            <opt.Icon className="h-4 w-4 shrink-0" style={{ color: opt.color }} />
-            <span className="truncate text-xs text-[var(--text-primary)]">{opt.name}</span>
-          </button>
-        ))}
-        <div className="px-2.5 pt-2 pb-1.5 text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">素材</div>
-        {options.filter(o => ['image', 'video', 'audio', 'localSave'].includes(o.type)).map((opt) => (
+        <div className="px-2.5 pt-2 pb-1.5 text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">上传</div>
+        {options.filter(o => ['image', 'video'].includes(o.type)).map((opt) => (
           <button
             key={opt.type}
             onClick={() => spawn(opt.type)}

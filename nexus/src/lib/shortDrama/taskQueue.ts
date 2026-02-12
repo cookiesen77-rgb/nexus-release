@@ -42,8 +42,8 @@ const isRateLimitedError = (err: any) => {
 }
 
 export class ShortDramaTaskQueue {
-  private baseLimits: ShortDramaQueueLimits = { imageConcurrency: 4, videoConcurrency: 2, analysisConcurrency: 1 }
-  private limits: ShortDramaQueueLimits = { imageConcurrency: 4, videoConcurrency: 2, analysisConcurrency: 1 }
+  private baseLimits: ShortDramaQueueLimits = { imageConcurrency: 16, videoConcurrency: 8, analysisConcurrency: 2 }
+  private limits: ShortDramaQueueLimits = { imageConcurrency: 16, videoConcurrency: 8, analysisConcurrency: 2 }
 
   private runningKeys = new Set<string>()
 
@@ -148,8 +148,8 @@ export class ShortDramaTaskQueue {
   }
 
   private getAdaptiveMax(kind: AdaptiveKind) {
-    if (kind === 'image') return Math.max(1, Math.min(16, this.baseLimits.imageConcurrency + 4))
-    return Math.max(1, Math.min(8, this.baseLimits.videoConcurrency + 2))
+    if (kind === 'image') return Math.max(1, Math.min(64, this.baseLimits.imageConcurrency + 8))
+    return Math.max(1, Math.min(32, this.baseLimits.videoConcurrency + 4))
   }
 
   private pendingCount(kind: AdaptiveKind) {

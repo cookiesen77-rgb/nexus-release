@@ -3,11 +3,11 @@ import type { NodeType } from '@/graph/types'
 // 节点宽度配置（高度改为自适应）
 export const NODE_WIDTHS: Record<string, number> = {
   text: 280,
-  imageConfig: 420,
-  videoConfig: 420,
+  imageConfig: 250,
+  videoConfig: 320,
   blendConfig: 300,
-  image: 260,
-  video: 320,
+  image: 250,
+  video: 444,
   audio: 280,
   localSave: 260,
   klingVideoTool: 320,
@@ -20,11 +20,11 @@ export const NODE_WIDTHS: Record<string, number> = {
 // 节点最小高度（用于空间索引估算）
 export const NODE_MIN_HEIGHTS: Record<string, number> = {
   text: 140,
-  imageConfig: 480,
-  videoConfig: 480,
+  imageConfig: 250,
+  videoConfig: 250,
   blendConfig: 200,
-  image: 200,
-  video: 240,
+  image: 250,
+  video: 250,
   audio: 120,
   localSave: 100,
   klingVideoTool: 220,

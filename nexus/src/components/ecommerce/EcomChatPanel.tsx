@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import type { EcomDraftV1, EcomSceneType, EcomChatMessage } from '@/lib/ecommerce/types'
 import { buildEcomSystemPrompt, compactChatHistory, buildMultimodalMessage } from '@/lib/ecommerce/ecomChat'
 import { streamAiAssistant } from '@/lib/nexusApi'
+import { useSettingsStore } from '@/store/settings'
 import { getMedia } from '@/lib/mediaStorage'
 
 interface Props {
@@ -137,7 +138,7 @@ export default function EcomChatPanel({ draft, setDraftSafe, activeScene, onOpen
     const assistantMsg: EcomChatMessage = { role: 'assistant', content: '', timestamp: Date.now() }
     setDraftSafe(prev => ({ ...prev, chatHistory: [...prev.chatHistory, assistantMsg] }))
 
-    const aiModel = 'gemini-3-pro-preview-thinking'
+    const aiModel = useSettingsStore.getState().aiAssistantModel
     const systemPrompt = buildEcomSystemPrompt(draft, activeScene)
     const history = compactChatHistory([...draft.chatHistory, userMsg])
     const apiMessages = [{ role: 'system' as const, content: systemPrompt }, ...history]

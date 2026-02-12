@@ -14,6 +14,7 @@ import { saveMedia, isLargeData, isBase64Data } from '@/lib/mediaStorage'
 import { polishEditPrompt, describeImage, type EditType } from './prompts'
 import { cropToFourGrid, cropToNineGrid, calculateNodePosition, type GridCropAreaPx } from './gridCrop'
 import { chatCompletions } from '@/lib/nexusApi'
+import { useSettingsStore } from '@/store/settings'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
@@ -106,7 +107,7 @@ Keep it under 60 words, in English.`
 
   try {
     const result = await chatCompletions({
-      model: 'gpt-5-mini',
+      model: useSettingsStore.getState().aiAssistantModel,
       messages: [{
         role: 'user',
         content: [

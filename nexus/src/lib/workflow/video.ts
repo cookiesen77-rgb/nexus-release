@@ -692,8 +692,7 @@ const getConnectedInputs = async (configId: string) => {
     if (sourceNode.type === 'text') {
       const text = normalizeText((sourceNode.data as any)?.content || '')
       if (text) promptParts.push(text)
-    } else if (sourceNode.type === 'image') {
-      // 与 Vue 版本对齐：优先使用 base64/DataURL。
+    } else if (sourceNode.type === 'image' || sourceNode.type === 'imageConfig') {
       // 但要避免把本地缓存链接（asset:// / 127.0.0.1）直接传给上游 —— 上游无法访问。
       const nodeData = sourceNode.data as any
       const asStr = (x: any) => (typeof x === 'string' ? x.trim() : '')
@@ -1284,7 +1283,7 @@ export const generateVideoFromConfigNode = async (
   let forceOutput = false
   if (forcedOutputId) {
     const forcedNode = store.nodes.find((n) => n.id === forcedOutputId)
-    if (forcedNode?.type === 'video') {
+    if (forcedNode?.type === 'video' || forcedNode?.type === 'videoConfig') {
       forceOutput = true
       // 强制使用指定输出节点
       store.updateNode(forcedOutputId, { data: { loading: true, error: '' } } as any)
@@ -2096,7 +2095,7 @@ export const generateVideoFromConfigNode = async (
         const connectedImageNodes = store.edges
           .filter(e => e.target === configNodeId)
           .map(e => store.nodes.find(n => n.id === e.source))
-          .filter((n): n is any => n?.type === 'image' && !!(n.data as any)?.sourceUrl)
+          .filter((n): n is any => (n?.type === 'image' || n?.type === 'imageConfig') && !!(n.data as any)?.sourceUrl)
 
         for (const imgNode of connectedImageNodes.slice(0, 3)) {
           const srcUrl = String((imgNode.data as any).sourceUrl || '').trim()

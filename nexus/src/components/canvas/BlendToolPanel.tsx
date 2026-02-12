@@ -12,6 +12,7 @@ import type { GraphNode } from '@/graph/types'
 import { useAssetsStore } from '@/store/assets'
 import { postJson } from '@/lib/workflow/request'
 import { chatCompletions } from '@/lib/nexusApi'
+import { useSettingsStore } from '@/store/settings'
 import { safeFetch } from '@/lib/safeFetch'
 
 interface Props {
@@ -98,7 +99,7 @@ Be extremely specific about identifiable features. Max 100 words.`
   const results = await Promise.all(images.map(async (img) => {
     const base64 = extractBase64(await ensureBase64(img))
     const result = await chatCompletions({
-      model: 'gpt-5-mini',
+      model: useSettingsStore.getState().aiAssistantModel,
       messages: [
         {
           role: 'user',
@@ -180,7 +181,7 @@ Generate a fusion prompt that:
 3. The person should NOT change in any way`
 
   const result = await chatCompletions({
-    model: 'gpt-4o',
+    model: useSettingsStore.getState().aiAssistantModel,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userContent }

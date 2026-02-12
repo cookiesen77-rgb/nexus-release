@@ -424,8 +424,17 @@ export default function HistoryPanel({ onClose, onAddToCanvas }: Props) {
                     loop
                     playsInline
                     preload="metadata"
-                    onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                    onMouseLeave={(e) => (e.target as HTMLVideoElement).pause()}
+                    onMouseEnter={(e) => {
+                      const v = e.currentTarget as HTMLVideoElement
+                      const p = v.play()
+                      if (p && typeof (p as Promise<void>).catch === "function") {
+                        p.catch(() => {})
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      const v = e.currentTarget as HTMLVideoElement
+                      try { v.pause() } catch { /* ignore */ }
+                    }}
                     onError={() => handleMediaError(asset)}
                   />
                 )}

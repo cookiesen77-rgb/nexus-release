@@ -1,6 +1,7 @@
 import React, { memo, useRef, useState, useCallback, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import { callAiAssistant } from '@/lib/nexusApi'
+import { useSettingsStore } from '@/store/settings'
 import {
   inferPolishModeFromText,
   buildPolishUserText,
@@ -96,7 +97,7 @@ export const PromptInput = memo(function PromptInput({
     if (!value.trim() || polishing) return
     setPolishing(true)
     try {
-      const aiModel = 'gemini-3-pro-preview-thinking'
+      const aiModel = useSettingsStore.getState().aiAssistantModel
       const mode = inferPolishModeFromText(value)
       const userText = buildPolishUserText({ mode, userText: value, promptTemplate: null, upstreamInputs: { text: [], images: [] } })
       const systemPrompt = buildPolishSystemPrompt(mode)

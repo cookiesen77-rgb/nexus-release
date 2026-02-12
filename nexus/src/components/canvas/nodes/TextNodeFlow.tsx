@@ -36,6 +36,7 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
 
   const hasContent = !!displayContent.trim()
   const isEmpty = !hasContent && !editing
+  const isFromWorkflow = !!(nodeData as any)?._fromWorkflow
 
   useEffect(() => {
     if (nodeData?.content !== undefined && nodeData.content !== contentRef.current) {
@@ -62,38 +63,42 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
     setTimeout(() => textareaRef.current?.focus(), 50)
   }, [])
 
-  // 文字生视频: text → video
+  // 文字生视频: 搭建 Text→Video 工作流, Text进入编辑模式
   const handleTextToVideo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find(n => n.id === id)
     if (!node) return
-    const videoId = store.addNode('video', { x: node.x + 350, y: node.y }, { label: 'Video' })
+    store.patchNodeDataSilent(id, { _fromWorkflow: true })
+    const videoId = store.addNode('videoConfig', { x: node.x + 350, y: node.y }, { label: '视频生成', _awaitingGeneration: true })
     store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left' })
-    store.setSelected(videoId)
+    setEditing(true)
+    setTimeout(() => textareaRef.current?.focus(), 50)
   }, [id])
 
-  // 图片反推提示词: image → text (当前节点)
+  // 图片反推提示词: imageConfig → text (当前节点)
   const handleImageReverse = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find(n => n.id === id)
     if (!node) return
-    const imageId = store.addNode('image', { x: node.x - 350, y: node.y }, { label: '上传图片' })
+    store.patchNodeDataSilent(id, { _fromWorkflow: true })
+    const imageId = store.addNode('imageConfig', { x: node.x - 350, y: node.y }, { label: '上传图片', _fromWorkflow: true })
     store.addEdge(imageId, id, { sourceHandle: 'right', targetHandle: 'left' })
     store.setSelected(imageId)
-    window.$message?.info?.('请在图片节点上传图片，然后使用底部面板生成提示词')
   }, [id])
 
-  // 文字生音乐: text → audio
+  // 文字生音乐: 搭建 Text→Audio 工作流, Text进入编辑模式
   const handleTextToAudio = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find(n => n.id === id)
     if (!node) return
-    const audioId = store.addNode('audio', { x: node.x + 350, y: node.y }, { label: '音频' })
+    store.patchNodeDataSilent(id, { _fromWorkflow: true })
+    const audioId = store.addNode('audio', { x: node.x + 350, y: node.y }, { label: '音频', _fromWorkflow: true })
     store.addEdge(id, audioId, { sourceHandle: 'right', targetHandle: 'left' })
-    store.setSelected(audioId)
+    setEditing(true)
+    setTimeout(() => textareaRef.current?.focus(), 50)
   }, [id])
 
   return (
@@ -103,17 +108,22 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
       onMouseLeave={() => setShowActions(false)}
     >
       {/* TapNow: 标签在节点上方 */}
-      <div className="group relative overflow-visible rounded-[12px] bg-[var(--bg-secondary)]"
+      <div className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
            style={{ width: DEFAULT_WIDTH, minHeight: DEFAULT_HEIGHT }}
            onDoubleClick={handleDoubleClick}
       >
         {/* 标签 */}
-        <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap text-sm">
+        <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontSize: '17.1429px' }}>
           {nodeData?.label || 'Text'}
         </div>
 
-        {/* 空节点: 功能入口 */}
-        {isEmpty && !editing && (
+        {/* 空节点: 工作流创建的节点显示空白占位, 手动创建的显示功能入口 */}
+        {isEmpty && !editing && isFromWorkflow && (
+          <div className="w-full h-full flex items-center justify-center px-6 py-8 cursor-text" style={{ minHeight: DEFAULT_HEIGHT }} onClick={handleStartEdit} onPointerDown={e => e.stopPropagation()}>
+            <p className="text-sm text-[var(--text-secondary)] opacity-30">双击开始编辑...</p>
+          </div>
+        )}
+        {isEmpty && !editing && !isFromWorkflow && (
           <div className="w-full h-full flex flex-col justify-center gap-2 px-6 py-8" style={{ minHeight: DEFAULT_HEIGHT }}>
             <p className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</p>
             <div className="w-full space-y-1">

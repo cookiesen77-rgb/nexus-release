@@ -661,12 +661,12 @@ export async function* streamAiAssistant(
   const { CHAT_MODELS } = await import('@/config/models')
   const modelCfg = (CHAT_MODELS as any[]).find(m => m.key === modelKey)
 
-  // 判断是否为 Gemini 模型（需要特殊处理）
-  const isGeminiModel = modelKey.includes('gemini') || modelCfg?.format === 'gemini-chat'
+  // 根据模型配置的 format 路由到对应的流式实现
+  const format = modelCfg?.format || ''
 
-  if (isGeminiModel && modelCfg) {
+  if (format === 'gemini-chat' && modelCfg) {
     yield* streamGeminiChat(modelCfg, messages, apiKey, signal, filterThinking)
-  } else if (modelCfg?.format === 'anthropic-chat') {
+  } else if (format === 'anthropic-chat' && modelCfg) {
     yield* streamAnthropicChat(modelCfg, messages, apiKey, signal, filterThinking)
   } else {
     yield* streamOpenAIChat(modelKey, messages, apiKey, signal, filterThinking)
@@ -891,7 +891,6 @@ async function* streamAnthropicChat(
 
   const body: any = {
     model: modelCfg.key,
-    max_tokens: 16384,
     messages: nonSystemMessages,
     stream: true,
   }

@@ -1249,9 +1249,9 @@ export const CHAT_MODELS = [
     {
         label: 'Gemini 3 Pro Thinking',
         key: 'gemini-3-pro-preview-thinking',
-        endpoint: '/v1beta/models/gemini-3-pro-preview-thinking:generateContent',
+        endpoint: '/chat/completions',
         authMode: 'bearer',
-        format: 'gemini-chat'
+        format: 'openai-chat'
     },
     {
         label: 'GPT-5.1 Thinking All',
@@ -1263,16 +1263,16 @@ export const CHAT_MODELS = [
     {
         label: 'Claude Opus 4.6',
         key: 'claude-opus-4-6',
-        endpoint: '/messages',
+        endpoint: '/chat/completions',
         authMode: 'bearer',
-        format: 'anthropic-chat'
+        format: 'openai-chat'
     },
     {
         label: 'Claude Opus 4.5',
         key: 'claude-opus-4-5-20251101',
-        endpoint: '/messages',
+        endpoint: '/chat/completions',
         authMode: 'bearer',
-        format: 'anthropic-chat'
+        format: 'openai-chat'
     },
     {
         label: 'GPT-5 mini（Responses）',

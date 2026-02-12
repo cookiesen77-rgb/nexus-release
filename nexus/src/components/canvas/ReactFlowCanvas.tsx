@@ -21,6 +21,7 @@ import {
   useReactFlow,
   ReactFlowProvider,
   OnNodeDrag,
+  SelectionMode,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useGraphStore } from '@/graph/store'
@@ -199,20 +200,43 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
   if (!initializedRef.current) {
     const state = useGraphStore.getState()
     initialNodesRef.current = state.nodes.map(graphNodeToFlowNode)
-    initialEdgesRef.current = state.edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      sourceHandle: (e.data as any)?.sourceHandle || 'right',
-      targetHandle: (e.data as any)?.targetHandle || 'left',
-      type: normalizeFlowEdgeType(e.type),
-      data: e.data,
-    }))
+    initialEdgesRef.current = state.edges.map((e) => {
+      const nodesById = new Map(state.nodes.map(n => [n.id, n]))
+      const src = nodesById.get(e.source)
+      const dst = nodesById.get(e.target)
+      const isConfigEdge = src?.type === 'imageConfig' || src?.type === 'videoConfig' || dst?.type === 'imageConfig' || dst?.type === 'videoConfig'
+      return {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: (e.data as any)?.sourceHandle || 'right',
+        targetHandle: (e.data as any)?.targetHandle || 'left',
+        type: isConfigEdge ? 'default' : normalizeFlowEdgeType(e.type),
+        data: e.data,
+      }
+    })
     initializedRef.current = true
   }
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodesRef.current)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdgesRef.current)
+
+  // 清理旧的 video dragHandle（此前版本遗留）
+  useEffect(() => {
+    setNodes((prev) => {
+      let changed = false
+      const next = prev.map((n: any) => {
+        if (n?.dragHandle && (n.type === 'video' || n.dragHandle === '.node-drag-handle')) {
+          const clone = { ...n }
+          delete clone.dragHandle
+          changed = true
+          return clone
+        }
+        return n
+      })
+      return changed ? next : prev
+    })
+  }, [setNodes])
 
   // 存储当前节点和边的数量（用于快速检测外部变化）
   const nodeCountRef = useRef(initialNodesRef.current.length)
@@ -264,13 +288,17 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         
         for (const edge of state.edges) {
           if (!edgeIdsRef.current.has(edge.id)) {
+            const nodesById = new Map(state.nodes.map(n => [n.id, n]))
+            const src = nodesById.get(edge.source)
+            const dst = nodesById.get(edge.target)
+            const isConfigEdge = src?.type === 'imageConfig' || src?.type === 'videoConfig' || dst?.type === 'imageConfig' || dst?.type === 'videoConfig'
             addedEdges.push({
               id: edge.id,
               source: edge.source,
               target: edge.target,
               sourceHandle: (edge.data as any)?.sourceHandle || 'right',
               targetHandle: (edge.data as any)?.targetHandle || 'left',
-              type: normalizeFlowEdgeType(edge.type),
+              type: isConfigEdge ? 'default' : normalizeFlowEdgeType(edge.type),
               data: edge.data,
             })
           }
@@ -826,6 +854,29 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     return unsubscribe
   }, [setEdges, setNodes])
 
+  // Delete/Backspace 删除选中的节点和边
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return
+
+      const store = useGraphStore.getState()
+      const nodeIds = store.selectedNodeIds
+      const edgeId = store.selectedEdgeId
+
+      if (nodeIds.length > 0) {
+        e.preventDefault()
+        store.removeNodes(nodeIds)
+      } else if (edgeId) {
+        e.preventDefault()
+        store.removeEdge(edgeId)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // 监听自定义节点更新事件（由 image.ts / video.ts 生成完成后触发）
   // 强制刷新 React Flow 节点，确保新生成的图片/视频能正确显示
   useEffect(() => {
@@ -1031,6 +1082,10 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         edgeTypes={edgeTypes}
         defaultViewport={defaultViewport}
         deleteKeyCode={null}
+        selectionMode={SelectionMode.Partial}
+        panOnDrag={[0, 1, 2]}
+        selectionKeyCode="Shift"
+        multiSelectionKeyCode="Shift"
         minZoom={0.1}
         maxZoom={2}
         onlyRenderVisibleElements={true}

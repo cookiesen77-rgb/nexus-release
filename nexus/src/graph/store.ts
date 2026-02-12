@@ -60,14 +60,17 @@ const asPositiveInt = (v: unknown, fallback: number) => {
 }
 
 const inferEdgeType = (edge: GraphEdge, nodesById: Map<string, GraphNode>): EdgeType => {
+  const s = nodesById.get(edge.source)
+  const dst = nodesById.get(edge.target)
+  // Config 节点之间的边统一用 default 样式（data.imageRole 保留给生成逻辑）
+  const isConfigEdge = s?.type === 'imageConfig' || s?.type === 'videoConfig' || dst?.type === 'imageConfig' || dst?.type === 'videoConfig'
+  if (isConfigEdge) return 'default'
   const t = String(edge.type || '').trim()
   if (t === 'imageRole' || t === 'promptOrder' || t === 'imageOrder') return t
   const d: any = edge.data || {}
   if (d.imageRole) return 'imageRole'
   if (d.promptOrder != null) return 'promptOrder'
   if (d.imageOrder != null) return 'imageOrder'
-  const s = nodesById.get(edge.source)
-  const dst = nodesById.get(edge.target)
   if (s?.type === 'image' && dst?.type === 'videoConfig') return 'imageRole'
   if (s?.type === 'text' && dst?.type === 'imageConfig') return 'promptOrder'
   if (s?.type === 'image' && dst?.type === 'imageConfig') return 'imageOrder'

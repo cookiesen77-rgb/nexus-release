@@ -498,6 +498,7 @@ export default function CanvasContextMenu({
     return (
       <>
         <MenuShell>
+          <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">添加节点</div>
           <button
             className={itemClass}
             onClick={() => {
@@ -505,7 +506,7 @@ export default function CanvasContextMenu({
               onOpenChange(false)
             }}
           >
-            <span>新建文本节点</span>
+            <span>文本节点</span>
           </button>
           <button
             className={itemClass}
@@ -514,7 +515,7 @@ export default function CanvasContextMenu({
               onOpenChange(false)
             }}
           >
-            <span>新建生图配置</span>
+            <span>图片配置节点</span>
           </button>
           <button
             className={itemClass}
@@ -523,26 +524,20 @@ export default function CanvasContextMenu({
               onOpenChange(false)
             }}
           >
-            <span>新建视频配置</span>
+            <span>视频配置节点</span>
           </button>
           {sectionSep}
           <button
             className={itemClass}
             onClick={() => triggerFileUpload('image', world)}
           >
-            <span>新建图片节点</span>
+            <span>图片上传节点</span>
           </button>
           <button
             className={itemClass}
             onClick={() => triggerFileUpload('video', world)}
           >
-            <span>新建视频节点</span>
-          </button>
-          <button
-            className={itemClass}
-            onClick={() => triggerFileUpload('audio', world)}
-          >
-            <span>新建音频节点</span>
+            <span>视频上传节点</span>
           </button>
         </MenuShell>
         {fileInput}

@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { streamChatCompletions, streamResponses, createResponse, extractTextFromResponses } from '@/api'
+import { useSettingsStore } from '@/store/settings'
 
 // ==================== Types ====================
 
@@ -39,7 +40,7 @@ export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'success' | 'error'
 
 // ==================== Constants ====================
 
-const DEFAULT_CHAT_MODEL = 'gpt-5-mini'
+const getDefaultChatModel = () => useSettingsStore.getState().aiAssistantModel
 const MAX_HISTORY = 100
 
 // ==================== Utilities ====================
@@ -205,7 +206,7 @@ export function useChat(options: ChatOptions = {}) {
       abortControllerRef.current = new AbortController()
 
       try {
-        const modelKey = opts.model || DEFAULT_CHAT_MODEL
+        const modelKey = opts.model || getDefaultChatModel()
         const msgList = await buildMessageList(trimmedContent)
 
         // Append user message

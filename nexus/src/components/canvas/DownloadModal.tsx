@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react'
 import { downloadBatchAsZip } from '@/lib/download'
+import { syncAssetHistoryFromCanvasNodes } from '@/lib/assets/syncFromCanvas'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import HistoryExportPdfModal, { type ExportPdfImageItem } from '@/components/canvas/HistoryExportPdfModal'
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react'
 import type { GraphNode } from '@/graph/types'
 import { useGraphStore } from '@/graph/store'
+import { useAssetsStore } from '@/store/assets'
 
 interface Props {
   open: boolean
@@ -105,6 +107,8 @@ export default function DownloadModal({ open, onClose, nodes: propNodes }: Props
   const storeNodes = useGraphStore((state) => state.nodes)
   const nodes = propNodes ?? storeNodes
   
+  const assets = useAssetsStore((state) => state.assets)
+
   const [selectedTypes, setSelectedTypes] = useState<Set<AssetType>>(new Set(['image', 'video', 'audio']))
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
@@ -113,47 +117,76 @@ export default function DownloadModal({ open, onClose, nodes: propNodes }: Props
   const [pdfOpen, setPdfOpen] = useState(false)
   const [pdfItems, setPdfItems] = useState<ExportPdfImageItem[]>([])
 
+  React.useEffect(() => {
+    if (!open) return
+    syncAssetHistoryFromCanvasNodes({ includeDataUrl: true, includeAssetUrl: true })
+  }, [open])
+
   // Extract downloadable items from nodes
   // 支持 url 和 src 两种字段名（不同来源的节点可能使用不同字段）
   const downloadableItems = useMemo(() => {
     const items: DownloadItem[] = []
+    const seen = new Set<string>()
+
+    const pushItem = (item: DownloadItem) => {
+      const src = trimStr(item.src)
+      if (!src) return
+      const key = item.type + ":" + src
+      if (seen.has(key)) return
+      seen.add(key)
+      items.push({ ...item, src })
+    }
 
     nodes.forEach((node) => {
       const d: any = node.data || {}
       const url = d?.url || d?.src
       const remark = trimStr(d?.remark)
-      if (node.type === 'image' && url) {
-        items.push({
+      if (node.type === "image" && url) {
+        pushItem({
           id: node.id,
-          type: 'image',
+          type: "image",
           src: url,
-          title: d?.title || d?.label || `Image_${node.id}`,
+          title: d?.title || d?.label || ("Image_" + node.id),
           remark: remark || undefined,
           selected: true
         })
-      } else if (node.type === 'video' && url) {
-        items.push({
+      } else if (node.type === "video" && url) {
+        pushItem({
           id: node.id,
-          type: 'video',
+          type: "video",
           src: url,
-          title: d?.title || d?.label || `Video_${node.id}`,
+          title: d?.title || d?.label || ("Video_" + node.id),
           remark: remark || undefined,
           selected: true
         })
-      } else if (node.type === 'audio' && url) {
-        items.push({
+      } else if (node.type === "audio" && url) {
+        pushItem({
           id: node.id,
-          type: 'audio',
+          type: "audio",
           src: url,
-          title: d?.title || d?.label || `Audio_${node.id}`,
+          title: d?.title || d?.label || ("Audio_" + node.id),
           remark: remark || undefined,
           selected: true
         })
       }
     })
 
+    assets.forEach((asset) => {
+      if (!asset) return
+      const src = trimStr(asset.src)
+      if (!src) return
+      const titleFallback = asset.type === "video" ? "历史视频" : asset.type === "audio" ? "历史音频" : "历史图片"
+      pushItem({
+        id: "history:" + asset.id,
+        type: asset.type,
+        src,
+        title: asset.title || titleFallback,
+        selected: true
+      })
+    })
+
     return items
-  }, [nodes])
+  }, [nodes, assets])
 
   // Filtered items based on selected types
   const filteredItems = useMemo(() => {
@@ -320,7 +353,7 @@ export default function DownloadModal({ open, onClose, nodes: propNodes }: Props
             <div className="flex flex-col items-center justify-center py-12 text-[var(--text-secondary)]">
               <FolderDown className="mb-3 h-12 w-12 opacity-40" />
               <div className="text-sm">没有可下载的资源</div>
-              <div className="mt-1 text-xs opacity-70">画布上的图片、视频、音频会显示在这里</div>
+              <div className="mt-1 text-xs opacity-70">画布与历史素材会显示在这里</div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

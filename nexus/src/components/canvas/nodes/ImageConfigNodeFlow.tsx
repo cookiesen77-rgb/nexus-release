@@ -1,398 +1,257 @@
 /**
- * ImageConfigNodeFlow - All-in-one 图片生成节点
+ * ImageConfigNodeFlow - TapNow 风格图片生成节点
  *
- * 合并了提示词输入、配置、风格预设、相机预设、输出预览于一个节点
+ * 和 Image 节点外观一致的纯内容卡片，但自带生成能力：
+ * 空节点 → 显示"尝试"菜单 → 选中后底部面板配置+生成 → 结果写入自身
  */
-import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
 import { Position, NodeProps } from '@xyflow/react'
-import { TapNodeHandle } from './shared/TapNodeHandle'
-import { Trash2, Copy } from 'lucide-react'
+import { Loader2, ImageIcon, Upload, Video } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
-import { getNodeSize } from '@/graph/nodeSizing'
-import { generateImageFromConfigNode } from '@/lib/workflow/image'
-import { IMAGE_MODELS, SEEDREAM_SIZE_OPTIONS, SEEDREAM_4K_SIZE_OPTIONS } from '@/config/models'
-import { getImageModelCaps } from '@/lib/modelCaps'
-import { useSettingsStore } from '@/store/settings'
-import { usePresetsStore } from '@/store/presets'
-import { CAMERA_PRESETS } from '@/lib/cameraControl/presets'
+import { saveMedia, getMedia, getMediaByNodeId } from '@/lib/mediaStorage'
+import { TapNodeHandle } from './shared/TapNodeHandle'
+import ImageEditToolbar from '@/components/canvas/ImageEditToolbar'
 
-import { OutputPreview, type OutputEntry } from './shared/OutputPreview'
-import { PromptInput } from './shared/PromptInput'
-import { StylePresetsRow } from './shared/StylePresetsRow'
-import { GenerationToolbar } from './shared/GenerationToolbar'
+const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
-const getDefaultImageModel = (): string => {
-  const userDefault = useSettingsStore.getState().defaultImageModel
-  if (userDefault && IMAGE_MODELS.some((m: any) => m.key === userDefault)) return userDefault
-  return IMAGE_MODELS[0]?.key || 'gemini-3-pro-image-preview'
-}
-
-const MODEL_OPTIONS = IMAGE_MODELS.map((m: any) => ({ key: m.key, label: m.label }))
-const VALID_MODEL_KEYS = new Set(IMAGE_MODELS.map((m: any) => m.key))
-const getValidModel = (v: string | undefined): string => (v && VALID_MODEL_KEYS.has(v)) ? v : getDefaultImageModel()
-const getModelConfig = (key: string) => IMAGE_MODELS.find((m: any) => m.key === key) || IMAGE_MODELS[0]
-
-const getModelSizeOptions = (key: string) => {
-  const cfg = getModelConfig(key) as any
-  const sizes = cfg?.sizes || ['1:1', '16:9', '9:16', '4:3', '3:4']
-  return sizes.map((s: any) => typeof s === 'string' ? { key: s, label: s } : { key: s.key, label: s.label })
-}
-
-const getModelQualityOptions = (key: string) => {
-  const cfg = getModelConfig(key) as any
-  return cfg?.qualities || []
+interface ConfigData {
+  label?: string
+  url?: string
+  sourceUrl?: string
+  mediaId?: string
+  loading?: boolean
+  error?: string
+  _fromWorkflow?: boolean
 }
 
 export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data, selected }: NodeProps) {
-  const d = data as Record<string, any>
-  const [model, setModel] = useState(() => getValidModel(d?.model))
-  const [size, setSize] = useState(d?.size || '3:4')
-  const [quality, setQuality] = useState(d?.quality || '')
-  const [loopCount, setLoopCount] = useState(d?.loopCount || 1)
-  const [prompt, setPrompt] = useState(d?.prompt || '')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [outputs, setOutputs] = useState<OutputEntry[]>(d?.outputs || [])
-  const [activeOutputIndex, setActiveOutputIndex] = useState(d?.activeOutputIndex || 0)
-  const [activeStyleId, setActiveStyleId] = useState<string | undefined>(d?.activeStyleId)
-  const [cameraPreset, setCameraPreset] = useState<string | undefined>(d?.cameraPreset)
-  const [inlineRefImages, setInlineRefImages] = useState<Array<{ url: string; label?: string }>>(d?.inlineRefImages || [])
+  const nodeData = data as ConfigData
   const [showActions, setShowActions] = useState(false)
+  const [editToolbarBusy, setEditToolbarBusy] = useState(false)
+  const [editToolbarHover, setEditToolbarHover] = useState(false)
+  const replaceInputRef = useRef<HTMLInputElement>(null)
+  const loadAttemptedRef = useRef(false)
+  const persistAttemptedRef = useRef<string>('')
 
-  const updateTimerRef = useRef<number>(0)
+  // Local mode state — 即时切换 UI（不依赖 React Flow data prop 同步）
+  // 'menu' = 显示"尝试"菜单, 'upload' = 可上传参考图, 'awaiting' = 待生成
+  const [mode, setMode] = useState<'menu' | 'upload' | 'awaiting'>(() => {
+    if ((nodeData as any)?._awaitingGeneration) return 'awaiting'
+    if (nodeData?._fromWorkflow) return 'upload'
+    if (nodeData?.url) return 'upload'
+    return 'menu'
+  })
 
-  // Sync external data changes
+  const hasUrl = !!nodeData?.url
+
+  // 从 IndexedDB 恢复
   useEffect(() => {
-    const m = getValidModel(d?.model); if (m !== model) setModel(m)
-    const s = d?.size || '3:4'; if (s !== size) setSize(s)
-    const q = d?.quality || ''; if (q !== quality) setQuality(q)
-    const lc = d?.loopCount || 1; if (lc !== loopCount) setLoopCount(lc)
-    if (d?.prompt !== undefined && d.prompt !== prompt) setPrompt(d.prompt)
-    if (d?.outputs && JSON.stringify(d.outputs) !== JSON.stringify(outputs)) setOutputs(d.outputs)
-  }, [d?.model, d?.size, d?.quality, d?.loopCount, d?.prompt, d?.outputs])
+    const currentUrl = String(nodeData?.url || '').trim()
+    if (currentUrl && !currentUrl.startsWith('blob:')) return
+    if (nodeData?.loading) return
+    if (!nodeData?.mediaId && !nodeData?.sourceUrl) return
+    if (loadAttemptedRef.current) return
+    loadAttemptedRef.current = true
+    void (async () => {
+      try {
+        if (nodeData?.mediaId) {
+          const record = await getMedia(nodeData.mediaId)
+          if (record?.data) { useGraphStore.getState().updateNode(id, { data: { url: record.data, loading: false } } as any); return }
+        }
+        const recordByNode = await getMediaByNodeId(id)
+        if (recordByNode?.data) { useGraphStore.getState().updateNode(id, { data: { url: recordByNode.data, mediaId: recordByNode.id, loading: false } } as any); return }
+        if (nodeData?.sourceUrl && /^https?:\/\//i.test(nodeData.sourceUrl)) {
+          useGraphStore.getState().updateNode(id, { data: { url: nodeData.sourceUrl, loading: false } } as any)
+        }
+      } catch {}
+    })()
+  }, [id, nodeData?.url, nodeData?.mediaId, nodeData?.sourceUrl, nodeData?.loading])
 
-  useEffect(() => () => { if (updateTimerRef.current) clearTimeout(updateTimerRef.current) }, [])
-
-  // Seedream 旧数据迁移：曾把 1K/2K/4K 或像素值写在 size 字段
+  // 持久化 data URL 到 IndexedDB
   useEffect(() => {
-    const cfg = getModelConfig(model) as any
-    if (cfg?.format !== 'doubao-seedream') return
-    const ratioKeys = new Set(getModelSizeOptions(model).map((o: any) => String(o?.key || '').trim()))
-    const resKeys = new Set(getModelQualityOptions(model).map((o: any) => String(o?.key || '').trim()))
-    const curSize = String(size || '').trim()
-    const curQuality = String(quality || '').trim()
-    const defaultRatio = String(cfg?.defaultParams?.size || '3:4')
-    const defaultRes = String(cfg?.defaultParams?.quality || '2K')
-    let nextSize = curSize
-    let nextQuality = curQuality
-    if (!nextQuality || !resKeys.has(nextQuality)) nextQuality = defaultRes
-    if (!ratioKeys.has(nextSize)) {
-      if (/^(1k|2k|4k)$/i.test(nextSize)) {
-        nextQuality = nextSize.toUpperCase()
-        nextSize = defaultRatio
-      } else if (/^\d{3,5}x\d{3,5}$/i.test(nextSize)) {
-        const found2k: any = (SEEDREAM_SIZE_OPTIONS as any[]).find((o: any) => String(o?.key || '').trim() === nextSize)
-        const found4k: any = (SEEDREAM_4K_SIZE_OPTIONS as any[]).find((o: any) => String(o?.key || '').trim() === nextSize)
-        if (found2k?.label) { nextSize = String(found2k.label); nextQuality = '2K' }
-        else if (found4k?.label) { nextSize = String(found4k.label); nextQuality = '4K' }
-        else { nextSize = defaultRatio }
-      } else { nextSize = defaultRatio }
-    }
-    if (nextSize === curSize && nextQuality === curQuality) return
-    setSize(nextSize)
-    setQuality(nextQuality)
-    useGraphStore.getState().updateNode(id, { data: { size: nextSize, quality: nextQuality } } as any)
-  }, [model])
+    const url = String(nodeData?.url || '').trim()
+    if (!url || nodeData?.mediaId || persistAttemptedRef.current === url) return
+    const isDataUrl = url.startsWith('data:')
+    const isBase64Like = !/^https?:\/\//i.test(url) && url.length > 50000
+    if (!isDataUrl && !isBase64Like) return
+    persistAttemptedRef.current = url
+    void (async () => {
+      try {
+        const store = useGraphStore.getState()
+        const mediaId = await saveMedia({ nodeId: id, projectId: store.projectId || 'default', type: 'image', data: url })
+        if (mediaId) store.patchNodeDataSilent(id, { mediaId })
+      } catch {}
+    })()
+  }, [id, nodeData?.url, nodeData?.mediaId])
 
-  const debouncedSync = useCallback((patch: Record<string, any>) => {
-    if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
-    updateTimerRef.current = window.setTimeout(() => {
-      useGraphStore.getState().updateNode(id, { data: patch })
-    }, 300)
-  }, [id])
-
-  // Model config
-  const sizeOptions = useMemo(() => getModelSizeOptions(model), [model])
-  const qualityOptions = useMemo(() => getModelQualityOptions(model), [model])
-  const isResolution = qualityOptions.length > 0 && qualityOptions.every((o: any) => /^\d+k$/i.test(String(o?.key || '')))
-  const qualityLabel = isResolution ? '分辨率' : '画质'
-
-  // Connected ref images
-  const getRefImages = useCallback(() => {
-    const s = useGraphStore.getState()
-    return s.edges
-      .filter(e => e.target === id)
-      .map(e => s.nodes.find(n => n.id === e.source))
-      .filter((n): n is NonNullable<typeof n> => !!n && n.type === 'image' && !!n.data?.url)
-      .map(n => ({ url: String(n.data?.url || ''), label: String(n.data?.label || '') }))
-  }, [id])
-
-  const [refImages, setRefImages] = useState(() => getRefImages())
-  useEffect(() => {
-    let prev = JSON.stringify(refImages)
-    const unsub = useGraphStore.subscribe((state, prevState) => {
-      if (state.edges === prevState.edges && state.nodes === prevState.nodes) return
-      const next = getRefImages()
-      const nextStr = JSON.stringify(next)
-      if (nextStr !== prev) { prev = nextStr; setRefImages(next) }
-    })
-    return unsub
-  }, [getRefImages])
-
-  // Handlers
-  const handleModelChange = useCallback((key: string) => {
-    setModel(key)
-    const cfg = getModelConfig(key) as any
-    const defaultSize = cfg?.defaultParams?.size || sizeOptions[0]?.key || '3:4'
-    const defaultQuality = cfg?.defaultParams?.quality || ''
-    setSize(defaultSize)
-    setQuality(defaultQuality)
-    debouncedSync({ model: key, size: defaultSize, quality: defaultQuality })
-  }, [debouncedSync, sizeOptions])
-
-  const handleSizeChange = useCallback((v: string) => { setSize(v); debouncedSync({ size: v }) }, [debouncedSync])
-  const handleQualityChange = useCallback((v: string) => { setQuality(v); debouncedSync({ quality: v }) }, [debouncedSync])
-  const handleLoopCountChange = useCallback((n: number) => { setLoopCount(n); debouncedSync({ loopCount: n }) }, [debouncedSync])
-  const handlePromptChange = useCallback((v: string) => { setPrompt(v); debouncedSync({ prompt: v }) }, [debouncedSync])
-  const handleStyleChange = useCallback((id_: string | undefined) => { setActiveStyleId(id_); debouncedSync({ activeStyleId: id_ }) }, [debouncedSync])
-  const handleCameraChange = useCallback((name: string | undefined) => { setCameraPreset(name); debouncedSync({ cameraPreset: name }) }, [debouncedSync])
-
-  const handleRefImageAdd = useCallback((url: string) => {
-    setInlineRefImages(prev => {
-      const next = [...prev, { url }]
-      debouncedSync({ inlineRefImages: next })
-      return next
-    })
-  }, [debouncedSync])
-
-  const handleRefImageRemove = useCallback((index: number) => {
-    setInlineRefImages(prev => {
-      const next = prev.filter((_, i) => i !== index)
-      debouncedSync({ inlineRefImages: next })
-      return next
-    })
-  }, [debouncedSync])
-
-  const allRefImages = useMemo(() => [...inlineRefImages, ...refImages], [inlineRefImages, refImages])
-  const caps = useMemo(() => getImageModelCaps(model), [model])
-
-  const handleDelete = useCallback((e: React.MouseEvent) => { e.stopPropagation(); useGraphStore.getState().removeNode(id) }, [id])
-  const handleDuplicate = useCallback((e: React.MouseEvent) => {
+  // "尝试" handlers — 原节点变上传，下游创建待生成节点
+  const handleImageGen = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
     const node = store.nodes.find(n => n.id === id)
-    if (node) store.addNode('imageConfig', { x: node.x + 50, y: node.y + 50 }, { ...node.data })
+    if (!node) return
+    setMode('upload')
+    store.patchNodeDataSilent(id, { _fromWorkflow: true })
+    const newId = store.addNode('imageConfig', { x: node.x + 350, y: node.y }, { label: '图片生成', _awaitingGeneration: true })
+    store.addEdge(id, newId, { sourceHandle: 'right', targetHandle: 'left' })
   }, [id])
 
-  const handleGenerate = useCallback(async () => {
-    // Build effective prompt
-    let effectivePrompt = prompt.trim()
-    if (cameraPreset) {
-      const preset = CAMERA_PRESETS.find(p => p.name === cameraPreset)
-      if (preset) effectivePrompt += ', ' + preset.promptSuffix
-    }
-    if (activeStyleId) {
-      const style = usePresetsStore.getState().getStylePresetById(activeStyleId)
-      if (style) effectivePrompt += ', ' + style.promptSuffix
-    }
+  const handleVideoGen = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const store = useGraphStore.getState()
+    const node = store.nodes.find(n => n.id === id)
+    if (!node) return
+    setMode('upload')
+    store.patchNodeDataSilent(id, { _fromWorkflow: true })
+    const videoId = store.addNode('videoConfig', { x: node.x + 350, y: node.y }, { label: '视频生成', _awaitingGeneration: true })
+    store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left' })
+  }, [id])
 
-    // Check inputs
-    const caps = getImageModelCaps(model)
-    const refs = getRefImages()
-    if (!effectivePrompt && refs.length === 0) {
-      window.$message?.warning?.('请输入提示词或连接参考图')
-      return
-    }
-    if (caps.requiresPrompt && !effectivePrompt) {
-      window.$message?.warning?.('当前模型需要提示词')
-      return
-    }
+  const handleFirstFrameVideo = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const store = useGraphStore.getState()
+    const node = store.nodes.find(n => n.id === id)
+    if (!node) return
+    setMode('upload')
+    store.patchNodeDataSilent(id, { _fromWorkflow: true })
+    const videoId = store.addNode('videoConfig', { x: node.x + 350, y: node.y }, { label: '视频生成', _awaitingGeneration: true })
+    store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
+  }, [id])
 
-    setLoading(true)
-    setError('')
-
-    try {
-      // Sync everything to store before generation
-      if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
-      useGraphStore.getState().updateNode(id, { data: { model, size, quality, loopCount, prompt, _inlinePrompt: effectivePrompt, _inlineRefImages: inlineRefImages.map(r => r.url) } })
-
-      const actualLoopCount = Math.max(1, Math.min(10, loopCount))
-      const outIds: string[] = []
-      const s0 = useGraphStore.getState()
-      const cfgNode = s0.nodes.find(n => n.id === id)
-      if (!cfgNode) throw new Error('节点不存在')
-
-      const baseX = (cfgNode.x || 0) + 500
-      const baseY = (cfgNode.y || 0)
-      const outSize = getNodeSize('image')
-      const spacingY = Math.max(36, (outSize?.h || 200) + 40)
-
-      useGraphStore.getState().withBatchUpdates(() => {
-        for (let i = 0; i < actualLoopCount; i++) {
-          const outId = useGraphStore.getState().addNode('image', { x: baseX, y: baseY + i * spacingY }, {
-            url: '', loading: true, error: '', label: '图像生成结果'
-          })
-          outIds.push(outId)
-          useGraphStore.getState().addEdge(id, outId, { sourceHandle: 'right', targetHandle: 'left' })
+  const handleReplaceClick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isTauri) {
+      try {
+        const { open } = await import('@tauri-apps/plugin-dialog')
+        const { readFile } = await import('@tauri-apps/plugin-fs')
+        const result = await open({ multiple: false, filters: [{ name: '图片', extensions: ['png','jpg','jpeg','gif','webp','bmp'] }] })
+        if (result && typeof result === 'string') {
+          const fileData = await readFile(result)
+          const ext = (result.split('.').pop() || 'png').toLowerCase()
+          const mime: Record<string,string> = { png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp' }
+          const blob = new Blob([fileData], { type: mime[ext] || 'image/png' })
+          const dataUrl = await new Promise<string>(r => { const rd = new FileReader(); rd.onload = () => r(rd.result as string); rd.readAsDataURL(blob) })
+          useGraphStore.getState().updateNode(id, { data: { url: dataUrl, sourceUrl: '', mediaId: undefined, loading: false } })
         }
-      })
-
-      if (actualLoopCount > 1) window.$message?.info?.(`开始并发生成 ${actualLoopCount} 张图片...`)
-
-      const tasks = outIds.map(outId =>
-        generateImageFromConfigNode(id, { model, size, quality }, { outputNodeId: outId, selectOutput: false, markConfigExecuted: false })
-          .then(() => {
-            // After success, capture the output node's URL into our preview
-            const outNode = useGraphStore.getState().nodes.find(n => n.id === outId)
-            if (outNode?.data?.url) {
-              const entry: OutputEntry = {
-                id: outId,
-                url: String(outNode.data.url),
-                sourceUrl: String(outNode.data.sourceUrl || ''),
-                mediaId: String(outNode.data.mediaId || ''),
-                model,
-                createdAt: Date.now(),
-              }
-              setOutputs(prev => {
-                const next = [entry, ...prev].slice(0, 20)
-                useGraphStore.getState().updateNode(id, { data: { outputs: next, activeOutputIndex: 0 } })
-                return next
-              })
-              setActiveOutputIndex(0)
-            }
-            return { ok: true as const, outId }
-          })
-          .catch(err => ({ ok: false as const, outId, err }))
-      )
-
-      const results = await Promise.all(tasks)
-      const okCount = results.filter(r => r.ok).length
-      const failCount = results.length - okCount
-
-      // 删除临时输出节点，结果已存入 outputs 数组
-      useGraphStore.getState().withBatchUpdates(() => {
-        for (const outId of outIds) {
-          useGraphStore.getState().removeNode(outId)
-        }
-      })
-
-      useGraphStore.getState().updateNode(id, { data: { executed: true, _inlinePrompt: undefined } } as any)
-
-      if (failCount === 0) {
-        window.$message?.success?.(actualLoopCount > 1 ? `成功生成 ${okCount} 张图片` : '图片生成成功')
-      } else {
-        window.$message?.warning?.(`成功 ${okCount}，失败 ${failCount}`)
-        if (failCount === results.length) {
-          const firstErr = results.find(r => !r.ok) as any
-          setError(firstErr?.err?.message || '生成失败')
-        }
-      }
-    } catch (err: any) {
-      setError(err?.message || '生成失败')
-      window.$message?.error?.(`生成失败: ${err?.message || '未知错误'}`)
-    } finally {
-      setLoading(false)
+      } catch {}
+    } else {
+      replaceInputRef.current?.click()
     }
-  }, [id, model, size, quality, loopCount, prompt, cameraPreset, activeStyleId, getRefImages])
+  }, [id])
+
+  const handleReplaceFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string
+      if (dataUrl) useGraphStore.getState().updateNode(id, { data: { url: dataUrl, sourceUrl: '', mediaId: undefined, loading: false } })
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }, [id])
 
   return (
     <div
-      className={`rounded-xl border transition-shadow ${
-        selected ? 'ring-2 ring-amber-500/40 shadow-lg shadow-amber-500/20 border-amber-500/50' : 'border-[var(--border-color)] shadow-sm hover:shadow-md'
-      } bg-[var(--bg-primary)]`}
-      style={{ width: 420, borderTop: '3px solid #f59e0b' }}
+      className="relative"
       onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
-      onClick={e => e.stopPropagation()}
+      onMouseLeave={() => !editToolbarBusy && !editToolbarHover && setShowActions(false)}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-amber-500/10 rounded-t-xl">
-        <span className="text-xs font-medium text-[var(--text-primary)]">
-          {d?.label || '图片生成'}
-        </span>
-        <div className="flex items-center gap-1">
-          {showActions && (
-            <>
-              <button onClick={handleDuplicate} className="p-1 rounded hover:bg-[var(--bg-tertiary)]" title="复制">
-                <Copy size={12} className="text-[var(--text-secondary)]" />
+      <div
+        className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
+        style={{ width: 250 }}
+      >
+        {/* 标签 */}
+        <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontSize: '17.1429px' }}>
+          {nodeData?.label || '图片生成'}
+        </div>
+
+        {/* 内容区 */}
+        <div className="w-full overflow-visible" style={{ minHeight: hasUrl ? undefined : 250 }}>
+          {nodeData?.loading ? (
+            <div className="w-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)]" style={{ minHeight: 250 }}>
+              <Loader2 size={28} className="animate-spin text-[var(--text-secondary)]" />
+              <span className="text-xs text-[var(--text-secondary)]">生成中...</span>
+            </div>
+          ) : nodeData?.error ? (
+            <div className="w-full flex flex-col items-center justify-center gap-2 text-red-500 rounded-2xl bg-[var(--bg-tertiary)]" style={{ minHeight: 250 }}>
+              <span className="text-xl">⚠</span>
+              <span className="text-xs text-center px-4 line-clamp-2">{nodeData.error}</span>
+            </div>
+          ) : mode === 'upload' && !hasUrl ? (
+            <div
+              className="w-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)] cursor-pointer hover:bg-[var(--bg-tertiary)]/80 transition-colors"
+              style={{ minHeight: 250 }}
+              onClick={handleReplaceClick}
+              onPointerDown={e => e.stopPropagation()}
+            >
+              <Upload size={28} className="text-[var(--text-secondary)] opacity-30" />
+              <span className="text-xs text-[var(--text-secondary)] opacity-40">点击上传图片</span>
+            </div>
+          ) : mode === 'awaiting' && !hasUrl ? (
+            <div className="w-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)]" style={{ minHeight: 250 }}>
+              <ImageIcon size={28} className="text-[var(--text-secondary)] opacity-20" />
+              <span className="text-xs text-[var(--text-secondary)] opacity-30">待生成</span>
+            </div>
+          ) : hasUrl ? (
+            <div className="relative">
+              <img
+                src={nodeData.url}
+                alt={nodeData.label || '图片'}
+                className="w-full rounded-2xl"
+                draggable={false}
+                loading="lazy"
+                onError={() => useGraphStore.getState().updateNode(id, { data: { loading: false, error: '图片加载失败' } } as any)}
+              />
+              <button
+                onClick={handleReplaceClick}
+                onPointerDown={e => e.stopPropagation()}
+                className="flex items-center gap-1.5 text-white bg-[var(--bg-secondary)]/70 cursor-pointer border border-[var(--border-color)]/50 absolute top-2 right-2 z-5 px-3 py-1.5 rounded-md text-xs font-medium shadow-sm hover:bg-[var(--bg-secondary)]/90 transition-colors"
+              >
+                <Upload size={14} />上传
               </button>
-              <button onClick={handleDelete} className="p-1 rounded hover:bg-red-500/20" title="删除">
-                <Trash2 size={12} className="text-[var(--text-secondary)]" />
-              </button>
-            </>
+            </div>
+          ) : (
+            <div className="w-full flex flex-col justify-center gap-2 px-6 py-8" style={{ minHeight: 250 }}>
+              <span className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</span>
+              <div className="w-full space-y-1">
+                <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Upload size={14} className="shrink-0 opacity-50" />图生图
+                </button>
+                <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Upload size={14} className="shrink-0 opacity-50" />图生视频
+                </button>
+                <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <ImageIcon size={14} className="shrink-0 opacity-50" />图片换背景
+                </button>
+                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                  <Video size={14} className="shrink-0 opacity-50" />首帧图生视频
+                </button>
+              </div>
+            </div>
           )}
         </div>
+
+        <TapNodeHandle type="target" position={Position.Left} id="left" />
+        <TapNodeHandle type="source" position={Position.Right} id="right" />
       </div>
 
-      {/* Preview Section */}
-      <div className="px-3 py-2">
-        <OutputPreview
-          outputs={outputs}
-          activeIndex={activeOutputIndex}
-          onActiveIndexChange={setActiveOutputIndex}
-          loading={loading}
-          error={error}
-          mode="image"
-          width={394}
+      {/* 悬浮工具栏 */}
+      {hasUrl && (
+        <ImageEditToolbar
+          nodeId={id}
+          imageUrl={nodeData.url!}
+          visible={showActions || editToolbarBusy || editToolbarHover}
+          onBusyChange={setEditToolbarBusy}
+          onHoverChange={setEditToolbarHover}
+          onReplace={() => handleReplaceClick({} as any)}
+          onCrop={() => {}}
+          onDownload={() => {}}
+          onPreview={() => {}}
         />
-      </div>
+      )}
 
-      {/* Divider */}
-      <div className="mx-3 border-t border-[var(--border-color)]" />
-
-      {/* Control Panel */}
-      <div className="bg-[var(--bg-secondary)]/50 rounded-b-xl">
-        {/* Style Presets + Ref Images */}
-        <div className="px-3 pt-2">
-          <StylePresetsRow
-            activeStyleId={activeStyleId}
-            onStyleChange={handleStyleChange}
-            refImages={allRefImages}
-            onRefImageRemove={handleRefImageRemove}
-          />
-        </div>
-
-        {/* Prompt Input */}
-        <div className="px-3 pt-2">
-          <PromptInput
-            value={prompt}
-            onChange={handlePromptChange}
-            onSubmit={handleGenerate}
-            disabled={loading}
-            onRefImageAdd={handleRefImageAdd}
-            maxRefImages={caps.maxRefImages}
-            currentRefCount={allRefImages.length}
-          />
-        </div>
-
-        {/* Generation Toolbar */}
-        <div className="px-3 py-2">
-          <GenerationToolbar
-            modelOptions={MODEL_OPTIONS}
-            model={model}
-            onModelChange={handleModelChange}
-            sizeLabel="比例"
-            sizeOptions={sizeOptions}
-            size={size}
-            onSizeChange={handleSizeChange}
-            qualityOptions={qualityOptions}
-            quality={quality}
-            onQualityChange={handleQualityChange}
-            qualityLabel={qualityLabel}
-            cameraPreset={cameraPreset}
-            onCameraPresetChange={handleCameraChange}
-            loopCount={loopCount}
-            onLoopCountChange={handleLoopCountChange}
-            onGenerate={handleGenerate}
-            loading={loading}
-            disabled={false}
-          />
-        </div>
-      </div>
-
-      {/* Connection handles */}
-      <TapNodeHandle type="target" position={Position.Left} id="left" />
-      <TapNodeHandle type="source" position={Position.Right} id="right" />
+      <input ref={replaceInputRef} type="file" accept="image/*" className="hidden" onChange={handleReplaceFile} />
     </div>
   )
 })

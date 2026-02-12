@@ -20,6 +20,7 @@ import { useAssetsStore } from '@/store/assets'
 import { syncAssetHistoryFromCanvasNodes } from '@/lib/assets/syncFromCanvas'
 import CanvasAssistantDrawer from '@/components/canvas/CanvasAssistantDrawer'
 import CanvasBottomPanel from '@/components/canvas/CanvasBottomPanel'
+import HandleDropMenu from '@/components/canvas/HandleDropMenu'
 import NodeRemarkModal from '@/components/canvas/NodeRemarkModal'
 import DownloadModal from '@/components/canvas/DownloadModal'
 import HistoryPanel from '@/components/canvas/HistoryPanel'
@@ -36,7 +37,7 @@ import { getWorkflowById } from '@/config/workflows'
 import { getNodeSize } from '@/graph/nodeSizing'
 import { useSettingsStore } from '@/store/settings'
 import { saveMedia } from '@/lib/mediaStorage'
-import { ChevronDown, ChevronLeft, Download, History, Moon, Play, Settings, Sun, Type, SlidersHorizontal, Settings2, Image, Video, Music, BrainCircuit, Scissors, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Download, History, Moon, Play, Settings, Sun, Type, SlidersHorizontal, Settings2, Image, Video, Loader2 } from 'lucide-react'
 import { runWorkflow } from '@/lib/workflow/run'
 import { saveCurrentAsTemplate } from '@/lib/workflowTemplates'
 
@@ -108,23 +109,18 @@ export default function Canvas() {
   
   // 连接线拖拽菜单状态
   const [connectMenu, setConnectMenu] = useState<{
-    x: number           // 屏幕坐标
+    x: number
     y: number
-    flowX: number       // 画布坐标
+    flowX: number
     flowY: number
     sourceNodeId: string
     sourceNodeType: string
   } | null>(null)
 
-  // 连接菜单文件选择器
-  const connectMenuFileInputRef = useRef<HTMLInputElement | null>(null)
-  const connectMenuPendingTypeRef = useRef<string | null>(null)
-  
   // 右键菜单文件选择器
   const contextMenuFileInputRef = useRef<HTMLInputElement | null>(null)
   const contextMenuPendingTypeRef = useRef<string | null>(null)
   const contextMenuPendingPosRef = useRef<{ flowX: number; flowY: number } | null>(null)
-  const connectMenuPendingInfoRef = useRef<{ flowX: number; flowY: number; sourceNodeId: string } | null>(null)
 
 
   // 保存为模板
@@ -201,13 +197,10 @@ export default function Canvas() {
   // 右键菜单节点选项（不包含本地保存）
   const contextMenuNodeOptions = [
     { type: 'text', name: '文本节点', Icon: Type, color: '#3b82f6' },
-    { type: 'llm', name: 'LLM 文本生成', Icon: BrainCircuit, color: '#22d37e' },
-    { type: 'textSplitter', name: '文本拆分', Icon: Scissors, color: '#f97316' },
-    { type: 'imageConfig', name: '文生图配置', Icon: SlidersHorizontal, color: '#22c55e' },
-    { type: 'videoConfig', name: '视频生成配置', Icon: Settings2, color: '#f59e0b' },
-    { type: 'image', name: '图片节点', Icon: Image, color: '#8b5cf6' },
-    { type: 'video', name: '视频节点', Icon: Video, color: '#ef4444' },
-    { type: 'audio', name: '音频节点', Icon: Music, color: '#0ea5e9' }
+    { type: 'imageConfig', name: '图片配置节点', Icon: SlidersHorizontal, color: '#22c55e' },
+    { type: 'videoConfig', name: '视频配置节点', Icon: Settings2, color: '#f59e0b' },
+    { type: 'image', name: '图片上传节点', Icon: Image, color: '#8b5cf6' },
+    { type: 'video', name: '视频上传节点', Icon: Video, color: '#ef4444' },
   ]
 
   // 处理右键菜单文件选择
@@ -392,7 +385,7 @@ export default function Canvas() {
     
     const store = useGraphStore.getState()
     const data: Record<string, unknown> = {
-      label: type === 'text' ? '文本' : type === 'imageConfig' ? '生图配置' : type === 'videoConfig' ? '视频配置' : type === 'llm' ? 'LLM' : type === 'textSplitter' ? '文本拆分' : type
+      label: type === 'text' ? '文本' : type === 'imageConfig' ? '图片生成' : type === 'videoConfig' ? '视频生成' : type === 'audio' ? '音频' : type
     }
 
     if (type === 'imageConfig') {
@@ -416,6 +409,9 @@ export default function Canvas() {
 
   // 处理连接线拖拽结束（弹出节点选择菜单）
   const handleConnectEnd = useCallback((event: ConnectEndEvent) => {
+    setCtxOpen(false)
+    setCtxPayload(null)
+    setCanvasContextMenu(null)
     setConnectMenu({
       x: event.screenX,
       y: event.screenY,
@@ -426,249 +422,6 @@ export default function Canvas() {
     })
   }, [])
 
-  // 根据来源节点类型过滤可选目标节点 — TapNow 风格: "引用该节点生成"
-  const getConnectMenuOptions = useCallback((sourceType: string) => {
-    const textGen = { type: 'text', name: '文本生成', desc: '脚本、广告词、品牌文案', Icon: Type, color: '#3b82f6' }
-    const imageGen = { type: 'imageConfig', name: '图片生成', Icon: Image, color: '#22c55e' }
-    const videoGen = { type: 'videoConfig', name: '视频生成', Icon: Video, color: '#f59e0b' }
-    const imageEditor = { type: 'klingImageTool', name: '图片编辑器', Icon: SlidersHorizontal, color: '#8b5cf6' }
-
-    switch (sourceType) {
-      case 'image':
-        return [textGen, imageGen, videoGen, imageEditor]
-      case 'video':
-        return [textGen, imageGen, videoGen]
-      case 'text':
-      case 'llm':
-        return [imageGen, videoGen, textGen]
-      default:
-        return [textGen, imageGen, videoGen, imageEditor]
-    }
-  }, [])
-
-  // 处理连接菜单文件选择
-  const handleConnectMenuFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    const type = connectMenuPendingTypeRef.current
-    const info = connectMenuPendingInfoRef.current
-    
-    if (!file || !type || !info) {
-      connectMenuPendingTypeRef.current = null
-      connectMenuPendingInfoRef.current = null
-      e.target.value = ''
-      return
-    }
-    
-    const { flowX, flowY, sourceNodeId } = info
-    const { w, h } = getNodeSize(type)
-    const pos = { x: flowX - w * 0.5, y: flowY - h * 0.5 }
-    
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string
-      if (!dataUrl) return
-      
-      const store = useGraphStore.getState()
-      const newNodeId = store.addNode(type, pos, {
-        label: file.name || (type === 'image' ? '图片' : type === 'video' ? '视频' : '音频'),
-        url: dataUrl,
-        sourceUrl: '',
-        fileName: file.name,
-        fileType: file.type,
-        createdAt: Date.now()
-      })
-      
-      // 自动创建连接
-      store.addEdge(sourceNodeId, newNodeId, {
-        sourceHandle: 'right',
-        targetHandle: 'left',
-      })
-      
-      store.setSelected(newNodeId)
-      
-      // 保存到 IndexedDB
-      const projectId = store.projectId || 'default'
-      try {
-        const mediaId = await saveMedia({
-          nodeId: newNodeId,
-          projectId,
-          type: type as 'image' | 'video' | 'audio',
-          data: dataUrl,
-        })
-        if (mediaId) {
-          store.patchNodeDataSilent(newNodeId, { mediaId })
-        }
-      } catch {
-        // ignore
-      }
-    }
-    reader.readAsDataURL(file)
-    
-    connectMenuPendingTypeRef.current = null
-    connectMenuPendingInfoRef.current = null
-    e.target.value = ''
-  }, [])
-
-  // 触发连接菜单文件选择
-  const triggerConnectMenuFileUpload = useCallback(async (type: string, info: { flowX: number; flowY: number; sourceNodeId: string }) => {
-    connectMenuPendingTypeRef.current = type
-    connectMenuPendingInfoRef.current = info
-    setConnectMenu(null)
-    
-    let filters: Array<{ name: string; extensions: string[] }> = []
-    let accept = ''
-    if (type === 'image') {
-      accept = 'image/*'
-      filters = [{ name: '图片文件', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] }]
-    } else if (type === 'video') {
-      accept = 'video/*'
-      filters = [{ name: '视频文件', extensions: ['mp4', 'webm', 'mov', 'avi', 'mkv'] }]
-    } else if (type === 'audio') {
-      accept = 'audio/*'
-      filters = [{ name: '音频文件', extensions: ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'] }]
-    }
-    
-    if (isTauri) {
-      try {
-        const { open } = await import('@tauri-apps/plugin-dialog')
-        const { readFile } = await import('@tauri-apps/plugin-fs')
-        
-        const result = await open({
-          multiple: false,
-          filters,
-          title: type === 'image' ? '选择图片' : type === 'video' ? '选择视频' : '选择音频'
-        })
-        
-        if (result && typeof result === 'string') {
-          const fileData = await readFile(result)
-          const fileName = result.split('/').pop() || result.split('\\').pop() || 'file'
-          const ext = fileName.split('.').pop()?.toLowerCase() || ''
-          
-          let mimeType = ''
-          if (type === 'image') {
-            const mimeMap: Record<string, string> = { 
-              png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', 
-              gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml' 
-            }
-            mimeType = mimeMap[ext] || 'image/png'
-          } else if (type === 'video') {
-            const mimeMap: Record<string, string> = { 
-              mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', 
-              avi: 'video/x-msvideo', mkv: 'video/x-matroska' 
-            }
-            mimeType = mimeMap[ext] || 'video/mp4'
-          } else if (type === 'audio') {
-            const mimeMap: Record<string, string> = { 
-              mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', 
-              flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4' 
-            }
-            mimeType = mimeMap[ext] || 'audio/mpeg'
-          }
-          
-          const blob = new Blob([fileData], { type: mimeType })
-          const dataUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
-          })
-          
-          const { flowX, flowY, sourceNodeId } = info
-          const { w, h } = getNodeSize(type)
-          const pos = { x: flowX - w * 0.5, y: flowY - h * 0.5 }
-          
-          const store = useGraphStore.getState()
-          const newNodeId = store.addNode(type, pos, {
-            label: fileName,
-            url: dataUrl,
-            sourceUrl: '',
-            fileName,
-            fileType: mimeType,
-            createdAt: Date.now()
-          })
-          
-          store.addEdge(sourceNodeId, newNodeId, {
-            sourceHandle: 'right',
-            targetHandle: 'left',
-          })
-          
-          store.setSelected(newNodeId)
-          
-          // 保存到 IndexedDB
-          const projectId = store.projectId || 'default'
-          try {
-            const mediaId = await saveMedia({
-              nodeId: newNodeId,
-              projectId,
-              type: type as 'image' | 'video' | 'audio',
-              data: dataUrl,
-            })
-            if (mediaId) {
-              store.patchNodeDataSilent(newNodeId, { mediaId })
-            }
-          } catch {
-            // ignore
-          }
-        }
-      } catch (err) {
-        console.error('[Canvas] Tauri 文件选择失败:', err)
-        window.$message?.error?.('文件选择失败，请重试')
-      }
-      connectMenuPendingTypeRef.current = null
-      connectMenuPendingInfoRef.current = null
-    } else {
-      // Web 环境
-      if (connectMenuFileInputRef.current) {
-        connectMenuFileInputRef.current.accept = accept
-        connectMenuFileInputRef.current.click()
-      }
-    }
-  }, [])
-
-  // 从连接线菜单创建节点并自动连接
-  const spawnNodeFromConnectMenu = useCallback((type: string) => {
-    if (!connectMenu) return
-    const { flowX, flowY, sourceNodeId } = connectMenu
-    
-    // 图片/视频/音频节点需要先选择文件
-    if (type === 'image' || type === 'video' || type === 'audio') {
-      triggerConnectMenuFileUpload(type, { flowX, flowY, sourceNodeId })
-      return
-    }
-    
-    const { w, h } = getNodeSize(type)
-    const pos = { x: flowX - w * 0.5, y: flowY - h * 0.5 }
-    
-    const store = useGraphStore.getState()
-    const data: Record<string, unknown> = {
-      label: type === 'text' ? '文本' : type === 'imageConfig' ? '生图配置' : type === 'videoConfig' ? '视频配置' : type === 'llm' ? 'LLM' : type === 'textSplitter' ? '文本拆分' : type
-    }
-
-    if (type === 'imageConfig') {
-      const baseModelCfg: any = (IMAGE_MODELS as any[]).find((m: any) => m.key === DEFAULT_IMAGE_MODEL) || (IMAGE_MODELS as any[])[0]
-      data.model = DEFAULT_IMAGE_MODEL
-      if (baseModelCfg?.defaultParams?.size) data.size = baseModelCfg.defaultParams.size
-      if (baseModelCfg?.defaultParams?.quality) data.quality = baseModelCfg.defaultParams.quality
-    }
-    if (type === 'videoConfig') {
-      const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === DEFAULT_VIDEO_MODEL) || (VIDEO_MODELS as any[])[0]
-      data.model = DEFAULT_VIDEO_MODEL
-      if (baseModelCfg?.defaultParams?.ratio) data.ratio = baseModelCfg.defaultParams.ratio
-      if (baseModelCfg?.defaultParams?.duration) data.dur = baseModelCfg.defaultParams.duration
-      if (baseModelCfg?.defaultParams?.size) data.size = baseModelCfg.defaultParams.size
-    }
-    
-    // 创建新节点
-    const newNodeId = store.addNode(type, pos, data)
-    
-    // 自动创建连接
-    store.addEdge(sourceNodeId, newNodeId, {
-      sourceHandle: 'right',
-      targetHandle: 'left',
-    })
-    
-    store.setSelected(newNodeId)
-    setConnectMenu(null)
-  }, [connectMenu, triggerConnectMenuFileUpload])
 
   // 新事件系统状态
   type ConnectPreviewState =
@@ -1315,10 +1068,8 @@ export default function Canvas() {
           ref={canvasWrapRef}
           data-canvas-wrap="1"
           className="relative h-full w-full bg-[var(--bg-primary)]"
-          onContextMenu={handleCanvasContextMenu}
           onClick={() => {
             setCanvasContextMenu(null)
-            setConnectMenu(null)
           }}
           onDragOver={(e) => {
             e.preventDefault()
@@ -1895,58 +1646,7 @@ export default function Canvas() {
         </div>
       )}
 
-      {/* 画布右键菜单 - 添加节点 */}
-      {canvasContextMenu && (
-        <div
-          className="fixed z-[9999] w-[200px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl py-1"
-          style={{ left: canvasContextMenu.x, top: canvasContextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="px-3 py-2 text-xs text-[var(--text-secondary)] font-medium">添加节点</div>
-          {contextMenuNodeOptions.map((opt) => (
-            <button
-              key={opt.type}
-              onClick={() => spawnNodeFromContextMenu(opt.type)}
-              className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
-            >
-              <opt.Icon className="h-4 w-4" style={{ color: opt.color }} />
-              <span className="text-sm text-[var(--text-primary)]">{opt.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 连接线拖拽菜单 - TapNow 风格: "引用该节点生成" */}
-      {connectMenu && (
-        <div
-          className="fixed z-[9999] w-[260px] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-2xl py-2 overflow-hidden"
-          style={{ left: connectMenu.x, top: connectMenu.y, backdropFilter: 'blur(20px)' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="px-4 py-2 text-xs text-[var(--text-secondary)] font-medium">引用该节点生成</div>
-          {getConnectMenuOptions(connectMenu.sourceNodeType).map((opt) => (
-            <button
-              key={opt.type}
-              onClick={() => spawnNodeFromConnectMenu(opt.type)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-tertiary)] transition-colors"
-            >
-              <opt.Icon className="h-5 w-5 shrink-0" style={{ color: opt.color }} />
-              <div className="flex flex-col">
-                <span className="text-sm text-[var(--text-primary)] font-medium">{opt.name}</span>
-                {(opt as any).desc && <span className="text-xs text-[var(--text-secondary)]">{(opt as any).desc}</span>}
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 连接菜单文件选择器（隐藏） */}
-      <input
-        ref={connectMenuFileInputRef}
-        type="file"
-        className="hidden"
-        onChange={handleConnectMenuFileSelect}
-      />
+      <HandleDropMenu menu={connectMenu} onClose={() => setConnectMenu(null)} />
 
       {/* 右键菜单文件选择器（隐藏） */}
       <input

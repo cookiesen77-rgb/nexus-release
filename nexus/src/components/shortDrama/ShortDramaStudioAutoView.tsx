@@ -287,7 +287,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
 
   // 自动清理"无任务在跑但仍显示 running"的陈旧版本（例如：刷新/重启后遗留的状态）。
   useEffect(() => {
-    const minAgeMs = 20_000
+    const minAgeMs = 300_000 // 5 分钟：避免误杀正在执行的长任务（视频生成可能需要数分钟）
     const now = Date.now()
     const dueTimes: number[] = []
 

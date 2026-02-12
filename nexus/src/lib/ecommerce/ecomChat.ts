@@ -1,5 +1,6 @@
 import type { EcomDraftV1, EcomSceneType, EcomChatMessage, EcomChatContentPart } from './types'
 import { chatCompletions } from '@/lib/nexusApi'
+import { useSettingsStore } from '@/store/settings'
 
 const VISION_CAPABLE = /gpt-4o|gpt-5|gemini|claude-3/i
 
@@ -120,7 +121,7 @@ export async function analyzeEcomImage(imageDataUrl: string, context: string): P
 
 ${context ? `额外上下文: ${context}` : ''}`
 
-  const model = 'gemini-3-pro-preview-thinking'
+  const model = useSettingsStore.getState().aiAssistantModel
 
   return chatCompletions({
     model,
