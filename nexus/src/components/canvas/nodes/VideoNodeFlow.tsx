@@ -636,6 +636,36 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
         <TapNodeHandle type="source" position={Position.Right} id="right" />
       </div>
 
+      {/* TapNow: 视频悬浮工具栏 (选中有内容时显示) */}
+      {showActions && displayUrl && !nodeData?.loading && (
+        <div
+          className="absolute left-1/2 z-[1001]"
+          style={{ top: -56, transform: 'translateX(-50%)' }}
+          onPointerDown={e => e.stopPropagation()}
+        >
+          <div
+            className="w-fit h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap"
+            style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}
+          >
+            <button onClick={handleExtractFrame} className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer" title="截帧">
+              <Image size={14} />
+              <span>截帧</span>
+            </button>
+            <button onClick={handleReplaceClick} className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer" title="替换">
+              <RefreshCw size={14} />
+              <span>替换</span>
+            </button>
+            <div className="w-px h-5 bg-white/15 mx-1 shrink-0" />
+            <button onClick={handleDownload} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="下载">
+              <Download size={14} />
+            </button>
+            <button onClick={handlePreview} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="预览">
+              <Eye size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {previewModalOpen && displayUrl && createPortal(
         <MediaPreviewModal open={previewModalOpen} url={displayUrl} type="video" onClose={() => setPreviewModalOpen(false)} />,
         document.body
