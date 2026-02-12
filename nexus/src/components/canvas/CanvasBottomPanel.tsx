@@ -241,16 +241,18 @@ function ImagePanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
 
 function VideoPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
   const defaultModel = useSettingsStore(s => s.defaultVideoModel) || DEFAULT_VIDEO_MODEL
-  const [model, setModel] = useState(nodeData?.params?.model || defaultModel)
-  const [ratio, setRatio] = useState(nodeData?.params?.aspectRatio || '16:9')
-  const [prompt, setPrompt] = useState(nodeData?.prompt || (hasImageSource ? '根据图片生成视频。' : ''))
-  const [loading, setLoading] = useState(false)
 
   // 检测是否有图片源节点连接（图生视频模式）
   const hasImageSource = useMemo(() => {
     const s = useGraphStore.getState()
     return s.edges.some(e => e.target === nodeId && s.nodes.find(n => n.id === e.source)?.type === 'image')
   }, [nodeId])
+
+  const [model, setModel] = useState(nodeData?.params?.model || defaultModel)
+  const [ratio, setRatio] = useState(nodeData?.params?.aspectRatio || '16:9')
+  const [prompt, setPrompt] = useState(nodeData?.prompt || (hasImageSource ? '根据图片生成视频。' : ''))
+  const [loading, setLoading] = useState(false)
+
   const panelLabel = hasImageSource ? '图生视频' : '文生视频'
 
   const modelCfg = useMemo(() => (VIDEO_MODELS as any[]).find((m: any) => m.key === model) || VIDEO_MODELS[0], [model]) as any
