@@ -4,7 +4,7 @@
  * 
  * 性能优化：使用 IntersectionObserver 实现懒加载
  */
-import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
+import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Position, NodeProps } from '@xyflow/react'
 import { TapNodeHandle } from './shared/TapNodeHandle'
@@ -57,6 +57,9 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   const videoRef = useRef<HTMLVideoElement>(null)
   const persistAttemptedRef = useRef<string>('')
   const loadErrorFallbackRef = useRef<string>('')
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
   
   // 懒加载：只有节点进入可视区域时才加载视频
   const { ref: inViewRef, inView } = useInView({
@@ -183,6 +186,35 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     }
     void persist()
   }, [id, nodeData?.url, nodeData?.mediaId, nodeData?.sourceUrl, nodeData?.model])
+
+  const togglePlay = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const v = videoRef.current
+    if (!v) return
+    if (v.paused) { v.play(); setIsPlaying(true) }
+    else { v.pause(); setIsPlaying(false) }
+  }, [])
+
+  const handleTimeUpdate = useCallback(() => {
+    const v = videoRef.current
+    if (v) setCurrentTime(v.currentTime)
+  }, [])
+
+  const handleLoadedMetadata = useCallback(() => {
+    const v = videoRef.current
+    if (v) setDuration(v.duration)
+  }, [])
+
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = videoRef.current
+    if (!v) return
+    v.currentTime = Number(e.target.value)
+    setCurrentTime(v.currentTime)
+  }, [])
+
+  const handleVideoEnded = useCallback(() => {
+    setIsPlaying(false)
+  }, [])
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -537,25 +569,57 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
           )}
 
           {(inView || displayUrl) && !nodeData?.loading && !nodeData?.error && !videoError && displayUrl && (
-            <div className="aspect-video bg-black">
+            <div className="aspect-video bg-black relative">
               <video
                 key={`${displayUrl}|${corsMode}`}
                 ref={videoRef}
                 src={displayUrl}
-                controls
                 crossOrigin={corsMode === 'anonymous' && isHttpUrl(displayUrl) ? 'anonymous' : undefined}
                 playsInline
                 preload="auto"
                 className="w-full h-full object-contain nodrag"
                 onError={handleVideoError}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={handleVideoEnded}
+                onClick={togglePlay}
               />
+              {/* TapNow-style hover control bar */}
+              <div className="video-controls-bar nodrag absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2.5 pt-8 flex items-center gap-2.5 opacity-0 translate-y-1 pointer-events-none">
+                <button onClick={togglePlay} className="h-6 w-6 p-0 flex items-center justify-center text-white hover:text-white/80 bg-transparent border-none cursor-pointer shrink-0">
+                  {isPlaying ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" /></svg>
+                  )}
+                </button>
+                <span className="text-[11px] text-white/90 tabular-nums min-w-[34px] text-right shrink-0 leading-none">{formatDuration(currentTime)}</span>
+                <div className="flex-1 flex items-center">
+                  <input
+                    type="range"
+                    min={0}
+                    max={duration || 0}
+                    step={0.1}
+                    value={currentTime}
+                    onChange={handleSeek}
+                    className="w-full h-1 appearance-none bg-white/30 rounded-full cursor-pointer nodrag [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer"
+                  />
+                </div>
+                <span className="text-[11px] text-white/90 tabular-nums min-w-[34px] shrink-0 leading-none">{formatDuration(duration)}</span>
+                <button onClick={handleExtractFrame} title="截帧" className="h-6 w-6 p-0 flex items-center justify-center text-white hover:text-white/80 bg-transparent border-none cursor-pointer shrink-0">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                </button>
+              </div>
             </div>
           )}
 
           {inView && !nodeData?.loading && !nodeData?.error && !videoError && !displayUrl && (
-            <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-[var(--bg-tertiary)] border-2 border-dashed border-[var(--border-color)] relative">
-              <Video size={28} className="text-[var(--text-secondary)] opacity-40" />
-              <span className="text-xs text-[var(--text-secondary)] opacity-50">拖放视频或点击上传</span>
+            <div className="w-full h-full flex flex-col justify-center gap-2 px-6 py-8">
+              <p className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</p>
+              <div className="w-full space-y-1">
+                <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors">首尾帧生成视频</button>
+                <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors">首帧生成视频</button>
+              </div>
               <input
                 type="file"
                 accept="video/*"

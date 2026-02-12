@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useRef, useCallback } from 'react'
 import type { NodeType } from '@/graph/types'
 import { useGraphStore } from '@/graph/store'
 import { getNodeSize } from '@/graph/nodeSizing'
-import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS, CHAT_MODELS } from '@/config/models'
-import { Clapperboard, Image, Mic, Music, Save, Settings2, SlidersHorizontal, Sparkles, Type, Video, BrainCircuit, Scissors } from 'lucide-react'
+import { CHAT_MODELS } from '@/config/models'
+import { Clapperboard, Image, Mic, Music, Save, Sparkles, Type, Video, BrainCircuit, Scissors } from 'lucide-react'
 import { saveMedia } from '@/lib/mediaStorage'
 
 // 检测 Tauri 环境
@@ -13,8 +13,6 @@ const NODE_OPTIONS: { type: NodeType; name: string; Icon: React.ComponentType<{ 
   { type: 'text', name: '文本节点', Icon: Type, color: '#3b82f6' },
   { type: 'llm', name: 'LLM 文本生成', Icon: BrainCircuit, color: '#22d37e' },
   { type: 'textSplitter', name: '文本拆分', Icon: Scissors, color: '#f97316' },
-  { type: 'imageConfig', name: '图片生成', Icon: SlidersHorizontal, color: '#22c55e' },
-  { type: 'videoConfig', name: '视频生成', Icon: Settings2, color: '#f59e0b' },
   { type: 'klingVideoTool', name: 'Kling 视频工具', Icon: Clapperboard, color: '#f97316' },
   { type: 'klingImageTool', name: 'Kling 图片工具', Icon: Sparkles, color: '#22c55e' },
   { type: 'klingAudioTool', name: 'Kling 音频工具', Icon: Mic, color: '#0ea5e9' },
@@ -26,8 +24,6 @@ const NODE_OPTIONS: { type: NodeType; name: string; Icon: React.ComponentType<{ 
 
 const defaultLabelFor = (type: NodeType) => {
   if (type === 'text') return '文本'
-  if (type === 'imageConfig') return '图片生成'
-  if (type === 'videoConfig') return '视频生成'
   if (type === 'klingVideoTool') return 'Kling 视频工具'
   if (type === 'klingImageTool') return 'Kling 图片工具'
   if (type === 'klingAudioTool') return 'Kling 音频工具'
@@ -271,19 +267,6 @@ export default function NodePalettePanel({
     useGraphStore.getState().withBatchUpdates(() => {
       const store = useGraphStore.getState()
       const data: Record<string, unknown> = { label }
-      if (type === 'imageConfig') {
-        const baseModelCfg: any = (IMAGE_MODELS as any[]).find((m: any) => m.key === DEFAULT_IMAGE_MODEL) || (IMAGE_MODELS as any[])[0]
-        data.model = DEFAULT_IMAGE_MODEL
-        if (baseModelCfg?.defaultParams?.size) data.size = baseModelCfg.defaultParams.size
-        if (baseModelCfg?.defaultParams?.quality) data.quality = baseModelCfg.defaultParams.quality
-      }
-      if (type === 'videoConfig') {
-        const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === DEFAULT_VIDEO_MODEL) || (VIDEO_MODELS as any[])[0]
-        data.model = DEFAULT_VIDEO_MODEL
-        if (baseModelCfg?.defaultParams?.ratio) data.ratio = baseModelCfg.defaultParams.ratio
-        if (baseModelCfg?.defaultParams?.duration) data.dur = baseModelCfg.defaultParams.duration
-        if (baseModelCfg?.defaultParams?.size) data.size = baseModelCfg.defaultParams.size
-      }
       if (type === 'llm') {
         data.model = (CHAT_MODELS as any[])[0]?.key || 'gemini-3-pro-preview-thinking'
       }
@@ -309,7 +292,7 @@ export default function NodePalettePanel({
       />
       <div className="flex flex-col gap-0.5">
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">生成</div>
-        {options.filter(o => ['text', 'llm', 'textSplitter', 'imageConfig', 'videoConfig'].includes(o.type)).map((opt) => (
+        {options.filter(o => ['text', 'llm', 'textSplitter'].includes(o.type)).map((opt) => (
           <button
             key={opt.type}
             onClick={() => spawn(opt.type)}

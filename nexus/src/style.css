@@ -332,3 +332,13 @@ select option {
 .rf-zooming .react-flow__edges {
   display: none;
 }
+
+/* Video node hover control bar */
+.video-controls-bar {
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out !important;
+}
+.group:hover .video-controls-bar {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: auto !important;
+}
