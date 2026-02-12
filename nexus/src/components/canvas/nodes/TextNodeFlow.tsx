@@ -1,240 +1,99 @@
 /**
- * TextNodeFlow - React Flow 版本的文本节点
- * 完全对齐 Huobao 的 TextNode.vue 实现
- * 
- * 性能优化：
- * 1. 使用 useRef 存储内容，避免每次输入都重渲染
- * 2. 只在 blur 时同步到 store
- * 3. 完全避免订阅 store
+ * TextNodeFlow - TapNow 风格文本节点
+ *
+ * 空节点: 显示功能入口(自己编写/文字生视频/图片反推/文字生音乐)
+ * 有内容: 显示"双击开始编辑..."或实际内容
+ * 编辑模式: 双击进入, 上方格式工具栏
  */
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
 import { Position, NodeProps } from '@xyflow/react'
 import { TapNodeHandle } from './shared/TapNodeHandle'
-import { Copy, Trash2, ImageIcon, Video, Expand, Loader2 } from 'lucide-react'
+import { Pencil, Video, Music, Type, Loader2, Bold, Italic, List, ListOrdered, Minus, Copy, Maximize2, Heading1, Heading2, Heading3, Pilcrow } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
-import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS } from '@/config/models'
+import { DEFAULT_VIDEO_MODEL, VIDEO_MODELS } from '@/config/models'
+import { useSettingsStore } from '@/store/settings'
 import { callAiAssistant } from '@/lib/nexusApi'
-import { 
-  inferPolishModeFromText, 
-  inferPolishModeFromGraph,
-  selectBestPromptTemplate,
-  collectUpstreamInputsForFocus,
-  buildPolishUserText,
-  buildPolishSystemPrompt
-} from '@/lib/polish'
+import { inferPolishModeFromText, buildPolishUserText, buildPolishSystemPrompt } from '@/lib/polish'
 
 interface TextNodeData {
   content?: string
   label?: string
   width?: number
   height?: number
+  mode?: 'empty' | 'edit' | 'display'
 }
 
-// 默认尺寸
-const DEFAULT_WIDTH = 280
-const DEFAULT_HEIGHT = 150
-const MIN_WIDTH = 200
-const MIN_HEIGHT = 100
-const MAX_WIDTH = 600
-const MAX_HEIGHT = 500
+const DEFAULT_WIDTH = 250
+const DEFAULT_HEIGHT = 250
 
 export const TextNodeComponent = memo(function TextNode({ id, data, selected }: NodeProps) {
   const nodeData = data as TextNodeData
-  // 使用 ref 存储内容，避免每次输入都触发重渲染
   const contentRef = useRef(nodeData?.content || '')
   const [displayContent, setDisplayContent] = useState(nodeData?.content || '')
+  const [editing, setEditing] = useState(false)
   const [showActions, setShowActions] = useState(false)
-  const [polishing, setPolishing] = useState(false)
-  
-  // 节点尺寸状态
-  const [nodeWidth, setNodeWidth] = useState(nodeData?.width || DEFAULT_WIDTH)
-  const [nodeHeight, setNodeHeight] = useState(nodeData?.height || DEFAULT_HEIGHT)
-  const [isResizing, setIsResizing] = useState(false)
-  const resizeStartRef = useRef({ x: 0, y: 0, width: 0, height: 0 })
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // 同步外部数据变化（例如从 store 更新）
+  const hasContent = !!displayContent.trim()
+  const isEmpty = !hasContent && !editing
+
   useEffect(() => {
-    if (nodeData?.width && nodeData.width !== nodeWidth) {
-      setNodeWidth(nodeData.width)
+    if (nodeData?.content !== undefined && nodeData.content !== contentRef.current) {
+      contentRef.current = nodeData.content || ''
+      setDisplayContent(nodeData.content || '')
     }
-    if (nodeData?.height && nodeData.height !== nodeHeight) {
-      setNodeHeight(nodeData.height)
-    }
-  }, [nodeData?.width, nodeData?.height])
+  }, [nodeData?.content])
 
-  // 更新内容到 store（只在 blur 时）
-  const handleBlur = useCallback(() => {
-    // 使用 setTimeout 延迟执行，避免阻塞 UI
+  const syncToStore = useCallback(() => {
     setTimeout(() => {
       useGraphStore.getState().updateNode(id, { data: { content: contentRef.current } })
     }, 0)
   }, [id])
 
-  // 调整大小开始
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+  const handleStartEdit = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    e.preventDefault()
-    setIsResizing(true)
-    resizeStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      width: nodeWidth,
-      height: nodeHeight
-    }
+    setEditing(true)
+    setTimeout(() => textareaRef.current?.focus(), 50)
+  }, [])
 
-    let currentWidth = nodeWidth
-    let currentHeight = nodeHeight
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - resizeStartRef.current.x
-      const deltaY = moveEvent.clientY - resizeStartRef.current.y
-
-      currentWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, resizeStartRef.current.width + deltaX))
-      currentHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, resizeStartRef.current.height + deltaY))
-
-      setNodeWidth(currentWidth)
-      setNodeHeight(currentHeight)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizing(false)
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-
-      // 保存尺寸到 store（使用最新值）
-      useGraphStore.getState().updateNode(id, {
-        data: { width: currentWidth, height: currentHeight }
-      })
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [id, nodeWidth, nodeHeight])
-
-  // 删除节点
-  const handleDelete = useCallback((e: React.MouseEvent) => {
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    useGraphStore.getState().removeNode(id)
-  }, [id])
+    setEditing(true)
+    setTimeout(() => textareaRef.current?.focus(), 50)
+  }, [])
 
-  // 复制节点
-  const handleDuplicate = useCallback((e: React.MouseEvent) => {
+  // 文字生视频: text → video
+  const handleTextToVideo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
-    const node = store.nodes.find((n) => n.id === id)
-    if (node) {
-      store.addNode('text', { x: node.x + 50, y: node.y + 50 }, { ...node.data })
-    }
+    const node = store.nodes.find(n => n.id === id)
+    if (!node) return
+    const videoId = store.addNode('video', { x: node.x + 350, y: node.y }, { label: 'Video' })
+    store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left' })
+    store.setSelected(videoId)
   }, [id])
 
-  // 生成图片
-  const handleImageGen = useCallback((e: React.MouseEvent) => {
+  // 图片反推提示词: image → text (当前节点)
+  const handleImageReverse = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
-    const node = store.nodes.find((n) => n.id === id)
-    if (node) {
-      const baseModelCfg: any = (IMAGE_MODELS as any[]).find((m: any) => m.key === DEFAULT_IMAGE_MODEL) || (IMAGE_MODELS as any[])[0]
-      const newNodeId = store.addNode(
-        'imageConfig',
-        { x: node.x + 400, y: node.y },
-        { 
-          label: '文生图',
-          model: DEFAULT_IMAGE_MODEL,
-          size: baseModelCfg?.defaultParams?.size,
-          quality: baseModelCfg?.defaultParams?.quality,
-        }
-      )
-      store.addEdge(id, newNodeId, { sourceHandle: 'right', targetHandle: 'left' })
-    }
+    const node = store.nodes.find(n => n.id === id)
+    if (!node) return
+    const imageId = store.addNode('image', { x: node.x - 350, y: node.y }, { label: '上传图片' })
+    store.addEdge(imageId, id, { sourceHandle: 'right', targetHandle: 'left' })
+    store.setSelected(imageId)
+    window.$message?.info?.('请在图片节点上传图片，然后使用底部面板生成提示词')
   }, [id])
 
-  // 生成视频
-  const handleVideoGen = useCallback((e: React.MouseEvent) => {
+  // 文字生音乐: text → audio
+  const handleTextToAudio = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
-    const node = store.nodes.find((n) => n.id === id)
-    if (node) {
-      const baseModelCfg: any = (VIDEO_MODELS as any[]).find((m: any) => m.key === DEFAULT_VIDEO_MODEL) || (VIDEO_MODELS as any[])[0]
-      const newNodeId = store.addNode(
-        'videoConfig',
-        { x: node.x + 400, y: node.y },
-        { 
-          label: '视频生成',
-          model: DEFAULT_VIDEO_MODEL,
-          ratio: baseModelCfg?.defaultParams?.ratio,
-          dur: baseModelCfg?.defaultParams?.duration,
-          size: baseModelCfg?.defaultParams?.size,
-        }
-      )
-      store.addEdge(id, newNodeId, { sourceHandle: 'right', targetHandle: 'left' })
-    }
-  }, [id])
-
-  // AI 润色
-  const handlePolish = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    const text = contentRef.current.trim()
-    if (!text) {
-      window.$message?.warning?.('请先输入文本内容')
-      return
-    }
-    
-    setPolishing(true)
-    try {
-      const store = useGraphStore.getState()
-      const { nodes, edges } = store
-      
-      // 获取全局 AI 助手模型设置
-      const aiModel = 'gemini-3-pro-preview-thinking'
-      
-      // 1. 推断润色模式
-      const modeFromGraph = inferPolishModeFromGraph(id, nodes, edges)
-      const mode = modeFromGraph || inferPolishModeFromText(text)
-      
-      // 2. 收集上游输入
-      const upstreamInputs = collectUpstreamInputsForFocus({ focusNodeId: id, nodes, edges })
-      
-      // 3. 选择最佳提示词模板
-      const promptTemplate = await selectBestPromptTemplate({
-        mode,
-        userText: text,
-        contextText: ''
-      })
-      
-      // 4. 构建润色请求
-      const userMessage = buildPolishUserText({
-        mode,
-        userText: text,
-        promptTemplate,
-        upstreamInputs
-      })
-      const systemPrompt = buildPolishSystemPrompt(mode)
-      
-      // 5. 调用 AI API（使用全局设置的模型）
-      const polished = await callAiAssistant(
-        aiModel,
-        [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
-        ],
-        { filterThinking: true }
-      )
-      
-      if (polished) {
-        contentRef.current = polished
-        setDisplayContent(polished)
-        // 同步到 store
-        store.updateNode(id, { data: { content: polished } })
-        window.$message?.success?.('润色完成')
-      } else {
-        window.$message?.error?.('润色失败：未获取到结果')
-      }
-    } catch (err: any) {
-      console.error('[TextNode] AI 润色失败:', err)
-      window.$message?.error?.(`润色失败: ${err?.message || '未知错误'}`)
-    } finally {
-      setPolishing(false)
-    }
+    const node = store.nodes.find(n => n.id === id)
+    if (!node) return
+    const audioId = store.addNode('audio', { x: node.x + 350, y: node.y }, { label: '音频' })
+    store.addEdge(id, audioId, { sourceHandle: 'right', targetHandle: 'left' })
+    store.setSelected(audioId)
   }, [id])
 
   return (
@@ -243,78 +102,128 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      {/* 节点主体 */}
-      <div
-        className={`group text-node bg-[var(--bg-secondary)] rounded-xl relative transition-all duration-200 shadow-sm hover:shadow-md ${isResizing ? 'select-none' : ''}`}
-        style={{ width: nodeWidth, minHeight: nodeHeight }}
+      {/* TapNow: 标签在节点上方 */}
+      <div className="group relative overflow-visible rounded-[12px] bg-[var(--bg-secondary)]"
+           style={{ width: DEFAULT_WIDTH, minHeight: DEFAULT_HEIGHT }}
+           onDoubleClick={handleDoubleClick}
       >
-        {/* 标签 (小字) */}
-        <div className="px-3 pt-2 pb-0.5">
-          <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wide">
-            {nodeData?.label || '文本'}
-          </span>
+        {/* 标签 */}
+        <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap text-sm">
+          {nodeData?.label || 'Text'}
         </div>
 
-        {/* 内容 */}
-        <div className="px-3 pb-3 flex flex-col" style={{ height: nodeHeight - 40 }}>
-          <textarea
-            value={displayContent}
-            onChange={(e) => {
-              const val = e.target.value
-              contentRef.current = val
-              setDisplayContent(val)
-            }}
-            onBlur={handleBlur}
-            onMouseDown={(e) => e.stopPropagation()}
-            onWheel={(e) => e.stopPropagation()}
-            className="nodrag nowheel w-full bg-transparent resize-none outline-none text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] placeholder:opacity-40 flex-1 select-text"
-            placeholder="输入描述..."
-            style={{ minHeight: Math.max(60, nodeHeight - 80), userSelect: 'text', WebkitUserSelect: 'text' }}
-          />
-        </div>
-
-        {/* AI 润色按钮 */}
-        <button
-          onClick={handlePolish}
-          disabled={!displayContent.trim() || polishing}
-          className="absolute bottom-2 left-4 px-2 py-0.5 text-xs rounded-md bg-[var(--bg-tertiary)] hover:bg-emerald-500 hover:text-white border border-[var(--border-color)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
-          title="AI 润色"
-        >
-          {polishing ? (
-            <Loader2 size={10} className="animate-spin" />
-          ) : (
-            <span>✨ AI</span>
-          )}
-        </button>
-
-        {/* Hover: 删除按钮 */}
-        {showActions && (
-          <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5">
-            <button onClick={handleDelete} className="p-1 rounded hover:bg-red-500/20 transition-colors" title="删除">
-              <Trash2 size={12} className="text-[var(--text-secondary)]" />
-            </button>
+        {/* 空节点: 功能入口 */}
+        {isEmpty && !editing && (
+          <div className="w-full h-full flex flex-col justify-center gap-2 px-6 py-8" style={{ minHeight: DEFAULT_HEIGHT }}>
+            <p className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</p>
+            <div className="w-full space-y-1">
+              <button
+                onClick={handleStartEdit}
+                onPointerDown={e => e.stopPropagation()}
+                className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2"
+              >
+                <Pencil size={14} className="opacity-50 shrink-0" />
+                自己编写内容
+              </button>
+              <button
+                onClick={handleTextToVideo}
+                onPointerDown={e => e.stopPropagation()}
+                className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2"
+              >
+                <Video size={14} className="opacity-50 shrink-0" />
+                文字生视频
+              </button>
+              <button
+                onClick={handleImageReverse}
+                onPointerDown={e => e.stopPropagation()}
+                className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2"
+              >
+                <Type size={14} className="opacity-50 shrink-0" />
+                图片反推提示词
+              </button>
+              <button
+                onClick={handleTextToAudio}
+                onPointerDown={e => e.stopPropagation()}
+                className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2"
+              >
+                <Music size={14} className="opacity-50 shrink-0" />
+                文字生音乐
+              </button>
+            </div>
           </div>
         )}
 
-        {/* 调整大小手柄 */}
-        <div
-          onMouseDown={handleResizeStart}
-          className="nodrag absolute bottom-0 right-0 w-4 h-4 cursor-se-resize group"
-        >
-          <svg
-            className="absolute bottom-1 right-1 w-2 h-2 text-[var(--text-secondary)] opacity-30 group-hover:opacity-60 transition-opacity"
-            viewBox="0 0 10 10"
-            fill="currentColor"
-          >
-            <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-          </svg>
-        </div>
+        {/* 有内容但不在编辑: 显示内容预览 */}
+        {hasContent && !editing && (
+          <div className="w-full h-full flex items-center justify-center px-6 py-8 cursor-text" style={{ minHeight: DEFAULT_HEIGHT }}>
+            <p className="text-sm text-[var(--text-secondary)] opacity-50 text-center">
+              {displayContent.length > 100 ? displayContent.slice(0, 100) + '...' : displayContent || '双击开始编辑...'}
+            </p>
+          </div>
+        )}
 
-        {/* 连接点 */}
-        <TapNodeHandle type="source" position={Position.Right} id="right" />
+        {/* 编辑模式 */}
+        {editing && (
+          <>
+            {/* 格式工具栏 (TapNow 图4: 上方胶囊) */}
+            <div
+              className="absolute left-1/2 z-[1001] w-fit h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap"
+              style={{ top: -56, transform: 'translateX(-50%)', backgroundColor: 'rgba(20,20,20,0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.08)' }}
+              onPointerDown={e => e.stopPropagation()}
+            >
+              <ToolbarBtn title="段落"><Pilcrow size={14} /></ToolbarBtn>
+              <ToolbarBtn title="H1"><Heading1 size={14} /></ToolbarBtn>
+              <ToolbarBtn title="H2"><Heading2 size={14} /></ToolbarBtn>
+              <ToolbarBtn title="H3"><Heading3 size={14} /></ToolbarBtn>
+              <div className="w-px h-5 bg-white/10 mx-0.5" />
+              <ToolbarBtn title="加粗"><Bold size={14} /></ToolbarBtn>
+              <ToolbarBtn title="斜体"><Italic size={14} /></ToolbarBtn>
+              <ToolbarBtn title="无序列表"><List size={14} /></ToolbarBtn>
+              <ToolbarBtn title="有序列表"><ListOrdered size={14} /></ToolbarBtn>
+              <ToolbarBtn title="分隔线"><Minus size={14} /></ToolbarBtn>
+              <div className="w-px h-5 bg-white/10 mx-0.5" />
+              <ToolbarBtn title="复制"><Copy size={14} /></ToolbarBtn>
+              <ToolbarBtn title="全屏"><Maximize2 size={14} /></ToolbarBtn>
+            </div>
+
+            <div className="w-full p-4" style={{ minHeight: DEFAULT_HEIGHT }}>
+              <textarea
+                ref={textareaRef}
+                value={displayContent}
+                onChange={(e) => {
+                  const val = e.target.value
+                  contentRef.current = val
+                  setDisplayContent(val)
+                }}
+                onBlur={() => { syncToStore(); setEditing(false) }}
+                onMouseDown={e => e.stopPropagation()}
+                onWheel={e => e.stopPropagation()}
+                onKeyDown={e => { if (e.key === 'Escape') { syncToStore(); setEditing(false) } }}
+                className="nodrag nowheel w-full h-full bg-transparent resize-none outline-none text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] placeholder:opacity-40 select-text"
+                placeholder="双击开始编辑..."
+                style={{ minHeight: DEFAULT_HEIGHT - 32, userSelect: 'text', WebkitUserSelect: 'text' }}
+              />
+            </div>
+          </>
+        )}
+
+        {/* ⊕ Handle */}
         <TapNodeHandle type="target" position={Position.Left} id="left" />
+        <TapNodeHandle type="source" position={Position.Right} id="right" />
       </div>
-
     </div>
   )
 })
+
+function ToolbarBtn({ title, children, active, onClick }: { title: string; children: React.ReactNode; active?: boolean; onClick?: () => void }) {
+  return (
+    <button
+      className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${active ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+      title={title}
+      onClick={onClick}
+      onPointerDown={e => e.stopPropagation()}
+    >
+      {children}
+    </button>
+  )
+}

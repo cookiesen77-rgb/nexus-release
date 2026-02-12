@@ -11,7 +11,7 @@ import { callAiAssistant } from '@/lib/nexusApi'
 import { inferPolishModeFromText, buildPolishUserText, buildPolishSystemPrompt } from '@/lib/polish'
 import { getNodeSize } from '@/graph/nodeSizing'
 
-type PanelMode = 'image' | 'video' | null
+type PanelMode = 'image' | 'video' | 'text' | null
 
 const STYLE_PRESETS = [
   { id: 'anime', name: '动漫', suffix: 'anime style, vibrant colors' },
@@ -34,6 +34,7 @@ export default memo(function CanvasBottomPanel() {
     if (!selectedNode) return null
     if (selectedNode.type === 'image') return 'image'
     if (selectedNode.type === 'video') return 'video'
+    if (selectedNode.type === 'text') return 'text'
     return null
   }, [selectedNode?.type])
 
@@ -43,8 +44,10 @@ export default memo(function CanvasBottomPanel() {
     <div className="pointer-events-auto absolute bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-[680px] px-4">
       {mode === 'image' ? (
         <ImagePanel nodeId={selectedNode.id} nodeData={selectedNode.data as any} />
-      ) : (
+      ) : mode === 'video' ? (
         <VideoPanel nodeId={selectedNode.id} nodeData={selectedNode.data as any} />
+      ) : (
+        <TextPanel nodeId={selectedNode.id} nodeData={selectedNode.data as any} />
       )}
     </div>
   )
@@ -328,6 +331,64 @@ function VideoPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
 
         <div className="flex-1" />
 
+        <button
+          onClick={handleGenerate}
+          disabled={loading}
+          className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-40"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowUp size={16} />}
+        </button>
+      </div>
+    </PanelShell>
+  )
+}
+
+// ======================== Text Panel ========================
+
+function TextPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
+  const [model, setModel] = useState('gemini-3-pro-preview-thinking')
+  const [prompt, setPrompt] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [loopCount, setLoopCount] = useState(1)
+
+  const handleGenerate = useCallback(async () => {
+    if (!prompt.trim()) { window.$message?.warning?.('请输入描述'); return }
+    setLoading(true)
+    try {
+      const aiModel = model
+      const result = await callAiAssistant(aiModel, [{ role: 'user', content: prompt }], { filterThinking: true })
+      if (result) {
+        useGraphStore.getState().updateNode(nodeId, { data: { content: result } })
+        window.$message?.success?.('文本生成成功')
+      }
+    } catch (err: any) {
+      window.$message?.error?.(err?.message || '生成失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [nodeId, model, prompt])
+
+  return (
+    <PanelShell>
+      <div className="px-4 py-3">
+        <textarea
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
+          placeholder="描述你想要生成的内容，并在下方调整生成参数。(Enter 生成，Shift+Enter 换行，⌘/Ctrl+I 魔法选择）"
+          rows={2}
+          className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 resize-none outline-none"
+          style={{ minHeight: 36, maxHeight: 100 }}
+          disabled={loading}
+        />
+      </div>
+      <div className="flex items-center gap-1.5 px-4 pb-3 pt-1">
+        <MiniSelect value={model} options={[
+          { value: 'gemini-3-pro-preview-thinking', label: 'Gemini 3 Pro' },
+          { value: 'gpt-4o', label: 'GPT-4o' },
+        ]} onChange={setModel} icon="◇" maxW={160} />
+        <MiniSelect value={String(loopCount)} options={[1,2,3].map(n => ({ value: String(n), label: `${n}x` }))} onChange={v => setLoopCount(Number(v))} maxW={50} />
+        <div className="flex-1" />
         <button
           onClick={handleGenerate}
           disabled={loading}
