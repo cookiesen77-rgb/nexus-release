@@ -113,9 +113,23 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   const [cameraOpen, setCameraOpen] = useState(false)
   const [cameraBody, setCameraBody] = useState(0)
   const [cameraLens, setCameraLens] = useState(0)
-  const [focalLength, setFocalLength] = useState(1) // 24mm default
-  const [aperture, setAperture] = useState(3) // f/4 default
+  const [focalLength, setFocalLength] = useState(1)
+  const [aperture, setAperture] = useState(3)
   const [loopCount, setLoopCount] = useState(1)
+
+  // 订阅连接的参考图（上游 image 节点）
+  const refImages = useGraphStore(s => {
+    const edges = s.edges.filter(e => e.target === nodeId)
+    return edges
+      .map(e => {
+        const src = s.nodes.find(n => n.id === e.source)
+        if (src?.type !== 'image') return null
+        const order = Number((e.data as any)?.imageOrder) || 0
+        return { nodeId: src.id, url: (src.data as any)?.url || '', label: (src.data as any)?.label || '', order, edgeId: e.id }
+      })
+      .filter(Boolean) as Array<{ nodeId: string; url: string; label: string; order: number; edgeId: string }>
+  })
+  const sortedRefImages = useMemo(() => [...refImages].sort((a, b) => (a.order || 999) - (b.order || 999)), [refImages])
 
   const modelCfg = useMemo(() => (IMAGE_MODELS as any[]).find((m: any) => m.key === model) || IMAGE_MODELS[0], [model]) as any
   const sizeOptions = useMemo(() => (modelCfg?.sizes || ['1:1','16:9','9:16','4:3','3:4']).map((s: any) => typeof s === 'string' ? { key: s, label: s } : s), [modelCfg])
@@ -201,8 +215,41 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
 
   return (
     <PanelShell>
+      {/* 风格 + 参考图缩略图行 */}
+      <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 overflow-x-auto scrollbar-hide">
+        <MiniSelect
+          value={activeStyle || ''}
+          options={[{ value: '', label: '无' }, ...STYLE_PRESETS.map(s => ({ value: s.id, label: s.name }))]}
+          onChange={v => setActiveStyle(v || null)}
+          icon="✦"
+          maxW={80}
+        />
+        {sortedRefImages.length > 0 && (
+          <>
+            <div className="w-px h-5 bg-white/10 mx-0.5 shrink-0" />
+            {sortedRefImages.map((img, i) => (
+              <div
+                key={img.edgeId}
+                className="relative shrink-0 cursor-pointer group/ref"
+                title={`${img.label || '参考图'} — 点击修改编号`}
+                onClick={() => {
+                  const input = window.prompt('修改参考图编号', String(img.order || i + 1))
+                  const num = Number(input)
+                  if (input !== null && Number.isFinite(num) && num > 0) {
+                    useGraphStore.getState().updateEdge(img.edgeId, { data: { imageOrder: num } })
+                  }
+                }}
+              >
+                <img src={img.url} alt={img.label} className="w-8 h-8 rounded-md object-cover ring-1 ring-white/20 group-hover/ref:ring-white/50" />
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-blue-500 text-white text-[9px] font-bold leading-none px-0.5">{img.order || i + 1}</span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
       {/* 提示词输入 */}
-      <div className="px-4 py-2 pt-3">
+      <div className="px-4 py-2">
         <div className="relative">
           <textarea
             value={prompt}
@@ -235,16 +282,6 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
           </>
         )}
         <span className="text-white/20 text-xs">·</span>
-        {/* 风格下拉 */}
-        <MiniSelect
-          value={activeStyle || ''}
-          options={[{ value: '', label: '无' }, ...STYLE_PRESETS.map(s => ({ value: s.id, label: s.name }))]}
-          onChange={v => setActiveStyle(v || null)}
-          icon="✦"
-          maxW={80}
-        />
-        <span className="text-white/20 text-xs">·</span>
-        {/* 摄影机控制开关 */}
         <button
           className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${cameraOpen ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/70'}`}
           onClick={() => setCameraOpen(v => !v)}

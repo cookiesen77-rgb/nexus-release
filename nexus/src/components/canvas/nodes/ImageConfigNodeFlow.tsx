@@ -33,6 +33,9 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   const loadAttemptedRef = useRef(false)
   const persistAttemptedRef = useRef<string>('')
 
+  // 检查是否有上游图片连接
+  const hasUpstreamImage = useGraphStore(s => s.edges.some(e => e.target === id && s.nodes.find(n => n.id === e.source)?.type === 'image'))
+
   // Local mode state — 即时切换 UI（不依赖 React Flow data prop 同步）
   // 'menu' = 显示"尝试"菜单, 'upload' = 可上传参考图, 'awaiting' = 待生成
   const [mode, setMode] = useState<'menu' | 'upload' | 'awaiting'>(() => {
@@ -41,6 +44,11 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
     if (nodeData?.url) return 'upload'
     return 'menu'
   })
+
+  // 有上游图片连接时自动切换到 upload 模式
+  useEffect(() => {
+    if (hasUpstreamImage && mode === 'menu') setMode('upload')
+  }, [hasUpstreamImage, mode])
 
   const hasUrl = !!nodeData?.url
 

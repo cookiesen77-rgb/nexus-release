@@ -47,8 +47,10 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   
   // 计算此图片作为参考图/首帧/尾帧的角色标签
   const [roleTag, setRoleTag] = useState<string | null>(null)
+  const [roleEdgeId, setRoleEdgeId] = useState<string | null>(null)
+  const [roleType, setRoleType] = useState<'video' | 'image' | null>(null)
 
-  const computeRoleTag = useCallback(() => {
+  const computeRole = useCallback(() => {
     const state = useGraphStore.getState()
     const outgoingEdges = state.edges.filter(e => e.source === id)
     for (const edge of outgoingEdges) {
@@ -56,33 +58,32 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
       if (!targetNode) continue
       if (targetNode.type === 'videoConfig') {
         const role = String((edge.data as any)?.imageRole || '').trim()
-        if (role === 'first_frame_image') return '首帧'
-        if (role === 'last_frame_image') return '尾帧'
-        if (role === 'input_reference') return '参考图'
+        const tag = role === 'first_frame_image' ? '首帧' : role === 'last_frame_image' ? '尾帧' : role === 'input_reference' ? '参考图' : null
+        if (tag) return { tag, edgeId: edge.id, type: 'video' as const }
       }
       if (targetNode.type === 'imageConfig') {
         const configEdges = state.edges.filter(e => e.target === targetNode.id && state.nodes.find(n => n.id === e.source)?.type === 'image')
         if (configEdges.length > 1) {
-          const idx = configEdges.findIndex(e => e.source === id)
-          return `参考图${idx + 1}`
+          const myEdge = configEdges.find(e => e.source === id)
+          const order = Number((myEdge?.data as any)?.imageOrder) || (configEdges.findIndex(e => e.source === id) + 1)
+          return { tag: `参考图${order}`, edgeId: myEdge?.id || null, type: 'image' as const }
         }
       }
     }
-    return null
+    return { tag: null, edgeId: null, type: null }
   }, [id])
-  
-  // 订阅边变化以更新序号
+
   useEffect(() => {
-    setRoleTag(computeRoleTag())
-    const unsubscribe = useGraphStore.subscribe(
-      (state, prevState) => {
-        if (state.edges !== prevState.edges) {
-          setRoleTag(computeRoleTag())
-        }
+    const r = computeRole()
+    setRoleTag(r.tag); setRoleEdgeId(r.edgeId); setRoleType(r.type)
+    const unsubscribe = useGraphStore.subscribe((state, prevState) => {
+      if (state.edges !== prevState.edges) {
+        const r = computeRole()
+        setRoleTag(r.tag); setRoleEdgeId(r.edgeId); setRoleType(r.type)
       }
-    )
+    })
     return unsubscribe
-  }, [computeRefIndex])
+  }, [computeRole])
   
   // 懒加载：只有节点进入可视区域时才加载图片
   const { ref: inViewRef, inView } = useInView({
@@ -496,7 +497,28 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
         >
           {nodeData?.label || '图片'}
           {roleTag && (
-            <span className={`ml-1.5 px-1.5 py-0.5 text-[10px] font-bold text-white rounded ${roleTag === '首帧' ? 'bg-emerald-500' : roleTag === '尾帧' ? 'bg-orange-500' : 'bg-blue-500'}`}>
+            <span
+              className={`ml-1.5 px-1.5 py-0.5 text-[10px] font-bold text-white rounded cursor-pointer hover:opacity-80 ${roleTag === '首帧' ? 'bg-emerald-500' : roleTag === '尾帧' ? 'bg-orange-500' : 'bg-blue-500'}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!roleEdgeId) return
+                const store = useGraphStore.getState()
+                if (roleType === 'image') {
+                  const input = window.prompt('修改参考图编号', String(roleTag.replace(/\D/g, '') || '1'))
+                  const num = Number(input)
+                  if (input !== null && Number.isFinite(num) && num > 0) {
+                    store.updateEdge(roleEdgeId, { data: { imageOrder: num } })
+                  }
+                } else if (roleType === 'video') {
+                  const roles = ['first_frame_image', 'last_frame_image', 'input_reference']
+                  const labels = ['首帧', '尾帧', '参考图']
+                  const currentIdx = labels.indexOf(roleTag)
+                  const nextIdx = (currentIdx + 1) % roles.length
+                  store.updateEdge(roleEdgeId, { data: { imageRole: roles[nextIdx] } })
+                }
+              }}
+              title={roleType === 'image' ? '点击修改编号' : '点击切换角色'}
+            >
               {roleTag}
             </span>
           )}
