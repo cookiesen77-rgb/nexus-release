@@ -180,7 +180,7 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
       onMouseLeave={() => !editToolbarBusy && !editToolbarHover && setShowActions(false)}
     >
       <div
-        className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
+        className="group relative overflow-visible rounded-xl bg-[var(--bg-secondary)]"
         style={{ width: 250 }}
       >
         {/* 标签 */}
@@ -191,18 +191,18 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
         {/* 内容区 */}
         <div className="w-full overflow-visible" style={{ minHeight: hasUrl ? undefined : 250 }}>
           {nodeData?.loading ? (
-            <div className="w-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)]" style={{ minHeight: 250 }}>
+            <div className="w-full flex flex-col items-center justify-center gap-3 rounded-xl bg-[var(--bg-tertiary)]" style={{ minHeight: 250 }}>
               <Loader2 size={28} className="animate-spin text-[var(--text-secondary)]" />
               <span className="text-xs text-[var(--text-secondary)]">生成中...</span>
             </div>
           ) : nodeData?.error ? (
-            <div className="w-full flex flex-col items-center justify-center gap-2 text-red-500 rounded-2xl bg-[var(--bg-tertiary)]" style={{ minHeight: 250 }}>
+            <div className="w-full flex flex-col items-center justify-center gap-2 text-red-500 rounded-xl bg-[var(--bg-tertiary)]" style={{ minHeight: 250 }}>
               <span className="text-xl">⚠</span>
               <span className="text-xs text-center px-4 line-clamp-2">{nodeData.error}</span>
             </div>
           ) : mode === 'upload' && !hasUrl ? (
             <div
-              className="w-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)] cursor-pointer hover:bg-[var(--bg-tertiary)]/80 transition-colors"
+              className="w-full flex flex-col items-center justify-center gap-3 rounded-xl bg-[var(--bg-tertiary)] cursor-pointer hover:bg-[var(--bg-tertiary)]/80 transition-colors"
               style={{ minHeight: 250 }}
               onClick={handleReplaceClick}
               onPointerDown={e => e.stopPropagation()}
@@ -211,7 +211,7 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
               <span className="text-xs text-[var(--text-secondary)] opacity-40">点击上传图片</span>
             </div>
           ) : mode === 'awaiting' && !hasUrl ? (
-            <div className="w-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)]" style={{ minHeight: 250 }}>
+            <div className="w-full flex flex-col items-center justify-center gap-3 rounded-xl bg-[var(--bg-tertiary)]" style={{ minHeight: 250 }}>
               <ImageIcon size={28} className="text-[var(--text-secondary)] opacity-20" />
               <span className="text-xs text-[var(--text-secondary)] opacity-30">待生成</span>
             </div>
@@ -220,7 +220,7 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
               <img
                 src={nodeData.url}
                 alt={nodeData.label || '图片'}
-                className="w-full rounded-2xl"
+                className="w-full rounded-xl"
                 draggable={false}
                 loading="lazy"
                 onError={() => useGraphStore.getState().updateNode(id, { data: { loading: false, error: '图片加载失败' } } as any)}
@@ -237,16 +237,16 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
             <div className="w-full flex flex-col justify-center gap-2 px-6 py-8" style={{ minHeight: 250 }}>
               <span className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</span>
               <div className="w-full space-y-1">
-                <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <Upload size={14} className="shrink-0 opacity-50" />图生图
                 </button>
-                <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <Upload size={14} className="shrink-0 opacity-50" />图生视频
                 </button>
-                <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <ImageIcon size={14} className="shrink-0 opacity-50" />图片换背景
                 </button>
-                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <Video size={14} className="shrink-0 opacity-50" />首帧图生视频
                 </button>
               </div>

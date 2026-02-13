@@ -478,7 +478,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     >
       {/* TapNow: 节点主体 */}
       <div
-        className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
+        className="group relative overflow-visible rounded-xl bg-[var(--bg-secondary)]"
         style={{ width: '100%', minWidth: 250, height: imgHeight, minHeight: 120 }}
       >
         {/* TapNow: 标签浮在节点上方，可双击编辑 */}
@@ -527,22 +527,22 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
         {/* TapNow: 内容区 edge-to-edge */}
         <div className="absolute inset-0 w-full h-full overflow-visible">
           {!inView && !nodeData?.url && !nodeData?.loading ? (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-[var(--text-secondary)] rounded-2xl bg-[var(--bg-tertiary)]">
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-[var(--text-secondary)] rounded-xl bg-[var(--bg-tertiary)]">
               <ImageIcon size={32} className="opacity-20" />
             </div>
           ) : nodeData?.loading ? (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)]">
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 rounded-xl bg-[var(--bg-tertiary)]">
               <Loader2 size={28} className="animate-spin text-[var(--text-secondary)]" />
               <span className="text-xs text-[var(--text-secondary)]">生成中...</span>
             </div>
           ) : nodeData?.error ? (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-red-500 rounded-2xl bg-[var(--bg-tertiary)]">
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-red-500 rounded-xl bg-[var(--bg-tertiary)]">
               <span className="text-xl">⚠</span>
               <span className="text-xs text-center px-4 line-clamp-2">{nodeData.error}</span>
             </div>
           ) : (data as any)?._fromWorkflow && !nodeData?.url ? (
             <div
-              className="w-full h-full flex flex-col items-center justify-center gap-3 rounded-2xl bg-[var(--bg-tertiary)] cursor-pointer hover:bg-[var(--bg-tertiary)]/80 transition-colors"
+              className="w-full h-full flex flex-col items-center justify-center gap-3 rounded-xl bg-[var(--bg-tertiary)] cursor-pointer hover:bg-[var(--bg-tertiary)]/80 transition-colors"
               onClick={handleReplaceClick}
               onPointerDown={e => e.stopPropagation()}
             >
@@ -554,7 +554,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
               <img
                 src={nodeData.url}
                 alt={nodeData.label || '图片'}
-                className="w-full h-full object-cover rounded-2xl"
+                className="w-full h-full object-cover rounded-xl"
                 draggable={false}
                 loading="lazy"
                 onLoad={(e) => {
@@ -601,19 +601,19 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
             <div className="w-full h-full flex flex-col justify-center gap-2 px-6 py-8">
               <span className="text-xs text-[var(--text-secondary)] opacity-50 ml-2">尝试：</span>
               <div className="w-full space-y-1">
-                <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleImageGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <Upload size={14} className="shrink-0 opacity-50" />
                   图生图
                 </button>
-                <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleVideoGen} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <Upload size={14} className="shrink-0 opacity-50" />
                   图生视频
                 </button>
-                <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleReplaceClick} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <ImageIcon size={14} className="shrink-0 opacity-50" />
                   图片换背景
                 </button>
-                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-2xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
+                <button onClick={handleFirstFrameVideo} onPointerDown={e => e.stopPropagation()} className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors flex items-center gap-2">
                   <Video size={14} className="shrink-0 opacity-50" />
                   首帧图生视频
                 </button>

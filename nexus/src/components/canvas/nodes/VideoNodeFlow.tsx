@@ -593,13 +593,13 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     >
       {/* 节点主体 - 纯内容卡片 */}
       <div
-        className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
+        className="group relative overflow-visible rounded-xl bg-[var(--bg-secondary)]"
         style={{ width: 444, minHeight: 250 }}
       >
         {/* 标签 - TapNow 风格 */}
         <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontSize: '17.1429px' }}>{nodeData?.label || '视频'}</div>
         {/* 视频内容 - edge-to-edge */}
-        <div className="bg-[var(--bg-secondary)] rounded-2xl overflow-hidden relative">
+        <div className="bg-[var(--bg-secondary)] rounded-xl overflow-hidden relative">
           {!inView && !displayUrl && !nodeData?.loading && (
             <div className="aspect-video flex flex-col items-center justify-center gap-2 bg-[var(--bg-tertiary)]">
               <Video size={28} className="text-[var(--text-secondary)] opacity-30" />

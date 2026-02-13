@@ -55,13 +55,33 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
   const isFromWorkflow = !!nodeData?._fromWorkflow
   const isAwaitingGeneration = !!(nodeData as any)?._awaitingGeneration
 
+  const hasUpstreamImage = useGraphStore(s => s.edges.some(e => {
+    const src = s.nodes.find(n => n.id === e.source)
+    return e.target === id && (src?.type === 'image' || src?.type === 'imageConfig')
+  }))
+
   // Local mode state — 即时切换 UI
   const [mode, setMode] = useState<'menu' | 'upload' | 'awaiting'>(() => {
     if (isAwaitingGeneration) return 'awaiting'
+    const initHasUpstream = useGraphStore.getState().edges.some(e => {
+      const src = useGraphStore.getState().nodes.find(n => n.id === e.source)
+      return e.target === id && (src?.type === 'image' || src?.type === 'imageConfig')
+    })
+    if (initHasUpstream && !nodeData?.url) return 'awaiting'
     if (isFromWorkflow) return 'upload'
     if (nodeData?.url) return 'upload'
     return 'menu'
   })
+
+  useEffect(() => {
+    if (hasUpstreamImage && !nodeData?.url && mode !== 'awaiting') setMode('awaiting')
+  }, [hasUpstreamImage, mode, nodeData?.url])
+
+  useEffect(() => {
+    if (!hasUpstreamImage && !nodeData?.url && mode === 'awaiting' && !nodeData?._fromWorkflow) {
+      setMode('menu')
+    }
+  }, [hasUpstreamImage, nodeData?.url, mode, nodeData?._fromWorkflow])
 
   const displayUrl = nodeData?.url || ''
   const previewUrl = displayUrl || (nodeData?.sourceUrl && isRecoverableSourceUrl(nodeData.sourceUrl) ? nodeData.sourceUrl : '')
@@ -267,10 +287,10 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
 
       {/* 节点主体 */}
       <div
-        className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
+        className="group relative overflow-visible rounded-xl bg-[var(--bg-secondary)]"
         style={{ width: 320 }}
       >
-        <div className="bg-[var(--bg-secondary)] rounded-2xl overflow-hidden">
+        <div className="bg-[var(--bg-secondary)] rounded-xl overflow-hidden">
           {nodeData?.loading && (
             <div className="aspect-video bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-blue-500/20 flex flex-col items-center justify-center gap-3 relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-blue-500/10 animate-pulse" />

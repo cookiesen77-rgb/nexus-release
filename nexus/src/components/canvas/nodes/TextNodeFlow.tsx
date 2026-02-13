@@ -108,7 +108,7 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
       onMouseLeave={() => setShowActions(false)}
     >
       {/* TapNow: 标签在节点上方 */}
-      <div className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
+      <div className="group relative overflow-visible rounded-xl bg-[var(--bg-secondary)]"
            style={{ width: DEFAULT_WIDTH, minHeight: DEFAULT_HEIGHT }}
            onDoubleClick={handleDoubleClick}
       >

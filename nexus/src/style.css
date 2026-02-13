@@ -42,18 +42,17 @@ html, body, #root {
   --danger-rgb: 239 68 68;
 }
 
-/* Dark mode variables | 深色模式变量 */
+/* Dark mode variables | 深色模式变量 — TapNow 纯黑风格 */
 .dark {
-  /* Developer Tool / IDE Dark */
-  --bg-primary: #0b1220;
-  --bg-secondary: #0f172a;
-  --bg-tertiary: #111c2e;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --border-color: #334155;
-  --accent-color: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-rgb: 59 130 246;
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #141414;
+  --text-primary: #f0f0f0;
+  --text-secondary: rgba(240, 240, 240, 0.6);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --accent-color: #5297FF;
+  --accent-hover: #3d7fe6;
+  --accent-rgb: 82 151 255;
   --danger-color: #f43f5e;
   --danger-hover: #e11d48;
   --danger-rgb: 244 63 94;
@@ -145,6 +144,16 @@ select option {
 }
 
 /* GPU 层优化 */
+/* Force React Flow to stay below UI overlay */
+.react-flow,
+.react-flow__renderer,
+.react-flow__viewport,
+.react-flow__nodes,
+.react-flow__edges {
+  z-index: 0;
+}
+
+/* GPU 层优化 */
 .react-flow__viewport {
   will-change: transform;
   transform-origin: 0 0;
@@ -166,9 +175,15 @@ select option {
   z-index: 0;
 }
 
+/* TapNow 风格极淡点阵网格 */
+.dark .canvas-layer {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
 .ui-layer {
   pointer-events: none;
-  z-index: 1;
+  z-index: 40;
 }
 .ui-layer > * {
   pointer-events: auto;
@@ -294,7 +309,7 @@ select option {
 .react-flow__node.selected {
   outline: rgba(122, 122, 122, 0.8) solid 2px !important;
   outline-offset: 0px;
-  border-radius: 16px !important;
+  border-radius: 12px !important;
   box-shadow: none !important;
   z-index: 1000 !important;
 }
