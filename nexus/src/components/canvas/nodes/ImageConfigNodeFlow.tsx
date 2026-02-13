@@ -45,9 +45,9 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
     return 'menu'
   })
 
-  // 有上游图片连接时自动切换到 upload 模式
+  // 有上游图片连接时自动切换到待生成模式
   useEffect(() => {
-    if (hasUpstreamImage && mode === 'menu') setMode('upload')
+    if (hasUpstreamImage && mode === 'menu') setMode('awaiting')
   }, [hasUpstreamImage, mode])
 
   const hasUrl = !!nodeData?.url
