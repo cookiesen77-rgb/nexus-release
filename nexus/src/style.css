@@ -168,6 +168,12 @@ select option {
   overflow: visible !important;
 }
 
+/* 节点浅灰边框 — 纯黑背景下区分边界 */
+.dark .react-flow__node .group {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
 /* Canvas layering to reduce compositing cost during pan/zoom */
 .canvas-layer {
   contain: paint;

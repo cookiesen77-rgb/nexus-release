@@ -206,8 +206,13 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
 
   const handleLoadedMetadata = useCallback(() => {
     const v = videoRef.current
-    if (v) setDuration(v.duration)
+    if (v && Number.isFinite(v.duration) && v.duration > 0) setDuration(v.duration)
   }, [])
+
+  const handleCanPlay = useCallback(() => {
+    const v = videoRef.current
+    if (v && duration === 0 && Number.isFinite(v.duration) && v.duration > 0) setDuration(v.duration)
+  }, [duration])
 
   const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current
@@ -647,9 +652,10 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
                 onError={handleVideoError}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
+                onCanPlay={handleCanPlay}
                 onEnded={handleVideoEnded}
               />
-              <div className="absolute inset-0 z-10" />
+              <div className="absolute inset-0 z-10" onDoubleClick={(e) => { e.stopPropagation(); togglePlay() }} />
               {/* TapNow-style hover control bar */}
               <div className="video-controls-bar nodrag absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2.5 pt-8 flex items-center gap-2.5 opacity-0 translate-y-1 pointer-events-none">
                 <button onClick={togglePlay} className="h-6 w-6 p-0 flex items-center justify-center text-white hover:text-white/80 bg-transparent border-none cursor-pointer shrink-0">
