@@ -36,19 +36,21 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   // 检查是否有上游图片连接
   const hasUpstreamImage = useGraphStore(s => s.edges.some(e => e.target === id && s.nodes.find(n => n.id === e.source)?.type === 'image'))
 
-  // Local mode state — 即时切换 UI（不依赖 React Flow data prop 同步）
+  // Local mode state
   // 'menu' = 显示"尝试"菜单, 'upload' = 可上传参考图, 'awaiting' = 待生成
   const [mode, setMode] = useState<'menu' | 'upload' | 'awaiting'>(() => {
     if ((nodeData as any)?._awaitingGeneration) return 'awaiting'
+    const initHasUpstream = useGraphStore.getState().edges.some(e => e.target === id && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'image')
+    if (initHasUpstream && !nodeData?.url) return 'awaiting'
     if (nodeData?._fromWorkflow) return 'upload'
     if (nodeData?.url) return 'upload'
     return 'menu'
   })
 
-  // 有上游图片连接时自动切换到待生成模式
+  // 边变化时重新检测
   useEffect(() => {
-    if (hasUpstreamImage && mode === 'menu') setMode('awaiting')
-  }, [hasUpstreamImage, mode])
+    if (hasUpstreamImage && !nodeData?.url && mode !== 'awaiting') setMode('awaiting')
+  }, [hasUpstreamImage, mode, nodeData?.url])
 
   const hasUrl = !!nodeData?.url
 
