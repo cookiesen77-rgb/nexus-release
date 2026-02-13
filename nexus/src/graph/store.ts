@@ -731,11 +731,25 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   addEdge: (source, target, data) => {
     const state = get()
-    if (state.edges.some(e => e.source === source && e.target === target)) {
-      return state.edges.find(e => e.source === source && e.target === target)!.id
-    }
     const nodesById = new Map(state.nodes.map((n) => [n.id, n]))
-    if (!nodesById.get(source) || !nodesById.get(target)) return ''
+    const src0 = nodesById.get(source)
+    const dst0 = nodesById.get(target)
+    if (!src0 || !dst0) return ''
+
+    const existing = state.edges.filter(e => e.source === source && e.target === target)
+    if (existing.length > 0) {
+      // Allow multiple edges only when linking to videoConfig with different imageRole
+      if (dst0.type === 'videoConfig') {
+        const desiredRole = String((data as any)?.imageRole || '').trim()
+        const hasSameRole = desiredRole
+          ? existing.some(e => String((e.data as any)?.imageRole || '').trim() === desiredRole)
+          : true
+        if (hasSameRole) return existing[0].id
+      } else {
+        return existing[0].id
+      }
+    }
+
     const id = newEdgeId()
     set((s) => {
       const nodesById = new Map(s.nodes.map((n) => [n.id, n]))
@@ -745,7 +759,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       const nextData: Record<string, unknown> = data ? { ...data } : {}
       let type: EdgeType | undefined
 
-      if (src?.type === 'image' && dst?.type === 'videoConfig') {
+      if ((src?.type === 'image' || src?.type === 'imageConfig') && dst?.type === 'videoConfig') {
         type = 'imageRole'
         const caps = getVideoModelCaps(String((dst?.data as any)?.model || '').trim())
 
@@ -789,7 +803,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
           used.add(asPositiveInt((e.data as any)?.promptOrder, 0))
         }
         nextData.promptOrder = order > 0 && !used.has(order) ? order : next
-      } else if (src?.type === 'image' && dst?.type === 'imageConfig') {
+      } else if ((src?.type === 'image' || src?.type === 'imageConfig') && dst?.type === 'imageConfig') {
         type = 'imageOrder'
         const order = asPositiveInt((nextData as any)?.imageOrder, 0)
         const next = pickNextOrder(s.edges, nodesById, target, 'imageOrder')

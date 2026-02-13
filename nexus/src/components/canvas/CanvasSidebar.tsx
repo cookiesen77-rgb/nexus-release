@@ -3,7 +3,7 @@ import {
   Archive, Brush, Camera, Film, Hand, LayoutGrid, Link2,
   MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch,
   Save, Wand2, ShoppingBag, Sparkles, Clapperboard, MessageCircle,
-  History, ImageIcon, ChevronDown, Moon, Sun, Download, Settings
+  History, ImageIcon, ChevronDown, ChevronLeft, Moon, Sun, Download, Settings
 } from 'lucide-react'
 
 export type CanvasTool = 'select' | 'pan' | 'connect'
@@ -13,6 +13,7 @@ type Props = {
   nodeMenuOpen: boolean
   onChangeTool: (tool: CanvasTool) => void
   onToggleNodeMenu: () => void
+  onBack?: () => void
   onOpenWorkflow?: () => void
   onOpenShortDrama?: () => void
   onOpenDirector?: () => void
@@ -54,7 +55,7 @@ const DockIcon = ({ title, onClick, active, children }: {
 )
 
 export default function CanvasSidebar({
-  activeTool, nodeMenuOpen, onChangeTool, onToggleNodeMenu,
+  activeTool, nodeMenuOpen, onChangeTool, onToggleNodeMenu, onBack,
   onOpenWorkflow, onOpenShortDrama, onOpenDirector, onOpenSketch, onOpenAudio, onOpenBlend,
   onOpenPromptLibrary, onOpenPromptReverse, onOpenCameraControl,
   onOpenEcomStudio, onOpenAssetLibrary, onOpenPromptAgent, onSaveAsTemplate,
@@ -71,6 +72,16 @@ export default function CanvasSidebar({
         style={{ width: 54, backgroundColor: 'var(--bg-secondary)', backdropFilter: 'blur(24px)', border: '1px solid rgba(128,128,128,0.15)' }}
         data-testid="canvas-dockbar-container"
       >
+        {/* 返回主页 */}
+        <button
+          className="flex items-center justify-center cursor-pointer transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+          style={{ width: 40, height: 32, borderRadius: 8 }}
+          onClick={() => onBack?.()}
+          title="返回主页"
+        >
+          <ChevronLeft size={18} />
+        </button>
+
         {/* ⊕ 添加节点 - TapNow: 40x40 白色圆形 */}
         <button
           className="flex items-center justify-center shadow cursor-pointer transition-all duration-300"

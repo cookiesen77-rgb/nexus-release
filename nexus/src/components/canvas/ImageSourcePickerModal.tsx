@@ -19,10 +19,10 @@ export default memo(function ImageSourcePickerModal({ open, title, onClose, onSe
   const fileRef = useRef<HTMLInputElement>(null)
 
   const canvasImages = useGraphStore(s =>
-    s.nodes.filter(n => n.type === 'image' && (n.data as any)?.url).map(n => ({
+    s.nodes.filter(n => (n.type === 'image' || n.type === 'imageConfig') && (n.data as any)?.url).map(n => ({
       id: n.id,
       url: (n.data as any).url as string,
-      label: (n.data as any)?.label || '图片',
+      label: (n.data as any)?.label || (n.type === 'imageConfig' ? '生成图片' : '图片'),
     }))
   )
 

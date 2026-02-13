@@ -491,16 +491,6 @@ export default function Canvas() {
 
   const dark = useSettingsStore((s) => s.dark)
   const toggleDark = useSettingsStore((s) => s.toggleDark)
-  const defaultImageModel = useSettingsStore((s) => s.defaultImageModel)
-  const defaultVideoModel = useSettingsStore((s) => s.defaultVideoModel)
-  const setDefaultImageModel = useSettingsStore((s) => s.setDefaultImageModel)
-  const setDefaultVideoModel = useSettingsStore((s) => s.setDefaultVideoModel)
-  
-  // 显示的默认模型（如果未设置则使用配置中的默认值）
-  const effectiveImageModel = defaultImageModel || DEFAULT_IMAGE_MODEL
-  const effectiveVideoModel = defaultVideoModel || DEFAULT_VIDEO_MODEL
-
-  const projectName = useMemo(() => projects.find((p) => p.id === projectId)?.name || projectId, [projectId, projects])
 
   useEffect(() => {
     const pid = String(id || '').trim() || 'default'
@@ -1127,6 +1117,7 @@ export default function Canvas() {
             <CanvasSidebar
               activeTool={tool}
               nodeMenuOpen={nodeMenuOpen}
+              onBack={() => nav('/')}
               onChangeTool={(next) => {
                 setTool(next)
                 setNodeMenuOpen(false)

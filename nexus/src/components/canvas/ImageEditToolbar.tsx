@@ -5,7 +5,7 @@
  * - 擦除和重绘支持用户选择模型和分辨率
  */
 
-import React, { memo, useState, useCallback } from 'react'
+import React, { memo, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Move,
@@ -79,6 +79,8 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
   const [maskEditorOpen, setMaskEditorOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState('')
+  const trackRef = useRef<HTMLDivElement>(null)
+  const [hoveredIdx, setHoveredIdx] = useState(-1)
 
   const handleToolClick = useCallback((tool: ToolButton) => {
     if (tool.needsInput) {
@@ -222,60 +224,78 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
           onMouseEnter={() => onHoverChange?.(true)}
-          onMouseLeave={() => onHoverChange?.(false)}
+          onMouseLeave={() => { onHoverChange?.(false); setHoveredIdx(-1) }}
         >
-          <div className="max-w-[min(80vw,600px)]">
-            <div
-              className="h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap overflow-x-auto"
-              style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.2) transparent' }}
-            >
+          <div
+            ref={trackRef}
+            className="h-11 rounded-full flex items-end overflow-hidden"
+            style={{ width: 280, backgroundColor: 'rgba(20,20,20,0.85)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}
+            onMouseMove={(e) => {
+              const el = trackRef.current
+              if (!el) return
+              const rect = el.getBoundingClientRect()
+              const ratio = (e.clientX - rect.left) / rect.width
+              const maxScroll = el.scrollWidth - el.clientWidth
+              if (maxScroll > 0) el.scrollLeft = ratio * maxScroll
+            }}
+            onMouseLeave={() => setHoveredIdx(-1)}
+          >
+            <div className="flex items-end gap-px px-1.5 pb-1 w-max">
               {loading ? (
-              <div className="flex items-center gap-2 px-3 text-xs text-white/80">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{progress || '处理中...'}</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-0.5 w-max">
-                {TOOLS.map((tool) => {
-                  const Icon = tool.icon
-                  return (
-                    <button
-                      key={tool.key}
-                      onClick={() => handleToolClick(tool)}
-                      className="flex items-center gap-2 h-8 px-3 py-1 rounded-full text-xs text-white/80 hover:text-white transition-colors cursor-pointer"
-                      title={tool.label}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span>{tool.label}</span>
-                    </button>
-                  )
-                })}
-                {/* 分隔线 + icon-only 工具 */}
-                <div className="w-px h-5 bg-white/15 mx-1 shrink-0" />
-                {onReplace && (
-                  <button onClick={onReplace} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="替换">
-                    <PencilLine className="h-4 w-4" />
-                  </button>
-                )}
-                {onCrop && (
-                  <button onClick={onCrop} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="裁剪">
-                    <Crop className="h-4 w-4" />
-                  </button>
-                )}
-                {onDownload && (
-                  <button onClick={onDownload} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="下载">
-                    <Download className="h-4 w-4" />
-                  </button>
-                )}
-                {onPreview && (
-                  <button onClick={onPreview} className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-colors" title="预览">
-                    <Eye className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            )}
+                <div className="flex items-center gap-2 px-3 h-9 text-xs text-white/80">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{progress || '处理中...'}</span>
+                </div>
+              ) : (
+                <>
+                  {TOOLS.map((tool, i) => {
+                    const Icon = tool.icon
+                    const isHov = hoveredIdx === i
+                    const isNear = hoveredIdx >= 0 && Math.abs(hoveredIdx - i) === 1
+                    const sc = isHov ? 1.3 : isNear ? 1.12 : 1
+                    return (
+                      <button
+                        key={tool.key}
+                        onClick={() => handleToolClick(tool)}
+                        onMouseEnter={() => setHoveredIdx(i)}
+                        className="flex items-center gap-1 rounded-full text-white/80 hover:text-white cursor-pointer shrink-0 origin-bottom"
+                        style={{ height: 30 * sc, padding: `0 ${7 * sc}px`, transition: 'all 0.15s ease-out', transform: `scale(${sc})` }}
+                        title={tool.label}
+                      >
+                        <Icon className="w-3.5 h-3.5 shrink-0" />
+                        {isHov && <span className="text-[10px] whitespace-nowrap">{tool.label}</span>}
+                      </button>
+                    )
+                  })}
+                  <div className="w-px h-5 bg-white/15 mx-0.5 shrink-0 self-center" />
+                  {[
+                    onReplace && { fn: onReplace, icon: PencilLine, title: '替换' },
+                    onCrop && { fn: onCrop, icon: Crop, title: '裁剪' },
+                    onDownload && { fn: onDownload, icon: Download, title: '下载' },
+                    onPreview && { fn: onPreview, icon: Eye, title: '预览' },
+                  ].filter(Boolean).map((item: any, i) => {
+                    const idx = TOOLS.length + 1 + i
+                    const isHov = hoveredIdx === idx
+                    const isNear = hoveredIdx >= 0 && Math.abs(hoveredIdx - idx) === 1
+                    const sc = isHov ? 1.3 : isNear ? 1.12 : 1
+                    const Ic = item.icon
+                    return (
+                      <button
+                        key={item.title}
+                        onClick={item.fn}
+                        onMouseEnter={() => setHoveredIdx(idx)}
+                        className="rounded-full flex items-center justify-center text-white/60 hover:text-white shrink-0 origin-bottom"
+                        style={{ width: 30 * sc, height: 30 * sc, transition: 'all 0.15s ease-out', transform: `scale(${sc})` }}
+                        title={item.title}
+                      >
+                        <Ic className="w-3.5 h-3.5" />
+                      </button>
+                    )
+                  })}
+                </>
+              )}
+            </div>
           </div>
-        </div>
         </div>
       )}
 
