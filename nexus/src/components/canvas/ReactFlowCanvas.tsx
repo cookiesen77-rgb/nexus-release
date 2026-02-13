@@ -118,6 +118,7 @@ function graphNodeToFlowNode(node: GraphNode): Node {
 export interface ConnectEndEvent {
   sourceNodeId: string
   sourceNodeType: string
+  allSourceIds?: string[]
   screenX: number
   screenY: number
   flowX: number
@@ -634,8 +635,8 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     []
   )
 
-  // 记录连接开始时的源节点信息
-  const connectSourceRef = useRef<{ nodeId: string; nodeType: string } | null>(null)
+  // 记录连接开始时的源节点信息（支持多选）
+  const connectSourceRef = useRef<{ nodeId: string; nodeType: string; allSourceIds?: string[] } | null>(null)
 
   // 处理连接开始
   const handleConnectStart = useCallback(
@@ -644,7 +645,11 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
       const store = useGraphStore.getState()
       const sourceNode = store.nodes.find((n) => n.id === params.nodeId)
       if (sourceNode) {
-        connectSourceRef.current = { nodeId: sourceNode.id, nodeType: sourceNode.type }
+        const selectedIds = store.selectedNodeIds
+        const allSourceIds = selectedIds.includes(sourceNode.id) && selectedIds.length > 1
+          ? selectedIds
+          : [sourceNode.id]
+        connectSourceRef.current = { nodeId: sourceNode.id, nodeType: sourceNode.type, allSourceIds }
       }
     },
     []
@@ -688,6 +693,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
       onConnectEnd?.({
         sourceNodeId: connectSourceRef.current.nodeId,
         sourceNodeType: connectSourceRef.current.nodeType,
+        allSourceIds: connectSourceRef.current.allSourceIds,
         screenX: clientX,
         screenY: clientY,
         flowX: flowPosition.x,

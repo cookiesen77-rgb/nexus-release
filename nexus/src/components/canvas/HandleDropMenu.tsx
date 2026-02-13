@@ -59,6 +59,7 @@ export interface HandleDropMenuState {
   flowY: number
   sourceNodeId: string
   sourceNodeType: string
+  allSourceIds?: string[]
 }
 
 interface HandleDropMenuProps {
@@ -277,7 +278,10 @@ export default function HandleDropMenu({ menu, onClose }: HandleDropMenuProps) {
     }
 
     const newNodeId = store.addNode(type, pos, data)
-    store.addEdge(sourceNodeId, newNodeId, { sourceHandle: 'right', targetHandle: 'left' })
+    const allIds = menu.allSourceIds && menu.allSourceIds.length > 1 ? menu.allSourceIds : [sourceNodeId]
+    for (const sid of allIds) {
+      store.addEdge(sid, newNodeId, { sourceHandle: 'right', targetHandle: 'left' })
+    }
     store.setSelected(newNodeId)
     onClose()
   }, [menu, onClose, triggerFileUpload])

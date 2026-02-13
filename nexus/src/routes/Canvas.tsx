@@ -115,6 +115,7 @@ export default function Canvas() {
     flowY: number
     sourceNodeId: string
     sourceNodeType: string
+    allSourceIds?: string[]
   } | null>(null)
 
   // 右键菜单文件选择器
@@ -419,6 +420,7 @@ export default function Canvas() {
       flowY: event.flowY,
       sourceNodeId: event.sourceNodeId,
       sourceNodeType: event.sourceNodeType,
+      allSourceIds: event.allSourceIds,
     })
   }, [])
 

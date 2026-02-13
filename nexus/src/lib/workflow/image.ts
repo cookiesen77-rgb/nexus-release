@@ -194,7 +194,7 @@ const resolveImageToInlineData = async (input: string) => {
  * 获取连接到配置节点的输入（提示词和参考图）
  * 与 Vue 版本 getConnectedInputs() 对齐
  */
-const getConnectedInputs = (configId: string) => {
+const getConnectedInputs = async (configId: string) => {
   const s = useGraphStore.getState()
   const byId = new Map(s.nodes.map((n) => [n.id, n]))
   const connectedEdges = s.edges.filter((e) => e.target === configId)
@@ -247,7 +247,19 @@ const getConnectedInputs = (configId: string) => {
       console.log('[getConnectedInputs] 提取到文本:', text?.slice(0, 50))
       if (text) promptParts.push(text)
     } else if (sourceNode.type === 'image' || sourceNode.type === 'imageConfig') {
-      const imageData = (sourceNode.data as any)?.base64 || (sourceNode.data as any)?.url || (sourceNode.data as any)?.sourceUrl || ''
+      let imageData = (sourceNode.data as any)?.base64 || (sourceNode.data as any)?.url || (sourceNode.data as any)?.sourceUrl || ''
+      if (!imageData && (sourceNode.data as any)?.mediaId) {
+        try {
+          const media = await getMedia((sourceNode.data as any).mediaId)
+          if (media?.data) imageData = media.data
+        } catch { /* ignore */ }
+      }
+      if (!imageData && sourceNode.id) {
+        try {
+          const media = await getMediaByNodeId(sourceNode.id)
+          if (media?.data) imageData = media.data
+        } catch { /* ignore */ }
+      }
       if (imageData) refImages.push(imageData)
     }
   }
@@ -341,7 +353,7 @@ export const generateImageFromConfigNode = async (
   const d: any = cfg.data || {}
   
   // 1. 获取连接的输入（与 Vue 版本一致）
-  const { prompt, refImages } = getConnectedInputs(configNodeId)
+  const { prompt, refImages } = await getConnectedInputs(configNodeId)
   
   console.log('[generateImage] configNodeId:', configNodeId, 'prompt长度:', prompt?.length, 'refImages:', refImages.length)
   

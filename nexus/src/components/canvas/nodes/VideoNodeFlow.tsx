@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom'
 import { Position, NodeProps } from '@xyflow/react'
 import { TapNodeHandle } from './shared/TapNodeHandle'
 import { Trash2, Copy, Expand, Video, Image, Eye, Download, X, RefreshCw, Loader2, Sparkles } from 'lucide-react'
+import ImageSourcePickerModal from '@/components/canvas/ImageSourcePickerModal'
 import { useGraphStore } from '@/graph/store'
 import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
 import { downloadFile } from '@/lib/download'
@@ -52,6 +53,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   const [showActions, setShowActions] = useState(false)
   const [videoError, setVideoError] = useState('')
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState<'first' | 'last' | null>(null)
   const [corsMode, setCorsMode] = useState<'anonymous' | 'none'>('anonymous')
   const [downloading, setDownloading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -493,29 +495,48 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     reader.readAsDataURL(file)
   }, [id])
 
-  // 首尾帧生成视频: 创建2个ImageConfig节点(首帧+尾帧) + 两条连线
-  const handleStartEndVideo = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    const store = useGraphStore.getState()
-    const node = store.nodes.find(n => n.id === id)
-    if (!node) return
-    store.patchNodeDataSilent(id, { _awaitingGeneration: true })
-    const firstId = store.addNode('imageConfig', { x: node.x - 350, y: node.y - 160 }, { label: '首帧', _fromWorkflow: true })
-    const lastId = store.addNode('imageConfig', { x: node.x - 350, y: node.y + 160 }, { label: '尾帧', _fromWorkflow: true })
-    store.addEdge(firstId, id, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
-    store.addEdge(lastId, id, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'last_frame_image' } })
-  }, [id])
+  // 首尾帧生成视频: 先选首帧，再选尾帧
+  const handleStartEndVideo = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setPickerOpen('first')
+  }, [])
 
-  // 首帧生成视频: 创建1个ImageConfig节点(首帧) + 连线
-  const handleFirstFrameVideo = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
+  // 首帧生成视频: 选首帧
+  const handleFirstFrameVideo = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setPickerOpen('first')
+  }, [])
+
+  // 图片选择回调
+  const handlePickerSelect = useCallback((imageUrl: string, sourceNodeId?: string) => {
     const store = useGraphStore.getState()
     const node = store.nodes.find(n => n.id === id)
     if (!node) return
+    const role = pickerOpen === 'last' ? 'last_frame_image' : 'first_frame_image'
+
+    let imgNodeId = sourceNodeId || ''
+    if (!imgNodeId) {
+      imgNodeId = store.addNode('image', { x: node.x - 350, y: pickerOpen === 'last' ? node.y + 160 : node.y - 160 }, {
+        label: role === 'first_frame_image' ? '首帧' : '尾帧',
+        url: imageUrl,
+        _fromWorkflow: true,
+      })
+    }
+    store.addEdge(imgNodeId, id, { sourceHandle: 'right', targetHandle: 'left', imageRole: role })
     store.patchNodeDataSilent(id, { _awaitingGeneration: true })
-    const firstId = store.addNode('imageConfig', { x: node.x - 350, y: node.y }, { label: '首帧', _fromWorkflow: true })
-    store.addEdge(firstId, id, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
-  }, [id])
+
+    // 如果是首尾帧模式，选完首帧后继续选尾帧
+    if (pickerOpen === 'first') {
+      // 检查是否从"首尾帧"入口进来的（检查按钮触发源——通过是否已有首帧判断）
+      const hasFirst = store.edges.some(e => e.target === id && String((e.data as any)?.imageRole) === 'first_frame_image')
+      const hasLast = store.edges.some(e => e.target === id && String((e.data as any)?.imageRole) === 'last_frame_image')
+      if (hasFirst && !hasLast) {
+        setPickerOpen('last')
+        return
+      }
+    }
+    setPickerOpen(null)
+  }, [id, pickerOpen])
 
   const handleVideoError = useCallback(() => {
     const url = String(displayUrl || '').trim()
@@ -745,6 +766,13 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       )}
 
       <input ref={replaceInputRef} type="file" accept="video/*" className="hidden" onChange={handleReplaceFile} />
+
+      <ImageSourcePickerModal
+        open={!!pickerOpen}
+        title={pickerOpen === 'last' ? '选择尾帧图片' : '选择首帧图片'}
+        onClose={() => setPickerOpen(null)}
+        onSelect={handlePickerSelect}
+      />
     </div>
   )
 })
