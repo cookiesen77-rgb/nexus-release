@@ -721,9 +721,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   addEdge: (source, target, data) => {
     const id = newEdgeId()
     set((s) => {
+      if (s.edges.some(e => e.source === source && e.target === target)) return {}
       const nodesById = new Map(s.nodes.map((n) => [n.id, n]))
       const src = nodesById.get(source)
       const dst = nodesById.get(target)
+      if (!src || !dst) return {}
 
       const nextData: Record<string, unknown> = data ? { ...data } : {}
       let type: EdgeType | undefined

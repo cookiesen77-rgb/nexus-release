@@ -273,7 +273,7 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
     // Tauri HTTP 插件在某些平台（特别是 Windows）上对 AbortController 支持不完善
     // 因此只在非 Tauri 环境或明确设置超时时使用 signal
     const timeoutMs = Number(opts?.timeoutMs || 0)
-    const useSignal = !isTauri && timeoutMs > 0
+    const useSignal = timeoutMs > 0
     const controller = useSignal ? new AbortController() : null
     const t = useSignal ? window.setTimeout(() => {
       try { controller?.abort() } catch { /* ignore */ }
@@ -401,7 +401,7 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
   const maxRetries = isTauri ? 4 : 3
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const timeoutMs = Number(opts?.timeoutMs || 0)
-    const useSignal = !isTauri && timeoutMs > 0
+    const useSignal = timeoutMs > 0
     const controller = useSignal ? new AbortController() : null
     const t = useSignal ? window.setTimeout(() => {
       try { controller?.abort() } catch { /* ignore */ }
@@ -521,7 +521,7 @@ export const getJson = async <T,>(endpoint: string, query?: Record<string, any>,
   const maxRetries = isTauri ? 4 : 3
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const timeoutMs = Number(opts?.timeoutMs || 0)
-    const useSignal = !isTauri && timeoutMs > 0
+    const useSignal = timeoutMs > 0
     const controller = useSignal ? new AbortController() : null
     const t = useSignal ? window.setTimeout(() => {
       try { controller?.abort() } catch { /* ignore */ }

@@ -224,6 +224,7 @@ const getConnectedInputs = (configId: string) => {
       continue
     }
     if (sourceNode?.type === 'image' || sourceNode?.type === 'imageConfig') {
+      const order = Number((edge.data as any)?.imageOrder)
       imageEdges.push({ edge, idx, order: Number.isFinite(order) && order > 0 ? order : 999999 })
       continue
     }
