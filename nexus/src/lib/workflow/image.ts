@@ -522,7 +522,7 @@ export const generateImageFromConfigNode = async (
 
       // 针对偶发“200 但无图片”的情况，额外做一次轻量重试（不影响并发）
       for (let attempt = 0; attempt < 2; attempt++) {
-        const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000, noRetry: true })
+        const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
         const parts = rsp?.candidates?.[0]?.content?.parts || []
         const inline = parts.map((p: any) => p.inlineData || p.inline_data).filter(Boolean)[0]
         if (inline?.data) {
@@ -550,7 +550,7 @@ export const generateImageFromConfigNode = async (
         n: 1
       }
       if (quality) payload.quality = quality
-      const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000, noRetry: true })
+      const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
       imageUrl = normalizeToImageUrl(rsp)
     } else if (modelCfg.format === 'doubao-seedream') {
       // 云雾：豆包 Seedream 4.5（dall-e-3 格式外观，但字段与 OpenAI Images 不一致）
@@ -594,11 +594,11 @@ export const generateImageFromConfigNode = async (
         payload.image = imageInputs
       }
 
-      const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000, noRetry: true })
+      const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
       imageUrl = normalizeToImageUrl(rsp)
     } else if (modelCfg.format === 'openai-chat-image') {
       const payload = { model: modelCfg.key, messages: [{ role: 'user', content: prompt }] }
-      const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000, noRetry: true })
+      const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
       const maybe = rsp?.choices?.[0]?.message?.content
       if (typeof maybe === 'string') {
         const m = maybe.match(/https?:\/\/\S+/)
@@ -609,7 +609,7 @@ export const generateImageFromConfigNode = async (
       const imageInput = limitedRefImages[0] || ''
       if (!imageInput) throw new Error('该模型需要参考图（请先连接"图片"节点）')
       const payload: any = { model: modelCfg.key, prompt, image: imageInput }
-      const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000, noRetry: true })
+      const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
       imageUrl = normalizeToImageUrl(rsp) || extractUrlsDeep(rsp)[0] || ''
     } else if (modelCfg.format === 'kling-image') {
       const requestData: any = {
@@ -621,7 +621,7 @@ export const generateImageFromConfigNode = async (
       }
       const imageInput = limitedRefImages[0]
       if (imageInput) requestData.image = imageInput
-      const resp = await postJson<any>(modelCfg.endpoint, requestData, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000, noRetry: true })
+      const resp = await postJson<any>(modelCfg.endpoint, requestData, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
       imageUrl = normalizeToImageUrl(resp) || extractUrlsDeep(resp)[0] || ''
 
       if (!imageUrl) {
@@ -654,7 +654,7 @@ export const generateImageFromConfigNode = async (
       if (Array.isArray(limitedRefImages) && limitedRefImages.length > 0) {
         requestData.image_list = limitedRefImages.map((u: string) => ({ image: String(u || '').trim() }))
       }
-      const resp = await postJson<any>(modelCfg.endpoint, requestData, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000, noRetry: true })
+      const resp = await postJson<any>(modelCfg.endpoint, requestData, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
       imageUrl = normalizeToImageUrl(resp) || extractUrlsDeep(resp)[0] || ''
 
       if (!imageUrl) {
@@ -684,7 +684,7 @@ export const generateImageFromConfigNode = async (
         version: modelCfg.defaultParams?.version,
         clarity: modelCfg.defaultParams?.clarity
       }
-      const resp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000, noRetry: true })
+      const resp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
       const list = resp?.data ?? resp
       const first = Array.isArray(list) ? list[0] : list
       imageUrl = String(first?.url || first?.image_url || first || '').trim()

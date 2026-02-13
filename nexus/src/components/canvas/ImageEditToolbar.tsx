@@ -224,10 +224,10 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
           onMouseEnter={() => onHoverChange?.(true)}
           onMouseLeave={() => onHoverChange?.(false)}
         >
-          <div className="max-w-[80vw]">
+          <div className="max-w-[min(80vw,600px)]">
             <div
-              className="h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap overflow-x-auto scrollbar-hide"
-              style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}
+              className="h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap overflow-x-auto"
+              style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.2) transparent' }}
             >
               {loading ? (
               <div className="flex items-center gap-2 px-3 text-xs text-white/80">

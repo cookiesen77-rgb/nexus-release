@@ -2189,7 +2189,7 @@ export const generateVideoFromConfigNode = async (
         
         task = requestType === 'formdata'
           ? await postFormData<any>(endpointOverride, payload, { authMode: modelCfg.authMode, timeoutMs: 240000 })
-          : await postJson<any>(endpointOverride, payload, { authMode: modelCfg.authMode, timeoutMs: 240000, noRetry: true })
+          : await postJson<any>(endpointOverride, payload, { authMode: modelCfg.authMode, timeoutMs: 240000 })
         
         break // 成功则跳出重试循环
       } catch (err: any) {
