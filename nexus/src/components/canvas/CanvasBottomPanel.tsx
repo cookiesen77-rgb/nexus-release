@@ -7,6 +7,7 @@ import { usePresetsStore } from '@/store/presets'
 import { CAMERA_PRESETS, CAMERA_BODIES, CAMERA_LENSES, FOCAL_LENGTHS, APERTURES } from '@/lib/cameraControl/presets'
 import { generateImageFromConfigNode } from '@/lib/workflow/image'
 import { generateVideoFromConfigNode } from '@/lib/workflow/video'
+import { getMedia, getMediaByNodeId } from '@/lib/mediaStorage'
 import { callAiAssistant } from '@/lib/nexusApi'
 import { inferPolishModeFromText, buildPolishUserText, buildPolishSystemPrompt } from '@/lib/polish'
 
@@ -89,11 +90,11 @@ export default memo(function CanvasBottomPanel() {
       }}
     >
       {mode === 'image' ? (
-        <ImagePanel nodeId={selectedNode.id} nodeData={selectedNode.data as any} isConfigNode={selectedNode.type === 'imageConfig'} />
+        <ImagePanel key={selectedNode.id} nodeId={selectedNode.id} nodeData={selectedNode.data as any} isConfigNode={selectedNode.type === 'imageConfig'} />
       ) : mode === 'video' ? (
-        <VideoPanel nodeId={selectedNode.id} nodeData={selectedNode.data as any} isConfigNode={selectedNode.type === 'videoConfig'} />
+        <VideoPanel key={selectedNode.id} nodeId={selectedNode.id} nodeData={selectedNode.data as any} isConfigNode={selectedNode.type === 'videoConfig'} />
       ) : (
-        <TextPanel nodeId={selectedNode.id} nodeData={selectedNode.data as any} />
+        <TextPanel key={selectedNode.id} nodeId={selectedNode.id} nodeData={selectedNode.data as any} />
       )}
     </div>
   )
@@ -118,20 +119,51 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   const [loopCount, setLoopCount] = useState(1)
 
   // 直接订阅连接的参考图完整信息
-  const edgeCount = useGraphStore(s => s.edges.filter(e => e.target === nodeId).length)
+  const edgesSnapshot = useGraphStore(s => s.edges)
+  const nodesSnapshot = useGraphStore(s => s.nodes)
+  const [refUrlMap, setRefUrlMap] = useState<Record<string, string>>({})
+
   const sortedRefImages = useMemo(() => {
-    const s = useGraphStore.getState()
-    return s.edges
+    const byId = new Map(nodesSnapshot.map(n => [n.id, n]))
+    return edgesSnapshot
       .filter(e => e.target === nodeId)
       .map(e => {
-        const src = s.nodes.find(n => n.id === e.source)
-        if (src?.type !== 'image') return null
+        const src = byId.get(e.source)
+        if (!src || (src.type !== 'image' && src.type !== 'imageConfig')) return null
         const order = Number((e.data as any)?.imageOrder) || 0
-        return { nodeId: src.id, url: (src.data as any)?.url || '', label: (src.data as any)?.label || '', order, edgeId: e.id }
+        const url = String((src.data as any)?.url || (src.data as any)?.sourceUrl || '').trim()
+        const label = String((src.data as any)?.label || '')
+        const mediaId = String((src.data as any)?.mediaId || '').trim()
+        return { nodeId: src.id, url, label, order, edgeId: e.id, mediaId }
       })
       .filter(Boolean)
-      .sort((a: any, b: any) => (a.order || 999) - (b.order || 999)) as Array<{ nodeId: string; url: string; label: string; order: number; edgeId: string }>
-  }, [nodeId, edgeCount])
+      .sort((a: any, b: any) => (a.order || 999) - (b.order || 999)) as Array<{ nodeId: string; url: string; label: string; order: number; edgeId: string; mediaId: string }>
+  }, [nodeId, edgesSnapshot, nodesSnapshot])
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      for (const img of sortedRefImages) {
+        if (!img || img.url) continue
+        if (refUrlMap[img.nodeId]) continue
+        let url = ''
+        try {
+          if (img.mediaId) {
+            const rec = await getMedia(img.mediaId)
+            if (rec?.data) url = rec.data
+          }
+          if (!url) {
+            const recByNode = await getMediaByNodeId(img.nodeId)
+            if (recByNode?.data) url = recByNode.data
+          }
+        } catch {}
+        if (!url || cancelled) continue
+        setRefUrlMap(prev => (prev[img.nodeId] === url ? prev : { ...prev, [img.nodeId]: url }))
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [sortedRefImages, refUrlMap])
 
   const modelCfg = useMemo(() => (IMAGE_MODELS as any[]).find((m: any) => m.key === model) || IMAGE_MODELS[0], [model]) as any
   const sizeOptions = useMemo(() => (modelCfg?.sizes || ['1:1','16:9','9:16','4:3','3:4']).map((s: any) => typeof s === 'string' ? { key: s, label: s } : s), [modelCfg])
@@ -242,7 +274,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
                   }
                 }}
               >
-                <img src={img.url} alt={img.label} className="w-8 h-8 rounded-md object-cover ring-1 ring-white/20 group-hover/ref:ring-white/50" />
+                <img src={img.url || refUrlMap[img.nodeId] || ''} alt={img.label} className="w-8 h-8 rounded-md object-cover ring-1 ring-white/20 group-hover/ref:ring-white/50" />
                 <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-blue-500 text-white text-[9px] font-bold leading-none px-0.5">{img.order || i + 1}</span>
               </div>
             ))}

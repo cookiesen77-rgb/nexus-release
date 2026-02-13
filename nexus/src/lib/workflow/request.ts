@@ -268,7 +268,7 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
   })
 
   // Tauri 环境下增加重试次数（502 错误在 Tauri 中更常见）
-  const maxRetries = opts?.noRetry ? 0 : (isTauri ? 2 : 1)
+  const maxRetries = opts?.noRetry ? 1 : (isTauri ? 2 : 1)
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     // Tauri HTTP 插件在某些平台（特别是 Windows）上对 AbortController 支持不完善
     // 因此只在非 Tauri 环境或明确设置超时时使用 signal

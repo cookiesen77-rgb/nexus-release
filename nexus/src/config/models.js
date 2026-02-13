@@ -68,7 +68,7 @@ export const IMAGE_MODELS = [
         label: 'nano-banana-pro',
         key: 'gemini-3-pro-image-preview',
         endpoint: toAbsoluteUrl('/v1beta/models/gemini-3-pro-image-preview:generateContent'),
-        authMode: 'query',
+        authMode: 'bearer',
         format: 'gemini-image',
         timeout: 240000,
         tips: '支持多张参考图 + 提示词（最多 14 张参考图）',
