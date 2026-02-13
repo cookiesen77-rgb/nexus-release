@@ -1,6 +1,7 @@
 import React, { memo, useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
+import { shallow } from 'zustand/shallow'
 import { IMAGE_MODELS, VIDEO_MODELS, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL } from '@/config/models'
 import { useSettingsStore } from '@/store/settings'
 import { usePresetsStore } from '@/store/presets'
@@ -117,19 +118,22 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   const [aperture, setAperture] = useState(3)
   const [loopCount, setLoopCount] = useState(1)
 
-  // 订阅连接的参考图（上游 image 节点）
-  const refImages = useGraphStore(s => {
-    const edges = s.edges.filter(e => e.target === nodeId)
-    return edges
-      .map(e => {
-        const src = s.nodes.find(n => n.id === e.source)
-        if (src?.type !== 'image') return null
-        const order = Number((e.data as any)?.imageOrder) || 0
-        return { nodeId: src.id, url: (src.data as any)?.url || '', label: (src.data as any)?.label || '', order, edgeId: e.id }
-      })
-      .filter(Boolean) as Array<{ nodeId: string; url: string; label: string; order: number; edgeId: string }>
-  })
-  const sortedRefImages = useMemo(() => [...refImages].sort((a, b) => (a.order || 999) - (b.order || 999)), [refImages])
+  // 订阅连接的参考图（上游 image 节点）— 用边 ID 列表做浅比较确保更新
+  const refEdgeIds = useGraphStore(
+    s => s.edges.filter(e => e.target === nodeId && s.nodes.find(n => n.id === e.source)?.type === 'image').map(e => e.id),
+    shallow
+  )
+  const sortedRefImages = useMemo(() => {
+    const s = useGraphStore.getState()
+    return refEdgeIds.map(eid => {
+      const e = s.edges.find(x => x.id === eid)
+      if (!e) return null
+      const src = s.nodes.find(n => n.id === e.source)
+      if (!src) return null
+      const order = Number((e.data as any)?.imageOrder) || 0
+      return { nodeId: src.id, url: (src.data as any)?.url || '', label: (src.data as any)?.label || '', order, edgeId: e.id }
+    }).filter(Boolean).sort((a: any, b: any) => (a.order || 999) - (b.order || 999)) as Array<{ nodeId: string; url: string; label: string; order: number; edgeId: string }>
+  }, [refEdgeIds])
 
   const modelCfg = useMemo(() => (IMAGE_MODELS as any[]).find((m: any) => m.key === model) || IMAGE_MODELS[0], [model]) as any
   const sizeOptions = useMemo(() => (modelCfg?.sizes || ['1:1','16:9','9:16','4:3','3:4']).map((s: any) => typeof s === 'string' ? { key: s, label: s } : s), [modelCfg])
