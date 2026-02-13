@@ -34,13 +34,19 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   const persistAttemptedRef = useRef<string>('')
 
   // 检查是否有上游图片连接
-  const hasUpstreamImage = useGraphStore(s => s.edges.some(e => e.target === id && s.nodes.find(n => n.id === e.source)?.type === 'image'))
+  const hasUpstreamImage = useGraphStore(s => s.edges.some(e => {
+    const src = s.nodes.find(n => n.id === e.source)
+    return e.target === id && (src?.type === 'image' || src?.type === 'imageConfig')
+  }))
 
   // Local mode state
   // 'menu' = 显示"尝试"菜单, 'upload' = 可上传参考图, 'awaiting' = 待生成
   const [mode, setMode] = useState<'menu' | 'upload' | 'awaiting'>(() => {
     if ((nodeData as any)?._awaitingGeneration) return 'awaiting'
-    const initHasUpstream = useGraphStore.getState().edges.some(e => e.target === id && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'image')
+    const initHasUpstream = useGraphStore.getState().edges.some(e => {
+      const src = useGraphStore.getState().nodes.find(n => n.id === e.source)
+      return e.target === id && (src?.type === 'image' || src?.type === 'imageConfig')
+    })
     if (initHasUpstream && !nodeData?.url) return 'awaiting'
     if (nodeData?._fromWorkflow) return 'upload'
     if (nodeData?.url) return 'upload'
@@ -51,6 +57,12 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   useEffect(() => {
     if (hasUpstreamImage && !nodeData?.url && mode !== 'awaiting') setMode('awaiting')
   }, [hasUpstreamImage, mode, nodeData?.url])
+
+  useEffect(() => {
+    if (!hasUpstreamImage && !nodeData?.url && mode === 'awaiting' && !nodeData?._fromWorkflow) {
+      setMode('menu')
+    }
+  }, [hasUpstreamImage, nodeData?.url, mode, nodeData?._fromWorkflow])
 
   const hasUrl = !!nodeData?.url
 
@@ -125,7 +137,7 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
     setMode('upload')
     store.patchNodeDataSilent(id, { _fromWorkflow: true })
     const videoId = store.addNode('videoConfig', { x: node.x + 350, y: node.y }, { label: '视频生成', _awaitingGeneration: true })
-    store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
+    store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left', imageRole: 'first_frame_image' })
   }, [id])
 
   const handleReplaceClick = useCallback(async (e: React.MouseEvent) => {

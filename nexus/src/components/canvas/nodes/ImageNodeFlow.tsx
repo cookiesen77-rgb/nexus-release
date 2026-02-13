@@ -322,7 +322,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     if (node) {
       store.patchNodeDataSilent(id, { _fromWorkflow: true })
       const videoId = store.addNode('videoConfig', { x: node.x + 350, y: node.y }, { label: '视频生成', _awaitingGeneration: true })
-      store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left', data: { imageRole: 'first_frame_image' } })
+      store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left', imageRole: 'first_frame_image' })
       store.setSelected(videoId)
     }
   }, [id])
