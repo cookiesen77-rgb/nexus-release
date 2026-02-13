@@ -163,10 +163,12 @@ select option {
 .canvas-layer {
   contain: paint;
   isolation: isolate;
+  z-index: 0;
 }
 
 .ui-layer {
   pointer-events: none;
+  z-index: 1;
 }
 .ui-layer > * {
   pointer-events: auto;
