@@ -560,6 +560,7 @@ function TextPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
           { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
           { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5' },
           { value: 'gemini-3-pro-preview-thinking', label: 'Gemini 3 Pro' },
+          { value: 'kimi-k2.5', label: 'Kimi K2.5' },
         ]} onChange={setModel} icon="◇" maxW={180} />
         <div className="flex-1" />
         <button

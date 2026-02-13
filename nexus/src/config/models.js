@@ -1275,6 +1275,13 @@ export const CHAT_MODELS = [
         format: 'openai-chat'
     },
     {
+        label: 'Kimi K2.5',
+        key: 'kimi-k2.5',
+        endpoint: '/chat/completions',
+        authMode: 'bearer',
+        format: 'openai-chat'
+    },
+    {
         label: 'GPT-5 mini（Responses）',
         key: 'gpt-5-mini',
         endpoint: '/responses',
@@ -1331,7 +1338,7 @@ export const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image-preview'
 export const DEFAULT_VIDEO_MODEL = 'sora-2-all'
 export const DEFAULT_CHAT_MODEL = 'gpt-5.1-thinking-all'
 export const DEFAULT_TOOL_MODEL = 'gemini-3-pro-preview-thinking'
-export const TOOL_MODEL_KEYS = ['gemini-3-pro-preview-thinking', 'claude-opus-4-6', 'claude-opus-4-5-20251101']
+export const TOOL_MODEL_KEYS = ['gemini-3-pro-preview-thinking', 'claude-opus-4-6', 'claude-opus-4-5-20251101', 'kimi-k2.5']
 export const TOOL_CHAT_MODELS = CHAT_MODELS.filter(m => TOOL_MODEL_KEYS.includes(m.key))
 export const DEFAULT_IMAGE_SIZE = '1024x1024'
 export const DEFAULT_VIDEO_RATIO = '16:9'
