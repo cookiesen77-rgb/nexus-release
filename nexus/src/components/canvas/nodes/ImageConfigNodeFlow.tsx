@@ -5,12 +5,15 @@
  * 空节点 → 显示"尝试"菜单 → 选中后底部面板配置+生成 → 结果写入自身
  */
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Position, NodeProps } from '@xyflow/react'
 import { Loader2, ImageIcon, Upload, Video } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { saveMedia, getMedia, getMediaByNodeId } from '@/lib/mediaStorage'
 import { TapNodeHandle } from './shared/TapNodeHandle'
 import ImageEditToolbar from '@/components/canvas/ImageEditToolbar'
+import MediaPreviewModal from '@/components/canvas/MediaPreviewModal'
+import ImageCropModal from '@/components/canvas/ImageCropModal'
 
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
@@ -29,6 +32,8 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   const [showActions, setShowActions] = useState(false)
   const [editToolbarBusy, setEditToolbarBusy] = useState(false)
   const [editToolbarHover, setEditToolbarHover] = useState(false)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const toolbarHoverRef = useRef(false)
   const replaceInputRef = useRef<HTMLInputElement>(null)
   const loadAttemptedRef = useRef(false)
   const persistAttemptedRef = useRef<string>('')
@@ -140,8 +145,8 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
     store.addEdge(id, videoId, { sourceHandle: 'right', targetHandle: 'left', imageRole: 'first_frame_image' })
   }, [id])
 
-  const handleReplaceClick = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleReplaceClick = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     if (isTauri) {
       try {
         const { open } = await import('@tauri-apps/plugin-dialog')
@@ -173,11 +178,43 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
     e.target.value = ''
   }, [id])
 
+  const cancelHide = useCallback(() => {
+    if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }
+  }, [])
+
+  const scheduleHide = useCallback(() => {
+    cancelHide()
+    hideTimerRef.current = setTimeout(() => {
+      if (!toolbarHoverRef.current && !editToolbarBusy) setShowActions(false)
+    }, 200)
+  }, [cancelHide, editToolbarBusy])
+
+  const handleToolbarHoverChange = useCallback((hovering: boolean) => {
+    toolbarHoverRef.current = hovering
+    setEditToolbarHover(hovering)
+    if (hovering) { cancelHide(); setShowActions(true) }
+    else scheduleHide()
+  }, [cancelHide, scheduleHide])
+
+  const handleDownload = useCallback(async () => {
+    if (!nodeData?.url) return
+    try {
+      const { downloadFile } = await import('@/lib/download')
+      await downloadFile({ url: nodeData.url, filename: `${(nodeData as any)?.label || '图片'}_${Date.now()}.png`, mimeType: 'image/png' })
+      window.$message?.success?.('下载成功')
+    } catch { window.$message?.error?.('下载失败') }
+  }, [nodeData?.url, nodeData])
+
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [cropOpen, setCropOpen] = useState(false)
+
+  useEffect(() => () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current) }, [])
+
   return (
     <div
       className="relative"
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => !editToolbarBusy && !editToolbarHover && setShowActions(false)}
+      onMouseEnter={() => { cancelHide(); setShowActions(true) }}
+      onMouseLeave={scheduleHide}
     >
       <div
         className="group relative overflow-visible rounded-xl bg-[var(--bg-secondary)]"
@@ -265,15 +302,33 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
           imageUrl={nodeData.url!}
           visible={showActions || editToolbarBusy || editToolbarHover}
           onBusyChange={setEditToolbarBusy}
-          onHoverChange={setEditToolbarHover}
-          onReplace={() => handleReplaceClick({} as any)}
-          onCrop={() => {}}
-          onDownload={() => {}}
-          onPreview={() => {}}
+          onHoverChange={handleToolbarHoverChange}
+          onReplace={() => handleReplaceClick()}
+          onCrop={() => setCropOpen(true)}
+          onDownload={handleDownload}
+          onPreview={() => setPreviewOpen(true)}
         />
       )}
 
       <input ref={replaceInputRef} type="file" accept="image/*" className="hidden" onChange={handleReplaceFile} />
+
+      {previewOpen && nodeData?.url && createPortal(
+        <MediaPreviewModal open={previewOpen} url={nodeData.url} type="image" onClose={() => setPreviewOpen(false)} />,
+        document.body
+      )}
+
+      {cropOpen && nodeData?.url && createPortal(
+        <ImageCropModal
+          open={cropOpen}
+          imageUrl={nodeData.url}
+          onClose={() => setCropOpen(false)}
+          onCrop={(croppedUrl) => {
+            useGraphStore.getState().updateNode(id, { data: { url: croppedUrl } } as any)
+            setCropOpen(false)
+          }}
+        />,
+        document.body
+      )}
     </div>
   )
 })
