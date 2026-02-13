@@ -224,17 +224,18 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
           onMouseEnter={() => onHoverChange?.(true)}
           onMouseLeave={() => onHoverChange?.(false)}
         >
-          <div
-            className="w-fit h-10 p-1 rounded-full flex flex-nowrap items-center gap-0.5 whitespace-nowrap"
-            style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}
-          >
-            {loading ? (
+          <div className="max-w-[80vw]">
+            <div
+              className="h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap overflow-x-auto scrollbar-hide"
+              style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}
+            >
+              {loading ? (
               <div className="flex items-center gap-2 px-3 text-xs text-white/80">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>{progress || '处理中...'}</span>
               </div>
             ) : (
-              <>
+              <div className="flex items-center gap-0.5 w-max">
                 {TOOLS.map((tool) => {
                   const Icon = tool.icon
                   return (
@@ -271,9 +272,10 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
                     <Eye className="h-4 w-4" />
                   </button>
                 )}
-              </>
+              </div>
             )}
           </div>
+        </div>
         </div>
       )}
 
