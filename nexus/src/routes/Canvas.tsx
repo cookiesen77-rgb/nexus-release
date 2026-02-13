@@ -988,84 +988,8 @@ export default function Canvas() {
 
   return (
     <div className="h-full w-full bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <header className="flex h-[72px] items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-secondary)] px-6 py-4">
-        <div className="flex items-center gap-3">
-          <button
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]"
-            onClick={() => nav('/')}
-            title="返回"
-          >
-            <ChevronLeft className="h-[18px] w-[18px]" />
-          </button>
 
-          <button
-            className="flex items-center gap-1 rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]"
-            onClick={() => {
-              // TODO: 项目下拉菜单（重命名/复制/删除）
-            }}
-            title="项目"
-          >
-            <span className="max-w-[320px] truncate">{projectName}</span>
-            <ChevronDown className="h-4 w-4 text-[var(--text-secondary)]" />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* 默认模型选择 */}
-          <div className="flex items-center gap-1">
-            <select
-              value={effectiveImageModel}
-              onChange={(e) => setDefaultImageModel(e.target.value)}
-              className="h-9 rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 text-xs text-[var(--text-primary)] outline-none hover:bg-[var(--bg-secondary)]"
-              title="默认绘画模型"
-            >
-              {(IMAGE_MODELS as any[]).map((m: any) => (
-                <option key={m.key} value={m.key}>{m.label}</option>
-              ))}
-            </select>
-            <select
-              value={effectiveVideoModel}
-              onChange={(e) => setDefaultVideoModel(e.target.value)}
-              className="h-9 rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 text-xs text-[var(--text-primary)] outline-none hover:bg-[var(--bg-secondary)]"
-              title="默认视频模型"
-            >
-              {(VIDEO_MODELS as any[]).map((m: any) => (
-                <option key={m.key} value={m.key}>{m.label}</option>
-              ))}
-            </select>
-          </div>
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
-            onClick={() => toggleDark()}
-            title="主题"
-          >
-            {dark ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
-          </button>
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
-            onClick={() => setDownloadModalOpen(true)}
-            title="批量下载"
-          >
-            <Download className="h-[18px] w-[18px]" />
-          </button>
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
-            onClick={() => setHistoryPanelOpen((v) => !v)}
-            title="历史素材"
-          >
-            <History className="h-[18px] w-[18px]" />
-          </button>
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
-            onClick={() => setSettingsOpen(true)}
-            title="API 设置"
-          >
-            <Settings className="h-[18px] w-[18px]" />
-          </button>
-        </div>
-      </header>
-
-      <div className="h-[calc(100%-72px)] w-full p-4">
+      <div className="h-full w-full p-4">
         <div
           ref={canvasWrapRef}
           data-canvas-wrap="1"
@@ -1236,33 +1160,13 @@ export default function Canvas() {
               onOpenPromptReverse={() => setPromptReverseOpen(true)}
               onOpenPromptAgent={() => setPromptAgentOpen(true)}
               onSaveAsTemplate={handleSaveAsTemplate}
+              onToggleDark={() => toggleDark()}
+              onOpenDownload={() => setDownloadModalOpen(true)}
+              onOpenHistory={() => setHistoryPanelOpen(v => !v)}
+              onOpenSettings={() => setSettingsOpen(true)}
+              dark={dark}
             />
 
-            {/* 全局 Run 按钮 */}
-            <div className="pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-2">
-              {workflowRunning ? (
-                <div className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
-                  <span className="text-xs text-[var(--text-primary)]">
-                    {workflowProgress.completed}/{workflowProgress.total}
-                  </span>
-                  <button
-                    onClick={() => { setWorkflowRunning(false) }}
-                    className="px-2 py-0.5 text-xs rounded bg-red-500/20 text-red-500 hover:bg-red-500/30"
-                  >
-                    停止
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleRunWorkflow}
-                  className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
-                >
-                  <Play className="h-4 w-4" />
-                  Run
-                </button>
-              )}
-            </div>
 
             {/* CanvasHud 在 React Flow / DOM 画布模式下禁用，因为它订阅 viewport 会导致性能问题 */}
             {/* React Flow 和 DOMGraphCanvas 已经内置了小地图，缩放控制通过 wheel 事件实现 */}

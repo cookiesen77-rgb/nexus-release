@@ -634,7 +634,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
             </div>
           )}
 
-          {(inView || displayUrl) && !nodeData?.loading && !nodeData?.error && !videoError && displayUrl && (
+          {(inView || displayUrl) && !nodeData?.error && !videoError && displayUrl && (
             <div
               className="aspect-video bg-black relative"
               onDoubleClick={(e) => { e.stopPropagation(); togglePlay() }}

@@ -3,7 +3,7 @@ import {
   Archive, Brush, Camera, Film, Hand, LayoutGrid, Link2,
   MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch,
   Save, Wand2, ShoppingBag, Sparkles, Clapperboard, MessageCircle,
-  History, ImageIcon, ChevronDown
+  History, ImageIcon, ChevronDown, Moon, Sun, Download, Settings
 } from 'lucide-react'
 
 export type CanvasTool = 'select' | 'pan' | 'connect'
@@ -26,6 +26,11 @@ type Props = {
   onOpenAssetLibrary?: () => void
   onOpenPromptAgent?: () => void
   onSaveAsTemplate?: () => void
+  onToggleDark?: () => void
+  onOpenDownload?: () => void
+  onOpenHistory?: () => void
+  onOpenSettings?: () => void
+  dark?: boolean
   onUndo?: () => void
   onRedo?: () => void
   canUndo?: boolean
@@ -53,12 +58,13 @@ export default function CanvasSidebar({
   onOpenWorkflow, onOpenShortDrama, onOpenDirector, onOpenSketch, onOpenAudio, onOpenBlend,
   onOpenPromptLibrary, onOpenPromptReverse, onOpenCameraControl,
   onOpenEcomStudio, onOpenAssetLibrary, onOpenPromptAgent, onSaveAsTemplate,
+  onToggleDark, onOpenDownload, onOpenHistory, onOpenSettings, dark,
   onUndo, onRedo, canUndo, canRedo,
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false)
 
   return (
-    <div className="pointer-events-auto absolute left-[15px] top-4 bottom-4 z-30 flex flex-col items-center gap-2">
+    <div className="pointer-events-auto fixed left-4 top-4 bottom-4 z-40 flex flex-col items-center gap-2">
       {/* TapNow Dockbar: 54px宽, 32px圆角, 深色毛玻璃 */}
       <div
         className="flex flex-col gap-1 items-center rounded-[32px] relative p-1.5 box-border"
@@ -123,7 +129,7 @@ export default function CanvasSidebar({
         </div>
       </div>
 
-      {/* 底部: 画布工具 + 撤销重做 - TapNow 风格圆角容器 */}
+      {/* 底部: 画布工具 + 功能按钮 */}
       <div
         className="flex flex-col gap-0.5 items-center p-1 box-border"
         style={{ borderRadius: 20, backgroundColor: 'var(--bg-secondary)', backdropFilter: 'blur(24px)', border: '1px solid rgba(128,128,128,0.15)' }}
@@ -138,11 +144,17 @@ export default function CanvasSidebar({
           <Link2 size={16} />
         </DockIcon>
         <div className="w-5 h-px bg-[var(--border-color)]/30 my-0.5" />
-        <DockIcon title="撤销 (Ctrl+Z)" onClick={() => onUndo?.()}>
-          <Undo2 size={14} className={canUndo ? '' : 'opacity-25'} />
+        <DockIcon title="主题" onClick={() => onToggleDark?.()}>
+          {dark ? <Moon size={14} /> : <Sun size={14} />}
         </DockIcon>
-        <DockIcon title="重做 (Ctrl+Shift+Z)" onClick={() => onRedo?.()}>
-          <Redo2 size={14} className={canRedo ? '' : 'opacity-25'} />
+        <DockIcon title="批量下载" onClick={() => onOpenDownload?.()}>
+          <Download size={14} />
+        </DockIcon>
+        <DockIcon title="历史素材" onClick={() => onOpenHistory?.()}>
+          <History size={14} />
+        </DockIcon>
+        <DockIcon title="API 设置" onClick={() => onOpenSettings?.()}>
+          <Settings size={14} />
         </DockIcon>
       </div>
     </div>
