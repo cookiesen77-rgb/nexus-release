@@ -45,47 +45,27 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   const persistAttemptedRef = React.useRef<string>('')
   const loadErrorFallbackRef = React.useRef<string>('')
   
-  // 计算此图片作为参考图时的序号
-  const [refIndex, setRefIndex] = useState<number | null>(null)
-  
-  // 计算序号的函数
-  const computeRefIndex = useCallback(() => {
+  // 计算此图片作为参考图/首帧/尾帧的角色标签
+  const [roleTag, setRoleTag] = useState<string | null>(null)
+
+  const computeRoleTag = useCallback(() => {
     const state = useGraphStore.getState()
-    const byId = new Map(state.nodes.map(n => [n.id, n]))
-    // 找到从此节点出发连接到 imageConfig 或 videoConfig 的边
     const outgoingEdges = state.edges.filter(e => e.source === id)
     for (const edge of outgoingEdges) {
-      const targetNode = byId.get(edge.target)
+      const targetNode = state.nodes.find(n => n.id === edge.target)
       if (!targetNode) continue
-
-      // 仅 imageConfig：参考图顺序来自 edge.data.imageOrder（支持在配置节点中手动调整）
-      if (targetNode.type === 'imageConfig') {
-        const configId = targetNode.id
-        const inputEdges = state.edges.filter(e => e.target === configId)
-        const imageInputs = inputEdges
-          .map((e, idx) => {
-            const n = byId.get(e.source)
-            if (!n || n.type !== 'image') return null
-            const orderRaw = Number((e.data as any)?.imageOrder)
-            const order = Number.isFinite(orderRaw) && orderRaw > 0 ? orderRaw : 999999
-            return { nodeId: n.id, idx, order }
-          })
-          .filter(Boolean) as { nodeId: string; idx: number; order: number }[]
-
-        imageInputs.sort((a, b) => (a.order - b.order) || (a.idx - b.idx))
-        const idx = imageInputs.findIndex(n => n.nodeId === id)
-        if (imageInputs.length > 1 && idx >= 0) return idx + 1
-      }
-
-      // 保持兼容：videoConfig 仍按原逻辑给出参考序号（主要用于标识多图引用场景）
       if (targetNode.type === 'videoConfig') {
-        const configId = targetNode.id
-        const inputEdges = state.edges.filter(e => e.target === configId)
-        const imageInputs = inputEdges
-          .map(e => byId.get(e.source))
-          .filter(n => n?.type === 'image') as any[]
-        const idx = imageInputs.findIndex(n => n?.id === id)
-        if (imageInputs.length > 1 && idx >= 0) return idx + 1
+        const role = String((edge.data as any)?.imageRole || '').trim()
+        if (role === 'first_frame_image') return '首帧'
+        if (role === 'last_frame_image') return '尾帧'
+        if (role === 'input_reference') return '参考图'
+      }
+      if (targetNode.type === 'imageConfig') {
+        const configEdges = state.edges.filter(e => e.target === targetNode.id && state.nodes.find(n => n.id === e.source)?.type === 'image')
+        if (configEdges.length > 1) {
+          const idx = configEdges.findIndex(e => e.source === id)
+          return `参考图${idx + 1}`
+        }
       }
     }
     return null
@@ -93,14 +73,11 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   
   // 订阅边变化以更新序号
   useEffect(() => {
-    // 初始计算
-    setRefIndex(computeRefIndex())
-    
-    // 订阅边的变化
+    setRoleTag(computeRoleTag())
     const unsubscribe = useGraphStore.subscribe(
       (state, prevState) => {
         if (state.edges !== prevState.edges) {
-          setRefIndex(computeRefIndex())
+          setRoleTag(computeRoleTag())
         }
       }
     )
@@ -259,7 +236,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     try {
       const success = await downloadFile({
         url: downloadUrl,
-        filename: `image_${id}_${Date.now()}.png`,
+        filename: `${(nodeData?.label || '图片').replace(/[/\\:*?"<>|]/g, '_')}_${Date.now()}.png`,
         mimeType: 'image/png'
       })
       if (success) {
@@ -503,12 +480,24 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
         className="group relative overflow-visible rounded-2xl bg-[var(--bg-secondary)]"
         style={{ width: '100%', minWidth: 250, height: imgHeight, minHeight: 120 }}
       >
-        {/* TapNow: 标签浮在节点上方 */}
-        <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontSize: '17.1429px' }}>
+        {/* TapNow: 标签浮在节点上方，可双击编辑 */}
+        <div
+          className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap"
+          style={{ fontSize: '17.1429px' }}
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            const current = nodeData?.label || '图片'
+            const next = window.prompt('修改备注', current)
+            if (next !== null && next.trim() && next.trim() !== current) {
+              useGraphStore.getState().updateNode(id, { data: { label: next.trim() } } as any)
+            }
+          }}
+          title="双击编辑备注"
+        >
           {nodeData?.label || '图片'}
-          {refIndex && (
-            <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-blue-500 text-white rounded">
-              参考图{refIndex}
+          {roleTag && (
+            <span className={`ml-1.5 px-1.5 py-0.5 text-[10px] font-bold text-white rounded ${roleTag === '首帧' ? 'bg-emerald-500' : roleTag === '尾帧' ? 'bg-orange-500' : 'bg-blue-500'}`}>
+              {roleTag}
             </span>
           )}
         </div>

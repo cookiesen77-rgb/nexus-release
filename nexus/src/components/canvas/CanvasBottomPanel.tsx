@@ -289,10 +289,9 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
 function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeData: any; isConfigNode?: boolean }) {
   const defaultModel = useSettingsStore(s => s.defaultVideoModel) || DEFAULT_VIDEO_MODEL
 
-  const imageSourceCount = useMemo(() => {
-    const s = useGraphStore.getState()
+  const imageSourceCount = useGraphStore(s => {
     return s.edges.filter(e => e.target === nodeId && s.nodes.find(n => n.id === e.source)?.type === 'image').length
-  }, [nodeId])
+  })
 
   const hasImageSource = imageSourceCount > 0
 

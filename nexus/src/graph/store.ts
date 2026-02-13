@@ -114,17 +114,28 @@ const cloneCanvas = (c: PersistedCanvasV1): PersistedCanvasV1 => ({
     // 对于图片/视频/音频节点，不保存内联大数据到 localStorage
     // 大型数据会被保存到 IndexedDB，这里只保留 mediaId 引用
     if (n.type === 'image' || n.type === 'video' || n.type === 'audio') {
+      const mediaId = typeof data.mediaId === 'string' ? data.mediaId.trim() : ''
+      const hasMediaId = !!mediaId
+
       // 检查 url 是否是大数据（data/blob 或超过 50KB）
       if (data.url && typeof data.url === 'string') {
         const url = data.url as string
-        if (url.startsWith('data:') || url.startsWith('blob:') || url.length > 50000) {
+        const isData = url.startsWith('data:')
+        const isBlob = url.startsWith('blob:')
+        const isLarge = url.length > 50000
+        // blob: 跨刷新不可用，必须剥离；data/large: 若已落库则剥离，否则临时保留避免刷新丢图
+        if (isBlob || ((isData || isLarge) && hasMediaId)) {
           delete data.url
         }
       }
+
       // 检查 sourceUrl 是否是大数据
       if (data.sourceUrl && typeof data.sourceUrl === 'string') {
         const sourceUrl = data.sourceUrl as string
-        if (sourceUrl.startsWith('data:') || sourceUrl.startsWith('blob:') || sourceUrl.length > 50000) {
+        const isData = sourceUrl.startsWith('data:')
+        const isBlob = sourceUrl.startsWith('blob:')
+        const isLarge = sourceUrl.length > 50000
+        if (isBlob || ((isData || isLarge) && hasMediaId)) {
           delete data.sourceUrl
         }
       }
@@ -719,13 +730,17 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   addEdge: (source, target, data) => {
+    const state = get()
+    if (state.edges.some(e => e.source === source && e.target === target)) {
+      return state.edges.find(e => e.source === source && e.target === target)!.id
+    }
+    const nodesById = new Map(state.nodes.map((n) => [n.id, n]))
+    if (!nodesById.get(source) || !nodesById.get(target)) return ''
     const id = newEdgeId()
     set((s) => {
-      if (s.edges.some(e => e.source === source && e.target === target)) return {}
       const nodesById = new Map(s.nodes.map((n) => [n.id, n]))
       const src = nodesById.get(source)
       const dst = nodesById.get(target)
-      if (!src || !dst) return {}
 
       const nextData: Record<string, unknown> = data ? { ...data } : {}
       let type: EdgeType | undefined
