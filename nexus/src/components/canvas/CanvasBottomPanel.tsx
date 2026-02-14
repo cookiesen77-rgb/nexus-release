@@ -155,6 +155,11 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
   const [focalLength, setFocalLength] = useState(1)
   const [aperture, setAperture] = useState(3)
   const [loopCount, setLoopCount] = useState(1)
+  const promptBoxHeight = useMemo(() => {
+    if (!panelSize?.height) return 0
+    const reserved = cameraOpen ? 270 : 210
+    return Math.max(80, panelSize.height - reserved)
+  }, [panelSize?.height, cameraOpen])
 
   // 只订阅到当前节点的边数量变化，避免全量订阅导致性能问题
   const incomingEdgeCount = useGraphStore(s => s.edges.filter(e => e.target === nodeId).length)
@@ -242,7 +247,8 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
 
       const genCount = Math.max(1, Math.min(10, loopCount))
       const regenerateMode = useSettingsStore.getState().regenerateMode || 'create'
-      const forceCreateOutputs = !isConfigNode && genCount > 1
+      const forceCreateOutputs = genCount > 1
+      const batchOffset = Number((node?.data as any)?._batchOutputOffset || 0)
 
       // 收集上游参考图 URL
       const upstreamRefUrls = store.edges
@@ -254,7 +260,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
       const allRefImages = [...(nodeData?.url ? [nodeData.url] : []), ...upstreamRefUrls]
 
       for (let i = 0; i < genCount; i++) {
-        if (i === 0 && isConfigNode) {
+        if (i === 0 && isConfigNode && !forceCreateOutputs) {
           store.updateNode(nodeId, { data: { model, size, quality, prompt: effectivePrompt, _inlinePrompt: effectivePrompt } })
           store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
           await generateImageFromConfigNode(nodeId, { model, size, quality }, { outputNodeId: nodeId, selectOutput: false, markConfigExecuted: false })
@@ -297,11 +303,15 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
             latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
             if (outputId) latestStore.removeNode(outputId)
           } else if (outputNode) {
-            const pos = { x: (node?.x || 0) + 350 + i * 300, y: node?.y || 0 }
+            const slotIndex = batchOffset + i
+            const pos = { x: (node?.x || 0) + 350 + slotIndex * 300, y: node?.y || 0 }
             latestStore.updateNode(outputNode.id, { x: pos.x, y: pos.y })
           }
           latestStore.removeNode(configId)
         }
+      }
+      if (forceCreateOutputs) {
+        store.patchNodeDataSilent(nodeId, { _batchOutputOffset: batchOffset + genCount })
       }
       window.$message?.success?.(genCount > 1 ? `${genCount} 张图片生成成功` : '图片生成成功')
     } catch (err: any) {
@@ -376,7 +386,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
             placeholder="描述你想要生成的内容..."
             rows={2}
             className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 resize-none outline-none pr-20"
-            style={{ minHeight: 36, maxHeight: 100 }}
+            style={promptBoxHeight > 0 ? { minHeight: promptBoxHeight, maxHeight: promptBoxHeight } : { minHeight: 36, maxHeight: 100 }}
             disabled={loading}
           />
           <button
@@ -462,6 +472,11 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
   useEffect(() => { loadingRef.current = loading }, [loading])
   const [polishing, setPolishing] = useState(false)
   const [loopCount, setLoopCount] = useState(1)
+  const promptBoxHeight = useMemo(() => {
+    if (!panelSize?.height) return 0
+    const reserved = 210
+    return Math.max(80, panelSize.height - reserved)
+  }, [panelSize?.height])
 
   const panelLabel = imageSourceCount >= 2 ? '首尾帧生视频' : hasImageSource ? '图生视频' : '文生视频'
 
@@ -525,10 +540,11 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
       if (!node) throw new Error('节点不存在')
 
       const genCount = Math.max(1, Math.min(10, loopCount))
-      const forceCreateOutputs = !isConfigNode && genCount > 1
+      const forceCreateOutputs = genCount > 1
+      const batchOffset = Number((node?.data as any)?._batchOutputOffset || 0)
 
       for (let i = 0; i < genCount; i++) {
-        if (i === 0 && isConfigNode) {
+        if (i === 0 && isConfigNode && !forceCreateOutputs) {
           store.updateNode(nodeId, { data: { model, ratio, dur, resolution, prompt, _inlinePrompt: prompt } })
           store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
           await generateVideoFromConfigNode(nodeId, { model, ratio, duration: dur }, { outputNodeId: nodeId, selectOutput: false })
@@ -549,10 +565,14 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
             latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
             if (outputId) latestStore.removeNode(outputId)
           } else if (outputNode) {
-            latestStore.updateNode(outputNode.id, { x: (node?.x || 0) + 500 + i * 500, y: node?.y || 0 })
+            const slotIndex = batchOffset + i
+            latestStore.updateNode(outputNode.id, { x: (node?.x || 0) + 500 + slotIndex * 500, y: node?.y || 0 })
           }
           latestStore.removeNode(configId)
         }
+      }
+      if (forceCreateOutputs) {
+        store.patchNodeDataSilent(nodeId, { _batchOutputOffset: batchOffset + genCount })
       }
       window.$message?.success?.(genCount > 1 ? `${genCount} 个视频生成成功` : '视频生成成功')
     } catch (err: any) {
@@ -580,7 +600,7 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
             placeholder="描述你想要生成的视频内容..."
             rows={2}
             className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 resize-none outline-none pr-20"
-            style={{ minHeight: 36, maxHeight: 100 }}
+            style={promptBoxHeight > 0 ? { minHeight: promptBoxHeight, maxHeight: promptBoxHeight } : { minHeight: 36, maxHeight: 100 }}
             disabled={loading}
           />
           <button
@@ -631,6 +651,10 @@ function TextPanel({ nodeId, nodeData, panelSize, minPanelWidth, onPanelResize }
   const [loading, setLoading] = useState(false)
   const loadingRef = useRef(false)
   useEffect(() => { loadingRef.current = loading }, [loading])
+  const promptBoxHeight = useMemo(() => {
+    if (!panelSize?.height) return 0
+    return Math.max(120, panelSize.height - 140)
+  }, [panelSize?.height])
 
   const savePromptToNode = useCallback((val: string) => {
     useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
@@ -650,9 +674,13 @@ function TextPanel({ nodeId, nodeData, panelSize, minPanelWidth, onPanelResize }
 
   const handleGenerate = useCallback(async () => {
     if (loadingRef.current) return
-    if (!prompt.trim()) { window.$message?.warning?.('请输入润色指令'); return }
+    const inputText = String(prompt || '').trim()
     const originalContent = String((nodeData as any)?.content || '').trim()
-    if (!originalContent) { window.$message?.warning?.('文本节点内容为空，请先输入提示词'); return }
+    if (!inputText && !originalContent) { window.$message?.warning?.('请输入要润色的文本'); return }
+    const contentToPolish = originalContent || inputText
+    const polishInstruction = inputText && originalContent
+      ? inputText
+      : '请润色并优化这段提示词，使其更具体、可执行、适合 AI 生成。'
     loadingRef.current = true
     setLoading(true)
     try {
@@ -673,7 +701,7 @@ function TextPanel({ nodeId, nodeData, panelSize, minPanelWidth, onPanelResize }
         },
         {
           role: 'user',
-          content: `原始提示词：\n${originalContent}\n\n润色指令：${prompt}`
+          content: `原始提示词：\n${contentToPolish}\n\n润色指令：${polishInstruction}`
         }
       ], { filterThinking: true })
       if (result) {
@@ -695,10 +723,10 @@ function TextPanel({ nodeId, nodeData, panelSize, minPanelWidth, onPanelResize }
           value={prompt}
           onChange={e => { setPrompt(e.target.value); savePromptToNode(e.target.value) }}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
-          placeholder="输入润色指令，如：更具电影感、增加细节描述、改为日系动漫风格..."
+          placeholder="输入润色指令；若节点为空，也可直接输入要润色的提示词..."
           rows={2}
           className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 resize-none outline-none"
-          style={{ minHeight: 36, maxHeight: 100 }}
+          style={promptBoxHeight > 0 ? { minHeight: promptBoxHeight, maxHeight: promptBoxHeight } : { minHeight: 36, maxHeight: 100 }}
           disabled={loading}
         />
       </div>
@@ -756,7 +784,7 @@ function PanelShell({ children, panelSize, minPanelWidth, onPanelResize }: { chi
       onClick={e => e.stopPropagation()}
       onPointerDown={e => e.stopPropagation()}
     >
-      <div className="max-h-[80vh] overflow-auto">{children}</div>
+      <div className="max-h-[80vh] overflow-auto" style={{ minHeight: panelSize?.height || undefined }}>{children}</div>
       <div
         role="button"
         title="拖动调整面板大小（双击重置）"
