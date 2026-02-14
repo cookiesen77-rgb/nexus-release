@@ -231,6 +231,78 @@ const pickFirstHttpUrlFromText = (text: string) => {
   return String(m[0] || '').replace(/[)\]}>"'，。,.]+$/g, '').trim()
 }
 
+const IMAGE_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif|svg)(\?|$)/i
+const NON_IMAGE_EXT_RE = /\.(mp4|webm|mov|m4v|m3u8|avi|mkv|mp3|wav|m4a|aac|ogg|flac|json|txt|pdf)(\?|$)/i
+const IMAGE_URL_POSITIVE_HINT_RE = /(original|origin|source|full|final|result|output|download|raw|hd|hires|image)/i
+const IMAGE_URL_NEGATIVE_HINT_RE = /(preview|thumb|thumbnail|small|icon|avatar|mask|watermark|frame|border|sprite)/i
+
+const scoreImageUrlCandidate = (url: string, keyPath = '') => {
+  const u = String(url || '').trim()
+  const path = String(keyPath || '')
+  if (!u) return -999
+
+  let score = 0
+  if (/^data:image\//i.test(u)) score += 120
+  else if (/^data:/i.test(u)) score += 80
+  else if (IMAGE_EXT_RE.test(u)) score += 48
+  else if (NON_IMAGE_EXT_RE.test(u)) score -= 120
+  else score += 8
+
+  if (IMAGE_URL_POSITIVE_HINT_RE.test(path)) score += 36
+  if (IMAGE_URL_POSITIVE_HINT_RE.test(u)) score += 14
+
+  if (IMAGE_URL_NEGATIVE_HINT_RE.test(path)) score -= 72
+  if (IMAGE_URL_NEGATIVE_HINT_RE.test(u)) score -= 45
+
+  if (/(^|\/)preview(\/|$)/i.test(u)) score -= 35
+  if (/(^|\/)thumbs?(\/|$)/i.test(u)) score -= 30
+  if (/(^|\/)(images?|outputs?|results?)(\/|$)/i.test(u)) score += 12
+  if (/(\?|&)(download|raw|orig|original)=?(1|true)?($|&)/i.test(u)) score += 16
+
+  score += Math.min(10, Math.floor(u.length / 90))
+  return score
+}
+
+const pickBestImageUrlDeep = (payload: any) => {
+  const candidates: Array<{ url: string; score: number }> = []
+  const seen = new Set<string>()
+  const push = (val: any, keyPath = '') => {
+    if (typeof val !== 'string') return
+    const v = val.trim()
+    if (!v) return
+    if (!v.startsWith('http') && !v.startsWith('data:')) return
+    if (seen.has(v)) return
+    seen.add(v)
+    candidates.push({ url: v, score: scoreImageUrlCandidate(v, keyPath) })
+  }
+  const walk = (obj: any, depth = 0, path = '') => {
+    if (!obj || depth > 6) return
+    if (typeof obj === 'string') {
+      push(obj, path)
+      return
+    }
+    if (Array.isArray(obj)) {
+      for (let i = 0; i < obj.length; i++) {
+        walk(obj[i], depth + 1, `${path}[${i}]`)
+      }
+      return
+    }
+    if (typeof obj !== 'object') return
+    for (const [k, v] of Object.entries(obj)) {
+      const nextPath = path ? `${path}.${k}` : k
+      if (typeof v === 'string') push(v, nextPath)
+      walk(v, depth + 1, nextPath)
+    }
+  }
+  walk(payload)
+  if (candidates.length === 0) return ''
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    return b.url.length - a.url.length
+  })
+  return candidates[0]?.url || ''
+}
+
 const extractUrlsDeep = (payload: any) => {
   const urls: string[] = []
   const seen = new Set<string>()
@@ -264,11 +336,15 @@ const normalizeToImageUrl = (resp: any) => {
   const data = resp?.data
   if (Array.isArray(data) && data.length > 0) {
     const first = data[0]
-    if (typeof first?.url === 'string' && first.url) return first.url
+    if (typeof first?.url === 'string' && first.url) return first.url.trim()
     if (typeof first?.b64_json === 'string' && first.b64_json) return toDataUrl(first.b64_json, 'image/png')
+    const pickedFromFirst = pickBestImageUrlDeep(first)
+    if (pickedFromFirst) return pickedFromFirst
   }
-  if (typeof resp?.url === 'string') return resp.url
-  if (typeof resp?.image_url === 'string') return resp.image_url
+  if (typeof resp?.url === 'string' && resp.url.trim()) return resp.url.trim()
+  if (typeof resp?.image_url === 'string' && resp.image_url.trim()) return resp.image_url.trim()
+  const picked = pickBestImageUrlDeep(resp)
+  if (picked) return picked
   return ''
 }
 
@@ -449,7 +525,7 @@ export async function generateShortDramaImage(req: ShortDramaImageRequest): Prom
       authMode: modelCfg.authMode,
       timeoutMs: modelCfg.timeout || 240000,
     })
-    imageUrl = normalizeToImageUrl(rsp) || extractUrlsDeep(rsp)[0] || ''
+    imageUrl = normalizeToImageUrl(rsp) || pickBestImageUrlDeep(rsp) || extractUrlsDeep(rsp)[0] || ''
   } else if (modelCfg.format === 'openai-chat-image') {
     const payload = { model: modelCfg.key, messages: [{ role: 'user', content: prompt }] }
     const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
@@ -461,7 +537,7 @@ export async function generateShortDramaImage(req: ShortDramaImageRequest): Prom
     if (!imageInput) throw new Error('该图片模型需要参考图')
     const payload: any = { model: modelCfg.key, prompt, image: imageInput }
     const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
-    imageUrl = normalizeToImageUrl(rsp) || extractUrlsDeep(rsp)[0] || ''
+    imageUrl = normalizeToImageUrl(rsp) || pickBestImageUrlDeep(rsp) || extractUrlsDeep(rsp)[0] || ''
   } else if (modelCfg.format === 'kling-image') {
     const requestData: any = {
       model_name: modelCfg.defaultParams?.model_name || 'kling-v2-1',
@@ -473,7 +549,7 @@ export async function generateShortDramaImage(req: ShortDramaImageRequest): Prom
     const imageInput = limitedRefImages[0]
     if (imageInput) requestData.image = imageInput
     const resp = await postJson<any>(modelCfg.endpoint, requestData, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
-    imageUrl = normalizeToImageUrl(resp) || extractUrlsDeep(resp)[0] || ''
+    imageUrl = normalizeToImageUrl(resp) || pickBestImageUrlDeep(resp) || extractUrlsDeep(resp)[0] || ''
 
     if (!imageUrl) {
       const taskId = resp?.data?.task_id || resp?.data?.id || resp?.task_id || resp?.id || ''
@@ -481,7 +557,7 @@ export async function generateShortDramaImage(req: ShortDramaImageRequest): Prom
       const statusUrl = `${String(modelCfg.endpoint).replace(/\/$/, '')}/${encodeURIComponent(String(taskId))}`
       for (let i = 0; i < 120; i++) {
         const polled = await getJson<any>(statusUrl, undefined, { authMode: modelCfg.authMode })
-        imageUrl = normalizeToImageUrl(polled) || extractUrlsDeep(polled)[0] || ''
+        imageUrl = normalizeToImageUrl(polled) || pickBestImageUrlDeep(polled) || extractUrlsDeep(polled)[0] || ''
         if (imageUrl) break
         const statusText = String(polled?.status || polled?.data?.task_status || polled?.data?.status || polled?.task_status || '').toLowerCase()
         if (statusText && /(fail|error)/i.test(statusText)) {
