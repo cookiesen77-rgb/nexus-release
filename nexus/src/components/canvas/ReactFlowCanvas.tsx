@@ -248,7 +248,10 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
   // 使用订阅监听外部添加/删除节点
   useEffect(() => {
     const unsubscribe = useGraphStore.subscribe(
-      (state) => {
+      (state, prevState) => {
+        // 拖拽/缩放期间会有大量 selection / viewport 更新；nodes/edges 未变化时直接跳过
+        if (state.nodes === prevState.nodes && state.edges === prevState.edges) return
+
         // 处理节点变化
         const currentNodeIds = new Set(state.nodes.map(n => n.id))
         const addedNodes: Node[] = []
@@ -266,7 +269,6 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         }
         
         if (addedNodes.length > 0 || removedIds.length > 0) {
-          console.log('[ReactFlowCanvas] 节点增删:', { added: addedNodes.map(n => n.id), removed: removedIds })
           setNodes((prev) => {
             let result = prev
             if (removedIds.length > 0) {
@@ -358,7 +360,10 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     }
 
     const unsubscribe = useGraphStore.subscribe(
-      (state) => {
+      (state, prevState) => {
+        // 只在 nodes 引用变化时做字段对比，避免无关状态更新触发整表扫描
+        if (state.nodes === prevState.nodes) return
+
         const updatedNodes: { id: string; data: any }[] = []
         const currentIds = new Set<string>()
 
@@ -410,9 +415,10 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         cleanupSnaps(currentIds)
 
         if (updatedNodes.length > 0) {
-          setNodes((prev) => prev.map(n => {
-            const updated = updatedNodes.find(u => u.id === n.id)
-            return updated ? { ...n, data: updated.data } : n
+          const updatesById = new Map(updatedNodes.map((u) => [u.id, u.data] as const))
+          setNodes((prev) => prev.map((n) => {
+            const nextData = updatesById.get(n.id)
+            return nextData ? { ...n, data: nextData } : n
           }))
         }
       }
@@ -795,14 +801,25 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     const edgeId = String(selectedEdges[0]?.id || '').trim()
 
     const store = useGraphStore.getState()
+    const currentNodeIds = store.selectedNodeIds || []
+    const currentEdgeId = store.selectedEdgeId || null
+    const sameNodeSelection =
+      nodeIds.length === currentNodeIds.length &&
+      nodeIds.every((id, idx) => id === currentNodeIds[idx])
+
     if (nodeIds.length > 0) {
+      if (sameNodeSelection && !currentEdgeId) return
       store.setSelection(nodeIds, nodeIds[0] || null)
       return
     }
+
     if (edgeId) {
+      if (currentEdgeId === edgeId && currentNodeIds.length === 0) return
       store.setSelectedEdge(edgeId)
       return
     }
+
+    if (currentNodeIds.length === 0 && !currentEdgeId) return
     store.clearSelection()
   }, [])
 

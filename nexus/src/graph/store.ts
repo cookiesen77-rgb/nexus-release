@@ -59,6 +59,15 @@ const asPositiveInt = (v: unknown, fallback: number) => {
   return Math.max(1, Math.floor(n))
 }
 
+const sameStringArray = (a: string[], b: string[]) => {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 const inferEdgeType = (edge: GraphEdge, nodesById: Map<string, GraphNode>): EdgeType => {
   const s = nodesById.get(edge.source)
   const dst = nodesById.get(edge.target)
@@ -528,17 +537,26 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   setSelected: (id) => {
-    const next = id ? [id] : []
-    set({ selectedNodeId: id, selectedNodeIds: next, selectedEdgeId: null })
+    const nextId = id ? String(id || '').trim() : null
+    const nextIds = nextId ? [nextId] : []
+    set((s) => {
+      if (s.selectedNodeId === nextId && sameStringArray(s.selectedNodeIds, nextIds) && s.selectedEdgeId == null) return s
+      return { selectedNodeId: nextId, selectedNodeIds: nextIds, selectedEdgeId: null }
+    })
   },
 
   setSelection: (ids, primaryId) => {
     const clean = Array.from(new Set((Array.isArray(ids) ? ids : []).map((x) => String(x || '').trim()).filter(Boolean)))
     const primary = primaryId != null ? String(primaryId || '').trim() : clean[0] || null
-    set({
-      selectedNodeId: primary || null,
-      selectedNodeIds: primary ? (clean.includes(primary) ? clean : [primary, ...clean]) : clean,
-      selectedEdgeId: null
+    const nextIds = primary ? (clean.includes(primary) ? clean : [primary, ...clean]) : clean
+    const nextPrimary = primary || null
+    set((s) => {
+      if (s.selectedNodeId === nextPrimary && sameStringArray(s.selectedNodeIds, nextIds) && s.selectedEdgeId == null) return s
+      return {
+        selectedNodeId: nextPrimary,
+        selectedNodeIds: nextIds,
+        selectedEdgeId: null
+      }
     })
   },
 
@@ -553,11 +571,18 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     })
   },
 
-  clearSelection: () => set({ selectedNodeId: null, selectedNodeIds: [], selectedEdgeId: null }),
+  clearSelection: () => set((s) => {
+    if (s.selectedNodeId == null && s.selectedNodeIds.length === 0 && s.selectedEdgeId == null) return s
+    return { selectedNodeId: null, selectedNodeIds: [], selectedEdgeId: null }
+  }),
 
   setSelectedEdge: (id) => {
     const next = id ? String(id || '').trim() : null
-    set({ selectedEdgeId: next || null, selectedNodeId: null, selectedNodeIds: [] })
+    const edgeId = next || null
+    set((s) => {
+      if (s.selectedEdgeId === edgeId && s.selectedNodeId == null && s.selectedNodeIds.length === 0) return s
+      return { selectedEdgeId: edgeId, selectedNodeId: null, selectedNodeIds: [] }
+    })
   },
 
   setHoveredEdge: (id) => {
@@ -580,7 +605,12 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   setViewport: (vp) => {
     // 不调用 markDirty()，因为 viewport 变化不需要保存到历史记录
     // viewport 是临时视图状态，不需要持久化或 undo/redo
-    set({ viewport: { x: Number(vp.x) || 0, y: Number(vp.y) || 0, zoom: Number(vp.zoom) || 1 } })
+    const next = { x: Number(vp.x) || 0, y: Number(vp.y) || 0, zoom: Number(vp.zoom) || 1 }
+    set((s) => {
+      const cur = s.viewport
+      if (cur.x === next.x && cur.y === next.y && cur.zoom === next.zoom) return s
+      return { viewport: next }
+    })
   },
 
   addNode: (type, pos, data) => {
