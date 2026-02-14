@@ -303,10 +303,10 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
         } catch (e: any) {
           // JSON 解析失败：在 Tauri 环境下可能是响应被截断或格式问题，应该重试
           const errMsg = String(e?.message || e || '')
-          const isRetryableJsonError = /did not match|expected pattern|Unexpected/i.test(errMsg)
-          if (isTauri && attempt < maxRetries && isRetryableJsonError) {
+          const isRetryableJsonError = /did not match|expected pattern|Unexpected|unexpected end/i.test(errMsg)
+          if (attempt < maxRetries && isRetryableJsonError) {
             const wait = get502BackoffMs(attempt)
-            console.warn('[postJson] Tauri JSON 解析失败，准备重试:', { 
+            console.warn('[postJson] JSON 解析失败，准备重试:', { 
               attempt: attempt + 1, 
               waitMs: wait, 
               error: errMsg.slice(0, 100) 
@@ -431,8 +431,8 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
         } catch (e: any) {
           // JSON 解析失败：在 Tauri 环境下可能是响应被截断或格式问题，应该重试
           const errMsg = String(e?.message || e || '')
-          const isRetryableJsonError = /did not match|expected pattern|Unexpected/i.test(errMsg)
-          if (isTauri && attempt < maxRetries && isRetryableJsonError) {
+          const isRetryableJsonError = /did not match|expected pattern|Unexpected|unexpected end/i.test(errMsg)
+          if (attempt < maxRetries && isRetryableJsonError) {
             const wait = get502BackoffMs(attempt)
             console.warn('[postFormData] Tauri JSON 解析失败，准备重试:', { 
               attempt: attempt + 1, 
@@ -547,8 +547,8 @@ export const getJson = async <T,>(endpoint: string, query?: Record<string, any>,
         } catch (e: any) {
           // JSON 解析失败：在 Tauri 环境下可能是响应被截断或格式问题，应该重试
           const errMsg = String(e?.message || e || '')
-          const isRetryableJsonError = /did not match|expected pattern|Unexpected/i.test(errMsg)
-          if (isTauri && attempt < maxRetries && isRetryableJsonError) {
+          const isRetryableJsonError = /did not match|expected pattern|Unexpected|unexpected end/i.test(errMsg)
+          if (attempt < maxRetries && isRetryableJsonError) {
             const wait = get502BackoffMs(attempt)
             console.warn('[getJson] Tauri JSON 解析失败，准备重试:', { 
               attempt: attempt + 1, 

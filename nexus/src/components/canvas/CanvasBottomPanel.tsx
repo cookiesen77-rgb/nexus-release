@@ -107,7 +107,20 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   const [model, setModel] = useState(nodeData?.params?.model || defaultModel)
   const [size, setSize] = useState(nodeData?.params?.aspectRatio || '3:4')
   const [quality, setQuality] = useState(nodeData?.params?.imageSize || '2K')
-  const [prompt, setPrompt] = useState(nodeData?.prompt || '')
+  const [prompt, setPrompt] = useState(nodeData?.prompt || nodeData?._panelPrompt || '')
+
+  const savePromptToNode = useCallback((val: string) => {
+    useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
+  }, [nodeId])
+  const promptRef = useRef(prompt)
+  promptRef.current = prompt
+
+  // 卸载时自动保存 prompt 到 store
+  useEffect(() => () => {
+    const p = promptRef.current?.trim()
+    if (p) useGraphStore.getState().patchNodeDataSilent(nodeId, { prompt: p, _inlinePrompt: p })
+  }, [nodeId])
+
   const [loading, setLoading] = useState(false)
   const [polishing, setPolishing] = useState(false)
   const [activeStyle, setActiveStyle] = useState<string | null>(null)
@@ -325,7 +338,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
         <div className="relative">
           <textarea
             value={prompt}
-            onChange={e => setPrompt(e.target.value)}
+            onChange={e => { setPrompt(e.target.value); savePromptToNode(e.target.value) }}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
             placeholder="描述你想要生成的内容..."
             rows={2}
@@ -406,7 +419,11 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
 
   const [model, setModel] = useState(nodeData?.params?.model || defaultModel)
   const [ratio, setRatio] = useState(nodeData?.params?.aspectRatio || '16:9')
-  const [prompt, setPrompt] = useState(nodeData?.prompt || (hasImageSource ? '根据图片生成视频。' : ''))
+  const [prompt, setPrompt] = useState(nodeData?.prompt || nodeData?._panelPrompt || (hasImageSource ? '根据图片生成视频。' : ''))
+
+  const savePromptToNode = useCallback((val: string) => {
+    useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
+  }, [nodeId])
   const [loading, setLoading] = useState(false)
   const [loopCount, setLoopCount] = useState(1)
 
@@ -498,7 +515,7 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
       <div className="px-4 py-2">
         <textarea
           value={prompt}
-          onChange={e => setPrompt(e.target.value)}
+          onChange={e => { setPrompt(e.target.value); savePromptToNode(e.target.value) }}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
           placeholder="描述你想要生成的视频内容..."
           rows={2}
@@ -541,8 +558,12 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
 
 function TextPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
   const [model, setModel] = useState('claude-opus-4-6')
-  const [prompt, setPrompt] = useState('')
+  const [prompt, setPrompt] = useState(nodeData?._panelPrompt || '')
   const [loading, setLoading] = useState(false)
+
+  const savePromptToNode = useCallback((val: string) => {
+    useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
+  }, [nodeId])
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) { window.$message?.warning?.('请输入润色指令'); return }
@@ -586,7 +607,7 @@ function TextPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
       <div className="px-4 py-3">
         <textarea
           value={prompt}
-          onChange={e => setPrompt(e.target.value)}
+          onChange={e => { setPrompt(e.target.value); savePromptToNode(e.target.value) }}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
           placeholder="输入润色指令，如：更具电影感、增加细节描述、改为日系动漫风格..."
           rows={2}
