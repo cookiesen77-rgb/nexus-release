@@ -482,9 +482,14 @@ export const generateImageFromConfigNode = async (
       const requestParts: any[] = []
       if (prompt) requestParts.push({ text: buildGeminiImagePrompt(prompt) })
       
-      // 为多张参考图添加序列号标注
+      // 为多张参考图添加序列号标注（多张时自动压缩防止请求体过大）
       for (let i = 0; i < limitedRefImages.length; i++) {
-        const input = limitedRefImages[i]
+        let input = limitedRefImages[i]
+        // 多参考图时压缩到 2048px 以内，降低请求体大小
+        if (limitedRefImages.length > 1 && input) {
+          const compressed = await compressImage(input, 2048, 0.8)
+          if (compressed) input = compressed
+        }
         const inline = await resolveImageToInlineData(input)
         if (!inline) continue
         
