@@ -48,6 +48,8 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
   const loadAttemptedRef = useRef(false)
   const persistAttemptedRef = useRef<string>('')
   const loadErrorFallbackRef = useRef<string>('')
+  const lastTimeUpdateRef = useRef(0)
+  const wasPlayingBeforeInteractionRef = useRef(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -85,6 +87,11 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
 
   const displayUrl = nodeData?.url || ''
   const previewUrl = displayUrl || (nodeData?.sourceUrl && isRecoverableSourceUrl(nodeData.sourceUrl) ? nodeData.sourceUrl : '')
+  const isCanvasInteracting = useCallback(() => {
+    const v = videoRef.current
+    if (!v) return false
+    return !!v.closest('.rf-moving, .rf-zooming')
+  }, [])
 
   useEffect(() => { setVideoError(''); setCorsMode('anonymous'); loadErrorFallbackRef.current = '' }, [displayUrl])
 
@@ -136,9 +143,45 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
     if (v.paused) { v.play().catch(() => {}); setIsPlaying(true) } else { v.pause(); setIsPlaying(false) }
   }, [])
 
-  const handleTimeUpdate = useCallback(() => { const v = videoRef.current; if (v) setCurrentTime(v.currentTime) }, [])
+  const handleTimeUpdate = useCallback(() => {
+    const v = videoRef.current
+    if (!v) return
+    if (isCanvasInteracting()) return
+    const now = performance.now()
+    if (now - lastTimeUpdateRef.current < 120) return
+    lastTimeUpdateRef.current = now
+    const next = v.currentTime || 0
+    setCurrentTime((prev) => (Math.abs(prev - next) < 0.08 ? prev : next))
+  }, [isCanvasInteracting])
   const handleLoadedMetadata = useCallback(() => { const v = videoRef.current; if (v) setDuration(v.duration) }, [])
-  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => { const v = videoRef.current; if (!v) return; v.currentTime = Number(e.target.value); setCurrentTime(v.currentTime) }, [])
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = videoRef.current
+    if (!v) return
+    v.currentTime = Number(e.target.value)
+    lastTimeUpdateRef.current = performance.now()
+    setCurrentTime(v.currentTime)
+  }, [])
+
+  useEffect(() => {
+    const onCanvasInteraction = (event: Event) => {
+      const active = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active)
+      const v = videoRef.current
+      if (!v) return
+      if (active) {
+        wasPlayingBeforeInteractionRef.current = !v.paused
+        if (!v.paused) {
+          v.pause()
+          setIsPlaying(false)
+        }
+        return
+      }
+      if (!wasPlayingBeforeInteractionRef.current) return
+      wasPlayingBeforeInteractionRef.current = false
+      v.play().then(() => setIsPlaying(true)).catch(() => {})
+    }
+    window.addEventListener('nexus:canvas-interaction', onCanvasInteraction as EventListener)
+    return () => window.removeEventListener('nexus:canvas-interaction', onCanvasInteraction as EventListener)
+  }, [])
 
   const handleVideoError = useCallback(() => {
     if (corsMode === 'anonymous' && isHttpUrl(displayUrl)) { setCorsMode('none'); return }
@@ -321,6 +364,8 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
                 onEnded={() => setIsPlaying(false)}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
               />
               <div className="absolute inset-0 z-10" />
               {/* 控制栏 */}

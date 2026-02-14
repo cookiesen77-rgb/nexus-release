@@ -13,6 +13,7 @@ import { inferPolishModeFromText, buildPolishUserText, buildPolishSystemPrompt }
 
 type PanelMode = 'image' | 'video' | 'text' | null
 type PanelSize = { width: number; height: number }
+type PlacementMode = 'image' | 'video'
 
 const STYLE_PRESETS = [
   { id: 'anime', name: '动漫', suffix: 'anime style, vibrant colors' },
@@ -36,6 +37,53 @@ const STYLE_PRESETS = [
   { id: 'pop', name: '波普', suffix: 'pop art style, bold colors, halftone dots, Andy Warhol inspired' },
   { id: 'dark', name: '暗黑', suffix: 'dark gothic aesthetic, moody lighting, dramatic shadows, dark fantasy' },
 ]
+
+const getSafeNumber = (v: unknown, fallback = 0) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function createOutputPlacer(sourceNode: { x?: number; y?: number } | null | undefined, nodes: Array<{ x: number; y: number }>, mode: PlacementMode) {
+  const stepX = mode === 'video' ? 520 : 310
+  const stepY = mode === 'video' ? 300 : 240
+  const startX = getSafeNumber(sourceNode?.x, 0) + (mode === 'video' ? 500 : 360)
+  const startY = getSafeNumber(sourceNode?.y, 0)
+  const occupyThresholdX = Math.round(stepX * 0.56)
+  const occupyThresholdY = Math.round(stepY * 0.56)
+  const columns = 3
+  const occupied = nodes
+    .map((n) => ({ x: getSafeNumber(n.x), y: getSafeNumber(n.y) }))
+    .filter((n) => n.x > -9000 && n.y > -9000)
+
+  const isTaken = (x: number, y: number) => {
+    for (let i = 0; i < occupied.length; i++) {
+      const p = occupied[i]
+      if (Math.abs(p.x - x) < occupyThresholdX && Math.abs(p.y - y) < occupyThresholdY) return true
+    }
+    return false
+  }
+
+  const zigZagRow = (n: number) => {
+    if (n === 0) return 0
+    return n % 2 === 1 ? (n + 1) / 2 : -(n / 2)
+  }
+
+  return () => {
+    for (let idx = 0; idx < 600; idx++) {
+      const col = idx % columns
+      const rowBand = Math.floor(idx / columns)
+      const row = zigZagRow(rowBand)
+      const x = startX + col * stepX
+      const y = startY + row * stepY
+      if (isTaken(x, y)) continue
+      occupied.push({ x, y })
+      return { x, y }
+    }
+    const fallback = { x: startX + occupied.length * 24, y: startY + occupied.length * 12 }
+    occupied.push(fallback)
+    return fallback
+  }
+}
 
 export default memo(function CanvasBottomPanel() {
   const selectedNode = useGraphStore(s => {
@@ -248,7 +296,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
       const genCount = Math.max(1, Math.min(10, loopCount))
       const regenerateMode = useSettingsStore.getState().regenerateMode || 'create'
       const forceCreateOutputs = genCount > 1
-      const batchOffset = Number((node?.data as any)?._batchOutputOffset || 0)
+      const placeOutput = createOutputPlacer(node, store.nodes as Array<{ x: number; y: number }>, 'image')
 
       // 收集上游参考图 URL
       const upstreamRefUrls = store.edges
@@ -303,15 +351,11 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
             latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
             if (outputId) latestStore.removeNode(outputId)
           } else if (outputNode) {
-            const slotIndex = batchOffset + i
-            const pos = { x: (node?.x || 0) + 350 + slotIndex * 300, y: node?.y || 0 }
+            const pos = placeOutput()
             latestStore.updateNode(outputNode.id, { x: pos.x, y: pos.y })
           }
           latestStore.removeNode(configId)
         }
-      }
-      if (forceCreateOutputs) {
-        store.patchNodeDataSilent(nodeId, { _batchOutputOffset: batchOffset + genCount })
       }
       window.$message?.success?.(genCount > 1 ? `${genCount} 张图片生成成功` : '图片生成成功')
     } catch (err: any) {
@@ -541,7 +585,7 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
 
       const genCount = Math.max(1, Math.min(10, loopCount))
       const forceCreateOutputs = genCount > 1
-      const batchOffset = Number((node?.data as any)?._batchOutputOffset || 0)
+      const placeOutput = createOutputPlacer(node, store.nodes as Array<{ x: number; y: number }>, 'video')
 
       for (let i = 0; i < genCount; i++) {
         if (i === 0 && isConfigNode && !forceCreateOutputs) {
@@ -565,14 +609,11 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
             latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
             if (outputId) latestStore.removeNode(outputId)
           } else if (outputNode) {
-            const slotIndex = batchOffset + i
-            latestStore.updateNode(outputNode.id, { x: (node?.x || 0) + 500 + slotIndex * 500, y: node?.y || 0 })
+            const pos = placeOutput()
+            latestStore.updateNode(outputNode.id, { x: pos.x, y: pos.y })
           }
           latestStore.removeNode(configId)
         }
-      }
-      if (forceCreateOutputs) {
-        store.patchNodeDataSilent(nodeId, { _batchOutputOffset: batchOffset + genCount })
       }
       window.$message?.success?.(genCount > 1 ? `${genCount} 个视频生成成功` : '视频生成成功')
     } catch (err: any) {

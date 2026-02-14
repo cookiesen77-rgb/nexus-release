@@ -593,6 +593,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
   const handleNodeDragStop: OnNodeDrag<Node> = useCallback(
     (_event: any, node: any) => {
       reactFlowWrapper.current?.classList.remove('rf-moving')
+      window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: false } }))
       // 使用 requestIdleCallback 延迟同步，不阻塞 UI
       const sync = () => {
         const store = useGraphStore.getState()
@@ -614,6 +615,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
 
   const handleNodeDragStart: OnNodeDrag<Node> = useCallback(() => {
     reactFlowWrapper.current?.classList.add('rf-moving')
+    window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: true } }))
   }, [])
 
   // 处理连接
@@ -731,6 +733,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
   const handleMoveEnd = useCallback(
     (_event: unknown, vp: { x: number; y: number; zoom: number }) => {
       reactFlowWrapper.current?.classList.remove('rf-moving')
+      window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: false } }))
       viewportRef.current = vp
       const commit = () => {
         if (!viewportRef.current) return
@@ -748,6 +751,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
 
   const handleMoveStart = useCallback(() => {
     reactFlowWrapper.current?.classList.add('rf-moving')
+    window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: true } }))
   }, [])
 
   // 处理画布右键菜单

@@ -60,6 +60,8 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistAttemptedRef = useRef<string>('')
   const loadErrorFallbackRef = useRef<string>('')
+  const lastTimeUpdateRef = useRef(0)
+  const wasPlayingBeforeInteractionRef = useRef(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -72,6 +74,12 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
 
   const displayUrl = nodeData?.url || ''
   const previewUrl = displayUrl || (nodeData?.sourceUrl && isRecoverableSourceUrl(nodeData.sourceUrl) ? nodeData.sourceUrl : '')
+
+  const isCanvasInteracting = useCallback(() => {
+    const v = videoRef.current
+    if (!v) return false
+    return !!v.closest('.rf-moving, .rf-zooming')
+  }, [])
 
   // URL 变化时：清理错误并重置 CORS 策略（先尝试 anonymous，失败再降级）
   useEffect(() => {
@@ -201,8 +209,14 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
 
   const handleTimeUpdate = useCallback(() => {
     const v = videoRef.current
-    if (v) setCurrentTime(v.currentTime)
-  }, [])
+    if (!v) return
+    if (isCanvasInteracting()) return
+    const now = performance.now()
+    if (now - lastTimeUpdateRef.current < 120) return
+    lastTimeUpdateRef.current = now
+    const next = v.currentTime || 0
+    setCurrentTime((prev) => (Math.abs(prev - next) < 0.08 ? prev : next))
+  }, [isCanvasInteracting])
 
   const handleLoadedMetadata = useCallback(() => {
     const v = videoRef.current
@@ -218,11 +232,34 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     const v = videoRef.current
     if (!v) return
     v.currentTime = Number(e.target.value)
+    lastTimeUpdateRef.current = performance.now()
     setCurrentTime(v.currentTime)
   }, [])
 
   const handleVideoEnded = useCallback(() => {
     setIsPlaying(false)
+  }, [])
+
+  useEffect(() => {
+    const onCanvasInteraction = (event: Event) => {
+      const active = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active)
+      const v = videoRef.current
+      if (!v) return
+      if (active) {
+        wasPlayingBeforeInteractionRef.current = !v.paused
+        if (!v.paused) {
+          v.pause()
+          setIsPlaying(false)
+        }
+        return
+      }
+      if (!wasPlayingBeforeInteractionRef.current) return
+      wasPlayingBeforeInteractionRef.current = false
+      v.play().then(() => setIsPlaying(true)).catch(() => {})
+    }
+
+    window.addEventListener('nexus:canvas-interaction', onCanvasInteraction as EventListener)
+    return () => window.removeEventListener('nexus:canvas-interaction', onCanvasInteraction as EventListener)
   }, [])
 
   const handleDelete = useCallback((e?: React.MouseEvent) => {
@@ -654,6 +691,8 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
                 onLoadedMetadata={handleLoadedMetadata}
                 onCanPlay={handleCanPlay}
                 onEnded={handleVideoEnded}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
               />
               <div className="absolute inset-0 z-10" onDoubleClick={(e) => { e.stopPropagation(); togglePlay() }} />
               {/* TapNow-style hover control bar */}
