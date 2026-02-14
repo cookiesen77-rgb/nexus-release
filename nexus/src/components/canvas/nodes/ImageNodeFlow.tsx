@@ -546,8 +546,8 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
               onClick={handleReplaceClick}
               onPointerDown={e => e.stopPropagation()}
             >
-              <Upload size={28} className="text-[var(--text-secondary)] opacity-30" />
-              <span className="text-xs text-[var(--text-secondary)] opacity-40">点击上传图片</span>
+              <Upload size={28} className="text-blue-400" />
+              <span className="text-xs text-blue-400/80 font-medium">点击上传图片</span>
             </div>
           ) : nodeData?.url ? (
             <>
@@ -592,7 +592,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
               <button
                 onClick={handleReplaceClick}
                 onPointerDown={e => e.stopPropagation()}
-                className="flex items-center gap-1.5 text-white bg-[var(--bg-secondary)]/70 cursor-pointer border border-[var(--border-color)]/50 absolute top-2 right-2 z-5 px-3 py-1.5 rounded-md text-xs font-medium shadow-sm hover:bg-[var(--bg-secondary)]/90 transition-colors"
+                className="flex items-center gap-1.5 text-white bg-blue-600/80 cursor-pointer border border-blue-500/50 absolute top-2 right-2 z-5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg hover:bg-blue-600 transition-colors"
               >
                 <Upload size={14} />上传
               </button>

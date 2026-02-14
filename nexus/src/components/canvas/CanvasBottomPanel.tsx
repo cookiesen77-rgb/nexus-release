@@ -183,6 +183,16 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
       if (!node) throw new Error('节点不存在')
 
       let effectivePrompt = prompt.trim()
+
+      // 收集上游文本节点的提示词
+      const upstreamTexts = store.edges
+        .filter(e => e.target === nodeId)
+        .map(e => store.nodes.find(n => n.id === e.source))
+        .filter(n => n?.type === 'text')
+        .map(n => String((n?.data as any)?.content || '').trim())
+        .filter(Boolean)
+      if (upstreamTexts.length > 0) effectivePrompt = upstreamTexts.join('\n\n') + (effectivePrompt ? '\n\n' + effectivePrompt : '')
+
       if (activeStyle) {
         const style = STYLE_PRESETS.find(s => s.id === activeStyle)
         if (style) effectivePrompt += ', ' + style.suffix
@@ -192,6 +202,15 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
 
       const genCount = Math.max(1, Math.min(4, loopCount))
       const regenerateMode = useSettingsStore.getState().regenerateMode || 'create'
+
+      // 收集上游参考图 URL
+      const upstreamRefUrls = store.edges
+        .filter(e => e.target === nodeId)
+        .map(e => store.nodes.find(n => n.id === e.source))
+        .filter(n => n?.type === 'image' || n?.type === 'imageConfig')
+        .map(n => String((n?.data as any)?.url || '').trim())
+        .filter(Boolean)
+      const allRefImages = [...(nodeData?.url ? [nodeData.url] : []), ...upstreamRefUrls]
 
       for (let i = 0; i < genCount; i++) {
         if (i === 0 && isConfigNode) {
@@ -204,9 +223,8 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
           const configId = store.addNode('imageConfig', { x: -9999, y: -9999 }, {
             model, size, quality, prompt: effectivePrompt,
             _inlinePrompt: effectivePrompt,
-            _inlineRefImages: [nodeData.url],
+            _inlineRefImages: allRefImages,
           })
-          store.addEdge(nodeId, configId, { sourceHandle: 'right', targetHandle: 'left' })
           store.updateNode(nodeId, { data: { loading: true } } as any)
           await generateImageFromConfigNode(configId, { model, size, quality })
           const configNode = store.nodes.find(n => n.id === configId)
@@ -224,9 +242,8 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
           const configId = store.addNode('imageConfig', { x: -9999, y: -9999 }, {
             model, size, quality, prompt: effectivePrompt,
             _inlinePrompt: effectivePrompt,
-            _inlineRefImages: nodeData?.url ? [nodeData.url] : [],
+            _inlineRefImages: allRefImages,
           })
-          if (nodeData?.url) store.addEdge(nodeId, configId, { sourceHandle: 'right', targetHandle: 'left' })
           await generateImageFromConfigNode(configId, { model, size, quality })
           const configNode = store.nodes.find(n => n.id === configId)
           const outputId = (configNode?.data as any)?.outputNodeId
