@@ -2362,52 +2362,14 @@ export const generateVideoFromConfigNode = async (
       return
     }
 
-    const cached = await resolveCachedMediaUrl(videoUrl) as { displayUrl: string; localPath: string; error?: string }
+    // ===== 快速写回：先用原始 URL 立即更新 UI，再后台缓存/保存 =====
     const latestStore = useGraphStore.getState()
-    const displayUrl = cached.displayUrl
-    
-    console.log('[generateVideo] 缓存解析结果:', {
-      videoUrl: videoUrl?.slice(0, 80),
-      displayUrl: displayUrl?.slice(0, 80),
-      localPath: cached.localPath?.slice(0, 50),
-      error: cached.error,
-      videoNodeId
-    })
-    
-    // 如果下载失败，抛出错误
-    if (!displayUrl && cached.error) {
-      throw new Error(`视频下载失败: ${cached.error}`)
-    }
-    if (!displayUrl) {
-      throw new Error('视频下载失败：无法获取视频内容')
-    }
-    
-    // 如果数据是大型数据（base64 或 blob URL），保存到 IndexedDB
-    let mediaId: string | undefined
-    if (isLargeData(displayUrl) || isBase64Data(displayUrl)) {
-      try {
-        const projectId = latestStore.projectId || 'default'
-        mediaId = await saveMedia({
-          nodeId: videoNodeId,
-          projectId,
-          type: 'video',
-          data: displayUrl,
-          sourceUrl: isPersistableSourceUrl(videoUrl) && videoUrl !== displayUrl ? videoUrl : undefined,
-          model: modelKey,
-        })
-        console.log('[generateVideo] 视频已保存到 IndexedDB, mediaId:', mediaId)
-      } catch (err) {
-        console.error('[generateVideo] 保存到 IndexedDB 失败:', err)
-      }
-    }
-    
+
+    // 1. 立即更新节点（用户马上看到视频）
     latestStore.updateNode(videoNodeId, {
       data: {
-        url: displayUrl,
-        localPath: cached.localPath,
-        // 记录可恢复的原始地址（http(s) 或 /v1/... 相对 API 路径）
+        url: videoUrl,
         sourceUrl: isPersistableSourceUrl(videoUrl) ? videoUrl : undefined,
-        mediaId, // IndexedDB 媒体 ID
         loading: false,
         error: '',
         label: '视频',
@@ -2415,58 +2377,56 @@ export const generateVideoFromConfigNode = async (
         updatedAt: Date.now()
       }
     } as any)
-    
-    // 同步到历史素材（画布视频）
-    try {
-      useAssetsStore.getState().addAsset({
-        type: 'video',
-        src: displayUrl,
-        title: String((d.label || d.prompt || '画布视频') as any).slice(0, 80),
-        model: modelKey,
-        duration: Number(duration || 0),
-      })
-    } catch {
-      // ignore
-    }
-    
-    // 等待 React 渲染周期，确保 store 更新已同步
-    await new Promise(r => setTimeout(r, 50))
-    
-    // 验证更新是否成功
-    const afterUpdate = useGraphStore.getState().nodes.find(n => n.id === videoNodeId)
-    console.log('[generateVideo] 更新后验证:', {
-      nodeId: afterUpdate?.id,
-      hasUrl: !!(afterUpdate?.data as any)?.url,
-      urlLength: (afterUpdate?.data as any)?.url?.length || 0,
-      urlPreview: (afterUpdate?.data as any)?.url?.slice(0, 80),
-      loading: (afterUpdate?.data as any)?.loading,
-      error: (afterUpdate?.data as any)?.error,
-      mediaId: (afterUpdate?.data as any)?.mediaId
-    })
-    
-    // 如果验证失败，尝试重新更新
-    if (!afterUpdate || !(afterUpdate.data as any)?.url) {
-      console.warn('[generateVideo] 节点更新验证失败，尝试重新更新')
-      useGraphStore.getState().updateNode(videoNodeId, {
-        data: { url: displayUrl, loading: false, error: '', model: modelKey, mediaId }
-      } as any)
-      await new Promise(r => setTimeout(r, 50))
-    }
-    
-    // 触发 React Flow 节点刷新事件
-    try {
-      const event = new CustomEvent('nexus:node-updated', { detail: { nodeId: videoNodeId, type: 'video' } })
-      window.dispatchEvent(event)
-    } catch (e) {
-      console.warn('[generateVideo] 触发刷新事件失败:', e)
-    }
 
-    if (selectOutput) {
-      latestStore.setSelected(videoNodeId)
-    }
-    if (markConfigExecuted) {
-      latestStore.updateNode(configNodeId, { data: { executed: true, outputNodeId: videoNodeId } } as any)
-    }
+    if (selectOutput) latestStore.setSelected(videoNodeId)
+    if (markConfigExecuted) latestStore.updateNode(configNodeId, { data: { executed: true, outputNodeId: videoNodeId } } as any)
+
+    // 2. 触发刷新事件
+    try { window.dispatchEvent(new CustomEvent('nexus:node-updated', { detail: { nodeId: videoNodeId, type: 'video' } })) } catch {}
+
+    // 3. 后台：缓存 + IndexedDB 保存（不阻塞 UI）
+    void (async () => {
+      try {
+        const cached = await resolveCachedMediaUrl(videoUrl) as { displayUrl: string; localPath: string }
+        const displayUrl = cached.displayUrl || videoUrl
+        const store = useGraphStore.getState()
+
+        // 保存到 IndexedDB
+        let mediaId: string | undefined
+        if (isLargeData(displayUrl) || isBase64Data(displayUrl)) {
+          try {
+            mediaId = await saveMedia({
+              nodeId: videoNodeId,
+              projectId: store.projectId || 'default',
+              type: 'video',
+              data: displayUrl,
+              sourceUrl: isPersistableSourceUrl(videoUrl) && videoUrl !== displayUrl ? videoUrl : undefined,
+              model: modelKey,
+            })
+          } catch {}
+        }
+
+        // 更新为缓存后的 URL（如果不同）
+        if (displayUrl !== videoUrl || mediaId || cached.localPath) {
+          store.updateNode(videoNodeId, {
+            data: { url: displayUrl, localPath: cached.localPath, mediaId }
+          } as any)
+        }
+
+        // 同步到历史素材
+        try {
+          useAssetsStore.getState().addAsset({
+            type: 'video',
+            src: displayUrl,
+            title: String((d.label || d.prompt || '画布视频') as any).slice(0, 80),
+            model: modelKey,
+            duration: Number(duration || 0),
+          })
+        } catch {}
+      } catch (err) {
+        console.warn('[generateVideo] 后台缓存失败:', err)
+      }
+    })()
     errorStage = 'finalize'
 
   } catch (err: any) {
