@@ -398,7 +398,12 @@ export const resolveCachedMediaUrl = async (url: string) => {
       console.log('[resolveCachedMediaUrl] Tauri: 相对路径转换为绝对 URL:', absoluteUrl.slice(0, 80))
     }
     if (!/^https?:\/\//i.test(absoluteUrl)) return { displayUrl: absoluteUrl, localPath: '' }
-    
+
+    // 非鉴权公网视频：直接返回原始 URL，避免 Tauri 缓存大视频文件导致超时
+    if (!isLikelyAuthRequiredUrl(absoluteUrl)) {
+      return { displayUrl: absoluteUrl, localPath: '' }
+    }
+
     try {
       const token = getApiKey()
       console.log('[resolveCachedMediaUrl] Tauri: 调用 cache_remote_media 命令')
