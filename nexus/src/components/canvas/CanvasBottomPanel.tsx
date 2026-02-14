@@ -191,6 +191,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
       if (camSuffix) effectivePrompt += ', ' + camSuffix
 
       const genCount = Math.max(1, Math.min(4, loopCount))
+      const regenerateMode = useSettingsStore.getState().regenerateMode || 'create'
 
       for (let i = 0; i < genCount; i++) {
         if (i === 0 && isConfigNode) {
@@ -198,8 +199,28 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
           store.updateNode(nodeId, { data: { loading: true } })
           await generateImageFromConfigNode(nodeId, { model, size, quality }, { outputNodeId: nodeId, selectOutput: false, markConfigExecuted: false })
           store.updateNode(nodeId, { data: { loading: false, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
+        } else if (i === 0 && !isConfigNode && nodeData?.url && regenerateMode === 'replace') {
+          // 替换模式：直接替换当前 image 节点内容
+          const configId = store.addNode('imageConfig', { x: -9999, y: -9999 }, {
+            model, size, quality, prompt: effectivePrompt,
+            _inlinePrompt: effectivePrompt,
+            _inlineRefImages: [nodeData.url],
+          })
+          store.addEdge(nodeId, configId, { sourceHandle: 'right', targetHandle: 'left' })
+          store.updateNode(nodeId, { data: { loading: true } } as any)
+          await generateImageFromConfigNode(configId, { model, size, quality })
+          const configNode = store.nodes.find(n => n.id === configId)
+          const outputId = (configNode?.data as any)?.outputNodeId
+          const outputNode = outputId ? store.nodes.find(n => n.id === outputId) : null
+          if (outputNode?.data?.url) {
+            store.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, loading: false, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
+            if (outputId) store.removeNode(outputId)
+          } else {
+            store.updateNode(nodeId, { data: { loading: false } } as any)
+          }
+          store.removeNode(configId)
         } else {
-          const offsetX = isConfigNode ? 350 + (i - 1) * 300 : (i === 0 ? 0 : 300 * i)
+          // 新建模式：创建新节点
           const configId = store.addNode('imageConfig', { x: -9999, y: -9999 }, {
             model, size, quality, prompt: effectivePrompt,
             _inlinePrompt: effectivePrompt,
@@ -210,7 +231,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
           const configNode = store.nodes.find(n => n.id === configId)
           const outputId = (configNode?.data as any)?.outputNodeId
           const outputNode = outputId ? store.nodes.find(n => n.id === outputId) : null
-          if (i === 0 && !isConfigNode && !nodeData?.url && outputNode?.data?.url) {
+          if (!nodeData?.url && outputNode?.data?.url) {
             store.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
             if (outputId) store.removeNode(outputId)
           } else if (outputNode) {
