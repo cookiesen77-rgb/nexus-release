@@ -457,7 +457,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     cancelHide()
     hideTimerRef.current = setTimeout(() => {
       if (!toolbarHoverRef.current && !editToolbarBusy) setShowActions(false)
-    }, 200)
+    }, 400)
   }, [cancelHide, editToolbarBusy])
 
   const handleToolbarHoverChange = useCallback((hovering: boolean) => {

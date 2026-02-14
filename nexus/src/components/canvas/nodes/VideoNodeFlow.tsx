@@ -594,7 +594,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       ref={inViewRef}
       className="relative"
       onMouseEnter={() => { if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }; setShowActions(true) }}
-      onMouseLeave={() => { hideTimerRef.current = setTimeout(() => setShowActions(false), 200) }}
+      onMouseLeave={() => { hideTimerRef.current = setTimeout(() => setShowActions(false), 400) }}
     >
       {/* 节点主体 - 纯内容卡片 */}
       <div
@@ -721,7 +721,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
           onMouseDown={e => e.stopPropagation()}
           onPointerDown={e => e.stopPropagation()}
           onMouseEnter={() => { if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }; setShowActions(true) }}
-          onMouseLeave={() => { hideTimerRef.current = setTimeout(() => setShowActions(false), 200) }}
+          onMouseLeave={() => { hideTimerRef.current = setTimeout(() => setShowActions(false), 400) }}
         >
           <div
             className="w-fit h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap"

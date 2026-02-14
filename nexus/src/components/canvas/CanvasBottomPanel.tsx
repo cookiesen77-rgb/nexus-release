@@ -267,7 +267,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
                 className="relative shrink-0 cursor-pointer group/ref"
                 title={`${img.label || '参考图'} — 点击修改编号`}
                 onClick={() => {
-                  const input = window.prompt('修改参考图编号', String(img.order || i + 1))
+                  const input = window.prompt('修改参考图编号', String(i + 1))
                   const num = Number(input)
                   if (input !== null && Number.isFinite(num) && num > 0) {
                     useGraphStore.getState().updateEdge(img.edgeId, { data: { imageOrder: num } })
@@ -275,7 +275,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
                 }}
               >
                 <img src={img.url || refUrlMap[img.nodeId] || ''} alt={img.label} className="w-8 h-8 rounded-md object-cover ring-1 ring-white/20 group-hover/ref:ring-white/50" />
-                <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-blue-500 text-white text-[9px] font-bold leading-none px-0.5">{img.order || i + 1}</span>
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-blue-500 text-white text-[9px] font-bold leading-none px-0.5">{i + 1}</span>
               </div>
             ))}
           </>
