@@ -481,7 +481,7 @@ export const generateImageFromConfigNode = async (
     if (forcedNode?.type === 'image' || forcedNode?.type === 'imageConfig') {
       forceOutput = true
       // 强制使用指定输出节点
-      store.updateNode(forcedOutputId, { data: { loading: true, error: '' } } as any)
+      store.patchNodeDataSilent(forcedOutputId, { loading: true, error: '' })
     } else {
       console.warn('[generateImage] 指定 outputNodeId 无效，回退到默认创建/复用:', forcedOutputId, forcedNode?.type)
       imageNodeId = findConnectedOutputImageNode(configNodeId)
@@ -503,7 +503,7 @@ export const generateImageFromConfigNode = async (
       
       if (regenerateMode === 'replace') {
         // 替代模式：直接更新现有节点
-        store.updateNode(imageNodeId, { data: { loading: true, error: '' } } as any)
+        store.patchNodeDataSilent(imageNodeId, { loading: true, error: '' })
       } else {
         // 新建模式：如果已有节点有内容，创建新节点
         if (oldImageData?.url) {
@@ -528,7 +528,7 @@ export const generateImageFromConfigNode = async (
           })
         } else {
           // 复用已有的空白图片节点
-          store.updateNode(imageNodeId, { data: { loading: true, error: '' } } as any)
+          store.patchNodeDataSilent(imageNodeId, { loading: true, error: '' })
         }
       }
     } else {

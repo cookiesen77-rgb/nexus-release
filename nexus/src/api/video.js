@@ -52,23 +52,39 @@ const toFormData = (data) => {
   return fd
 }
 
+const createRequestKey = (prefix = 'video') => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `${prefix}-${crypto.randomUUID()}`
+    }
+  } catch {
+    // ignore
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 // 创建视频任务
 export const createVideoTask = (data, options = {}) => {
   const { endpoint = '/videos', authMode, requestType = 'formdata' } = options
   const isFormData = typeof FormData !== 'undefined' && data instanceof FormData
   const url = buildUrl(endpoint)
+  const requestKey = createRequestKey('video')
+  const requestHeaders = {
+    'Idempotency-Key': requestKey,
+    'X-Client-Request-Id': requestKey
+  }
 
   if (isTauri) {
     if (requestType === 'formdata' || isFormData) {
       const form = toFormData(data)
-      return postFormData(url, form, { authMode })
+      return postFormData(url, form, { authMode, extraHeaders: requestHeaders, retryable: false })
     }
-    return postJson(url, data, { authMode })
+    return postJson(url, data, { authMode, extraHeaders: requestHeaders, retryable: false })
   }
 
   const headers = requestType === 'formdata' && !isFormData
-    ? { 'Content-Type': 'multipart/form-data' }
-    : {}
+    ? { 'Content-Type': 'multipart/form-data', ...requestHeaders }
+    : requestHeaders
 
   return request({
     url,

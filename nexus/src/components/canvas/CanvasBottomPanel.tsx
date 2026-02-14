@@ -2,7 +2,7 @@ import React, { memo, useState, useCallback, useMemo, useRef, useEffect } from '
 import { ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { IMAGE_MODELS, VIDEO_MODELS, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL } from '@/config/models'
-import { useSettingsStore } from '@/store/settings'
+import { AI_ASSISTANT_MODELS, useSettingsStore } from '@/store/settings'
 import { usePresetsStore } from '@/store/presets'
 import { CAMERA_PRESETS, CAMERA_BODIES, CAMERA_LENSES, FOCAL_LENGTHS, APERTURES } from '@/lib/cameraControl/presets'
 import { generateImageFromConfigNode } from '@/lib/workflow/image'
@@ -12,6 +12,7 @@ import { callAiAssistant } from '@/lib/nexusApi'
 import { inferPolishModeFromText, buildPolishUserText, buildPolishSystemPrompt } from '@/lib/polish'
 
 type PanelMode = 'image' | 'video' | 'text' | null
+type PanelSize = { width: number; height: number }
 
 const STYLE_PRESETS = [
   { id: 'anime', name: '动漫', suffix: 'anime style, vibrant colors' },
@@ -42,6 +43,7 @@ export default memo(function CanvasBottomPanel() {
     return s.nodes.find(n => n.id === s.selectedNodeId) || null
   })
   const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)
+  const [panelSizeByNode, setPanelSizeByNode] = useState<Record<string, PanelSize>>({})
   const rafRef = useRef(0)
 
   const mode: PanelMode = useMemo(() => {
@@ -78,6 +80,27 @@ export default memo(function CanvasBottomPanel() {
   }, [selectedNode?.id])
 
   if (!mode || !selectedNode || !pos) return null
+  const minPanelWidth = Math.max(pos.width, 420)
+  const panelSize = panelSizeByNode[selectedNode.id] || null
+  const panelWidth = panelSize ? Math.max(minPanelWidth, panelSize.width) : pos.width
+  const handlePanelResize = (next: PanelSize | null) => {
+    const id = selectedNode.id
+    setPanelSizeByNode((prev) => {
+      if (!next) {
+        if (!(id in prev)) return prev
+        const cloned = { ...prev }
+        delete cloned[id]
+        return cloned
+      }
+      const clamped: PanelSize = {
+        width: Math.max(minPanelWidth, Math.round(next.width)),
+        height: Math.max(220, Math.round(next.height))
+      }
+      const prevSize = prev[id]
+      if (prevSize && prevSize.width === clamped.width && prevSize.height === clamped.height) return prev
+      return { ...prev, [id]: clamped }
+    })
+  }
 
   return (
     <div
@@ -85,16 +108,16 @@ export default memo(function CanvasBottomPanel() {
       style={{
         left: pos.left,
         top: pos.top,
-        width: pos.width,
+        width: panelWidth,
         transform: 'translateX(-50%)',
       }}
     >
       {mode === 'image' ? (
-        <ImagePanel key={selectedNode.id} nodeId={selectedNode.id} nodeData={selectedNode.data as any} isConfigNode={selectedNode.type === 'imageConfig'} />
+        <ImagePanel key={selectedNode.id} nodeId={selectedNode.id} nodeData={selectedNode.data as any} isConfigNode={selectedNode.type === 'imageConfig'} panelSize={panelSize} minPanelWidth={minPanelWidth} onPanelResize={handlePanelResize} />
       ) : mode === 'video' ? (
-        <VideoPanel key={selectedNode.id} nodeId={selectedNode.id} nodeData={selectedNode.data as any} isConfigNode={selectedNode.type === 'videoConfig'} />
+        <VideoPanel key={selectedNode.id} nodeId={selectedNode.id} nodeData={selectedNode.data as any} isConfigNode={selectedNode.type === 'videoConfig'} panelSize={panelSize} minPanelWidth={minPanelWidth} onPanelResize={handlePanelResize} />
       ) : (
-        <TextPanel key={selectedNode.id} nodeId={selectedNode.id} nodeData={selectedNode.data as any} />
+        <TextPanel key={selectedNode.id} nodeId={selectedNode.id} nodeData={selectedNode.data as any} panelSize={panelSize} minPanelWidth={minPanelWidth} onPanelResize={handlePanelResize} />
       )}
     </div>
   )
@@ -102,7 +125,7 @@ export default memo(function CanvasBottomPanel() {
 
 // ======================== Image Panel ========================
 
-function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeData: any; isConfigNode?: boolean }) {
+function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, onPanelResize }: { nodeId: string; nodeData: any; isConfigNode?: boolean; panelSize: PanelSize | null; minPanelWidth: number; onPanelResize: (next: PanelSize | null) => void }) {
   const defaultModel = useSettingsStore(s => s.defaultImageModel) || DEFAULT_IMAGE_MODEL
   const [model, setModel] = useState(nodeData?.params?.model || defaultModel)
   const [size, setSize] = useState(nodeData?.params?.aspectRatio || '3:4')
@@ -122,6 +145,8 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   }, [nodeId])
 
   const [loading, setLoading] = useState(false)
+  const loadingRef = useRef(false)
+  useEffect(() => { loadingRef.current = loading }, [loading])
   const [polishing, setPolishing] = useState(false)
   const [activeStyle, setActiveStyle] = useState<string | null>(null)
   const [cameraOpen, setCameraOpen] = useState(false)
@@ -187,8 +212,10 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   }, [cameraOpen, cameraBody, cameraLens, focalLength, aperture])
 
   const handleGenerate = useCallback(async () => {
+    if (loadingRef.current) return
     const hasUpstreamText = useGraphStore.getState().edges.some(e => e.target === nodeId && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'text')
     if (!prompt.trim() && !nodeData?.url && !hasUpstreamText) { window.$message?.warning?.('请输入描述或连接文本节点'); return }
+    loadingRef.current = true
     setLoading(true)
     try {
       const store = useGraphStore.getState()
@@ -213,8 +240,9 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
       const camSuffix = buildCameraSuffix()
       if (camSuffix) effectivePrompt += ', ' + camSuffix
 
-      const genCount = Math.max(1, Math.min(4, loopCount))
+      const genCount = Math.max(1, Math.min(10, loopCount))
       const regenerateMode = useSettingsStore.getState().regenerateMode || 'create'
+      const forceCreateOutputs = !isConfigNode && genCount > 1
 
       // 收集上游参考图 URL
       const upstreamRefUrls = store.edges
@@ -228,28 +256,31 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
       for (let i = 0; i < genCount; i++) {
         if (i === 0 && isConfigNode) {
           store.updateNode(nodeId, { data: { model, size, quality, prompt: effectivePrompt, _inlinePrompt: effectivePrompt } })
-          store.updateNode(nodeId, { data: { loading: true } })
+          store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
           await generateImageFromConfigNode(nodeId, { model, size, quality }, { outputNodeId: nodeId, selectOutput: false, markConfigExecuted: false })
-          store.updateNode(nodeId, { data: { loading: false, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
-        } else if (i === 0 && !isConfigNode && nodeData?.url && regenerateMode === 'replace') {
+          store.updateNode(nodeId, { data: { prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
+          store.patchNodeDataSilent(nodeId, { loading: false })
+        } else if (i === 0 && !isConfigNode && nodeData?.url && regenerateMode === 'replace' && !forceCreateOutputs) {
           // 替换模式：直接替换当前 image 节点内容
           const configId = store.addNode('imageConfig', { x: -9999, y: -9999 }, {
             model, size, quality, prompt: effectivePrompt,
             _inlinePrompt: effectivePrompt,
             _inlineRefImages: allRefImages,
           })
-          store.updateNode(nodeId, { data: { loading: true } } as any)
+          store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
           await generateImageFromConfigNode(configId, { model, size, quality })
-          const configNode = store.nodes.find(n => n.id === configId)
+          const latestStore = useGraphStore.getState()
+          const configNode = latestStore.nodes.find(n => n.id === configId)
           const outputId = (configNode?.data as any)?.outputNodeId
-          const outputNode = outputId ? store.nodes.find(n => n.id === outputId) : null
+          const outputNode = outputId ? latestStore.nodes.find(n => n.id === outputId) : null
           if (outputNode?.data?.url) {
-            store.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, loading: false, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
-            if (outputId) store.removeNode(outputId)
+            latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
+            latestStore.patchNodeDataSilent(nodeId, { loading: false })
+            if (outputId) latestStore.removeNode(outputId)
           } else {
-            store.updateNode(nodeId, { data: { loading: false } } as any)
+            latestStore.patchNodeDataSilent(nodeId, { loading: false })
           }
-          store.removeNode(configId)
+          latestStore.removeNode(configId)
         } else {
           // 新建模式：创建新节点
           const configId = store.addNode('imageConfig', { x: -9999, y: -9999 }, {
@@ -258,23 +289,25 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
             _inlineRefImages: allRefImages,
           })
           await generateImageFromConfigNode(configId, { model, size, quality })
-          const configNode = store.nodes.find(n => n.id === configId)
+          const latestStore = useGraphStore.getState()
+          const configNode = latestStore.nodes.find(n => n.id === configId)
           const outputId = (configNode?.data as any)?.outputNodeId
-          const outputNode = outputId ? store.nodes.find(n => n.id === outputId) : null
-          if (!nodeData?.url && outputNode?.data?.url) {
-            store.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
-            if (outputId) store.removeNode(outputId)
+          const outputNode = outputId ? latestStore.nodes.find(n => n.id === outputId) : null
+          if (!nodeData?.url && outputNode?.data?.url && !forceCreateOutputs) {
+            latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
+            if (outputId) latestStore.removeNode(outputId)
           } else if (outputNode) {
             const pos = { x: (node?.x || 0) + 350 + i * 300, y: node?.y || 0 }
-            store.updateNode(outputNode.id, { x: pos.x, y: pos.y })
+            latestStore.updateNode(outputNode.id, { x: pos.x, y: pos.y })
           }
-          store.removeNode(configId)
+          latestStore.removeNode(configId)
         }
       }
       window.$message?.success?.(genCount > 1 ? `${genCount} 张图片生成成功` : '图片生成成功')
     } catch (err: any) {
       window.$message?.error?.(err?.message || '生成失败')
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
   }, [nodeId, nodeData?.url, model, size, quality, prompt, loopCount, activeStyle, buildCameraSuffix, isConfigNode])
@@ -299,7 +332,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   const cycleOption = (arr: any[], idx: number, dir: 1 | -1) => ((idx + dir) % arr.length + arr.length) % arr.length
 
   return (
-    <PanelShell>
+    <PanelShell panelSize={panelSize} minPanelWidth={minPanelWidth} onPanelResize={onPanelResize}>
       {/* 风格 + 参考图缩略图行 */}
       <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 overflow-x-auto scrollbar-hide">
         <MiniSelect
@@ -375,7 +408,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
           <span className="text-[11px]">摄影机</span>
         </button>
         <span className="text-white/20 text-xs">·</span>
-        <MiniSelect value={String(loopCount)} options={[1,2,3,4].map(n => ({ value: String(n), label: `${n}张` }))} onChange={v => setLoopCount(Number(v))} maxW={55} />
+        <MiniSelect value={String(loopCount)} options={Array.from({ length: 10 }, (_, i) => i + 1).map(n => ({ value: String(n), label: `${n}张` }))} onChange={v => setLoopCount(Number(v))} maxW={60} />
 
         <div className="flex-1" />
 
@@ -408,7 +441,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
 
 // ======================== Video Panel ========================
 
-function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeData: any; isConfigNode?: boolean }) {
+function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, onPanelResize }: { nodeId: string; nodeData: any; isConfigNode?: boolean; panelSize: PanelSize | null; minPanelWidth: number; onPanelResize: (next: PanelSize | null) => void }) {
   const defaultModel = useSettingsStore(s => s.defaultVideoModel) || DEFAULT_VIDEO_MODEL
 
   const imageSourceCount = useGraphStore(s => {
@@ -425,6 +458,9 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
     useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
   }, [nodeId])
   const [loading, setLoading] = useState(false)
+  const loadingRef = useRef(false)
+  useEffect(() => { loadingRef.current = loading }, [loading])
+  const [polishing, setPolishing] = useState(false)
   const [loopCount, setLoopCount] = useState(1)
 
   const panelLabel = imageSourceCount >= 2 ? '首尾帧生视频' : hasImageSource ? '图生视频' : '文生视频'
@@ -459,24 +495,45 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
     }
   }, [])
 
+  const handlePolish = useCallback(async () => {
+    if (!prompt.trim() || polishing || loading) return
+    setPolishing(true)
+    try {
+      const aiModel = useSettingsStore.getState().aiAssistantModel
+      const m = inferPolishModeFromText(prompt)
+      const userText = buildPolishUserText({ mode: m, userText: prompt, promptTemplate: null, upstreamInputs: { text: [], images: [] } })
+      const systemPrompt = buildPolishSystemPrompt(m)
+      const polished = await callAiAssistant(aiModel, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userText }], { filterThinking: true })
+      if (polished) { setPrompt(polished); window.$message?.success?.('润色完成') }
+    } catch (err: any) {
+      window.$message?.error?.(`润色失败: ${err?.message || ''}`)
+    } finally {
+      setPolishing(false)
+    }
+  }, [prompt, polishing, loading])
+
   const handleGenerate = useCallback(async () => {
+    if (loadingRef.current) return
     const hasUpstreamText = useGraphStore.getState().edges.some(e => e.target === nodeId && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'text')
     const hasUpstreamImage = useGraphStore.getState().edges.some(e => e.target === nodeId && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'image')
     if (!prompt.trim() && !hasUpstreamText && !hasUpstreamImage) { window.$message?.warning?.('请输入描述或连接上游节点'); return }
+    loadingRef.current = true
     setLoading(true)
     try {
       const store = useGraphStore.getState()
       const node = store.nodes.find(n => n.id === nodeId)
       if (!node) throw new Error('节点不存在')
 
-      const genCount = Math.max(1, Math.min(4, loopCount))
+      const genCount = Math.max(1, Math.min(10, loopCount))
+      const forceCreateOutputs = !isConfigNode && genCount > 1
 
       for (let i = 0; i < genCount; i++) {
         if (i === 0 && isConfigNode) {
           store.updateNode(nodeId, { data: { model, ratio, dur, resolution, prompt, _inlinePrompt: prompt } })
-          store.updateNode(nodeId, { data: { loading: true } })
+          store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
           await generateVideoFromConfigNode(nodeId, { model, ratio, duration: dur }, { outputNodeId: nodeId, selectOutput: false })
-          store.updateNode(nodeId, { data: { loading: false, prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
+          store.updateNode(nodeId, { data: { prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
+          store.patchNodeDataSilent(nodeId, { loading: false })
         } else {
           const configId = store.addNode('videoConfig', { x: -9999, y: -9999 }, {
             model, ratio, dur, resolution, prompt, _inlinePrompt: prompt,
@@ -484,28 +541,30 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
           })
           if (nodeData?.url) store.addEdge(nodeId, configId, { sourceHandle: 'right', targetHandle: 'left' })
           await generateVideoFromConfigNode(configId, { model, ratio, duration: dur })
-          const configNode = store.nodes.find(n => n.id === configId)
+          const latestStore = useGraphStore.getState()
+          const configNode = latestStore.nodes.find(n => n.id === configId)
           const outputId = (configNode?.data as any)?.outputNodeId
-          const outputNode = outputId ? store.nodes.find(n => n.id === outputId) : null
-          if (i === 0 && !isConfigNode && !nodeData?.url && outputNode?.data?.url) {
-            store.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
-            if (outputId) store.removeNode(outputId)
+          const outputNode = outputId ? latestStore.nodes.find(n => n.id === outputId) : null
+          if (i === 0 && !isConfigNode && !nodeData?.url && outputNode?.data?.url && !forceCreateOutputs) {
+            latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
+            if (outputId) latestStore.removeNode(outputId)
           } else if (outputNode) {
-            store.updateNode(outputNode.id, { x: (node?.x || 0) + 500 + i * 500, y: node?.y || 0 })
+            latestStore.updateNode(outputNode.id, { x: (node?.x || 0) + 500 + i * 500, y: node?.y || 0 })
           }
-          store.removeNode(configId)
+          latestStore.removeNode(configId)
         }
       }
       window.$message?.success?.(genCount > 1 ? `${genCount} 个视频生成成功` : '视频生成成功')
     } catch (err: any) {
       window.$message?.error?.(err?.message || '生成失败')
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
   }, [nodeId, nodeData?.url, model, ratio, dur, resolution, prompt, loopCount, isConfigNode])
 
   return (
-    <PanelShell>
+    <PanelShell panelSize={panelSize} minPanelWidth={minPanelWidth} onPanelResize={onPanelResize}>
       {/* 类型标签 */}
       <div className="flex items-center gap-2 px-4 pt-3 pb-1">
         <span className="text-xs font-medium text-white/50 bg-white/8 px-2 py-0.5 rounded">{panelLabel}</span>
@@ -513,16 +572,25 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
 
       {/* 提示词 */}
       <div className="px-4 py-2">
-        <textarea
-          value={prompt}
-          onChange={e => { setPrompt(e.target.value); savePromptToNode(e.target.value) }}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
-          placeholder="描述你想要生成的视频内容..."
-          rows={2}
-          className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 resize-none outline-none"
-          style={{ minHeight: 36, maxHeight: 100 }}
-          disabled={loading}
-        />
+        <div className="relative">
+          <textarea
+            value={prompt}
+            onChange={e => { setPrompt(e.target.value); savePromptToNode(e.target.value) }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
+            placeholder="描述你想要生成的视频内容..."
+            rows={2}
+            className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 resize-none outline-none pr-20"
+            style={{ minHeight: 36, maxHeight: 100 }}
+            disabled={loading}
+          />
+          <button
+            onClick={handlePolish}
+            disabled={!prompt.trim() || polishing || loading}
+            className="absolute bottom-1 right-1 px-2 py-0.5 text-xs rounded bg-white/8 text-white/50 hover:text-white/80 hover:bg-white/15 transition-colors disabled:opacity-30 flex items-center gap-1"
+          >
+            {polishing ? <Loader2 size={10} className="animate-spin" /> : <><Sparkles size={10} /> AI润色</>}
+          </button>
+        </div>
       </div>
 
       {/* 参数行 */}
@@ -538,7 +606,7 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
           </>
         )}
         <span className="text-white/20 text-xs">·</span>
-        <MiniSelect value={String(loopCount)} options={[1,2,3,4].map(n => ({ value: String(n), label: `${n}次` }))} onChange={v => setLoopCount(Number(v))} maxW={55} />
+        <MiniSelect value={String(loopCount)} options={Array.from({ length: 10 }, (_, i) => i + 1).map(n => ({ value: String(n), label: `${n}次` }))} onChange={v => setLoopCount(Number(v))} maxW={60} />
 
         <div className="flex-1" />
 
@@ -556,19 +624,36 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
 
 // ======================== Text Panel ========================
 
-function TextPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
-  const [model, setModel] = useState('claude-opus-4-6')
+function TextPanel({ nodeId, nodeData, panelSize, minPanelWidth, onPanelResize }: { nodeId: string; nodeData: any; panelSize: PanelSize | null; minPanelWidth: number; onPanelResize: (next: PanelSize | null) => void }) {
+  const assistantModel = useSettingsStore(s => s.aiAssistantModel)
+  const [model, setModel] = useState(String(nodeData?._panelModel || assistantModel || AI_ASSISTANT_MODELS[0].key))
   const [prompt, setPrompt] = useState(nodeData?._panelPrompt || '')
   const [loading, setLoading] = useState(false)
+  const loadingRef = useRef(false)
+  useEffect(() => { loadingRef.current = loading }, [loading])
 
   const savePromptToNode = useCallback((val: string) => {
     useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
   }, [nodeId])
 
+  useEffect(() => {
+    const next = String(nodeData?._panelModel || assistantModel || AI_ASSISTANT_MODELS[0].key)
+    setModel(next)
+  }, [assistantModel, nodeData?._panelModel, nodeId])
+
+  const handleModelChange = useCallback((val: string) => {
+    const next = String(val || '').trim()
+    if (!next) return
+    setModel(next)
+    useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelModel: next })
+  }, [nodeId])
+
   const handleGenerate = useCallback(async () => {
+    if (loadingRef.current) return
     if (!prompt.trim()) { window.$message?.warning?.('请输入润色指令'); return }
     const originalContent = String((nodeData as any)?.content || '').trim()
     if (!originalContent) { window.$message?.warning?.('文本节点内容为空，请先输入提示词'); return }
+    loadingRef.current = true
     setLoading(true)
     try {
       const result = await callAiAssistant(model, [
@@ -592,18 +677,19 @@ function TextPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
         }
       ], { filterThinking: true })
       if (result) {
-        useGraphStore.getState().updateNode(nodeId, { data: { content: result } })
+        useGraphStore.getState().updateNode(nodeId, { data: { content: result, _openEditorToken: Date.now() } })
         window.$message?.success?.('润色完成')
       }
     } catch (err: any) {
       window.$message?.error?.(err?.message || '润色失败')
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
   }, [nodeId, nodeData, model, prompt])
 
   return (
-    <PanelShell>
+    <PanelShell panelSize={panelSize} minPanelWidth={minPanelWidth} onPanelResize={onPanelResize}>
       <div className="px-4 py-3">
         <textarea
           value={prompt}
@@ -617,12 +703,7 @@ function TextPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
         />
       </div>
       <div className="flex items-center gap-1.5 px-4 pb-3 pt-1">
-        <MiniSelect value={model} options={[
-          { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-          { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5' },
-          { value: 'gemini-3-pro-preview-thinking', label: 'Gemini 3 Pro' },
-          { value: 'kimi-k2.5', label: 'Kimi K2.5' },
-        ]} onChange={setModel} icon="◇" maxW={180} />
+        <MiniSelect value={model} options={AI_ASSISTANT_MODELS.map(m => ({ value: m.key, label: m.label }))} onChange={handleModelChange} icon="◇" maxW={220} />
         <div className="flex-1" />
         <button
           onClick={handleGenerate}
@@ -638,15 +719,51 @@ function TextPanel({ nodeId, nodeData }: { nodeId: string; nodeData: any }) {
 
 // ======================== Shared Components ========================
 
-function PanelShell({ children }: { children: React.ReactNode }) {
+function PanelShell({ children, panelSize, minPanelWidth, onPanelResize }: { children: React.ReactNode; panelSize: PanelSize | null; minPanelWidth: number; onPanelResize: (next: PanelSize | null) => void }) {
+  const shellRef = useRef<HTMLDivElement>(null)
+  const resizeStartRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null)
+
+  const handleResizeStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = shellRef.current?.getBoundingClientRect()
+    if (!rect) return
+    resizeStartRef.current = { x: e.clientX, y: e.clientY, width: rect.width, height: rect.height }
+    const onMove = (ev: PointerEvent) => {
+      const start = resizeStartRef.current
+      if (!start) return
+      ev.preventDefault()
+      const maxW = Math.max(minPanelWidth, Math.floor(window.innerWidth * 0.8))
+      const maxH = Math.max(240, Math.floor(window.innerHeight * 0.8))
+      const width = Math.min(maxW, Math.max(minPanelWidth, start.width + (ev.clientX - start.x)))
+      const height = Math.min(maxH, Math.max(220, start.height + (ev.clientY - start.y)))
+      onPanelResize({ width, height })
+    }
+    const onUp = () => {
+      resizeStartRef.current = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove, { passive: false })
+    window.addEventListener('pointerup', onUp)
+  }, [minPanelWidth, onPanelResize])
+
   return (
     <div
-      className="rounded-2xl overflow-hidden"
-      style={{ backgroundColor: 'rgba(20,20,20,0.88)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.06)' }}
+      ref={shellRef}
+      className="relative rounded-2xl overflow-hidden"
+      style={{ backgroundColor: 'rgba(20,20,20,0.88)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.06)', minHeight: panelSize?.height || undefined, maxHeight: '80vh' }}
       onClick={e => e.stopPropagation()}
       onPointerDown={e => e.stopPropagation()}
     >
-      {children}
+      <div className="max-h-[80vh] overflow-auto">{children}</div>
+      <div
+        role="button"
+        title="拖动调整面板大小（双击重置）"
+        onPointerDown={handleResizeStart}
+        onDoubleClick={(e) => { e.preventDefault(); e.stopPropagation(); onPanelResize(null) }}
+        className="absolute right-1 bottom-1 w-4 h-4 cursor-nwse-resize rounded bg-white/10 hover:bg-white/20"
+      />
     </div>
   )
 }

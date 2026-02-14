@@ -2,6 +2,13 @@ import { DEFAULT_API_BASE_URL } from '@/utils/constants'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 
 export type AuthMode = 'bearer' | 'query' | undefined
+type PostRequestOptions = {
+  authMode?: AuthMode
+  timeoutMs?: number
+  extraHeaders?: Record<string, string>
+  // 非幂等写操作（如生图/生视频）建议关闭自动重试，避免重复创建任务
+  retryable?: boolean
+}
 
 // 检测是否在 Tauri 环境中
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
@@ -195,6 +202,14 @@ const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV === tru
 
 // 在开发环境的浏览器中使用 Vite 代理（非 Tauri），其他情况使用直接请求
 const useViteProxy = isDev && !isTauri
+const shouldLogNetworkDebug = () => {
+  if (!isDev || typeof window === 'undefined') return false
+  try {
+    return localStorage.getItem('nexus.debug.network') === '1'
+  } catch {
+    return false
+  }
+}
 
 export const resolveEndpointUrl = (endpoint: string) => {
   const ep = String(endpoint || '').trim()
@@ -249,7 +264,7 @@ export const resolveEndpointUrl = (endpoint: string) => {
   return `${base}${path}`
 }
 
-export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMode?: AuthMode; timeoutMs?: number; extraHeaders?: Record<string, string> }) => {
+export const postJson = async <T,>(endpoint: string, body: any, opts?: PostRequestOptions) => {
   const url0 = resolveEndpointUrl(endpoint)
   const authMode = opts?.authMode
   const apiKey = getApiKey()
@@ -257,18 +272,21 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
   const url = url0
 
   // 详细日志：确认实际请求 URL
-  console.log('[postJson] 请求详情:', {
-    inputEndpoint: endpoint,
-    resolvedUrl: url0,
-    finalUrl: url,
-    authMode,
-    hasApiKey: !!apiKey,
-    bodyKeys: Object.keys(body || {}),
-    isTauri
-  })
+  if (shouldLogNetworkDebug()) {
+    console.log('[postJson] 请求详情:', {
+      inputEndpoint: endpoint,
+      resolvedUrl: url0,
+      finalUrl: url,
+      authMode,
+      hasApiKey: !!apiKey,
+      bodyKeys: Object.keys(body || {}),
+      isTauri
+    })
+  }
 
-  // Tauri 环境下增加重试次数（502 错误在 Tauri 中更常见）
-  const maxRetries = isTauri ? 4 : 3
+  // 非幂等写操作默认禁用自动重试，避免重复生成/重复扣费
+  const canRetry = opts?.retryable !== false
+  const maxRetries = canRetry ? (isTauri ? 4 : 3) : 0
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     // Tauri HTTP 插件在某些平台（特别是 Windows）上对 AbortController 支持不完善
     // 因此只在非 Tauri 环境或明确设置超时时使用 signal
@@ -380,25 +398,27 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
   throw new Error('postJson failed')
 }
 
-export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: { authMode?: AuthMode; timeoutMs?: number }) => {
+export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: PostRequestOptions) => {
   const url0 = resolveEndpointUrl(endpoint)
   const authMode = opts?.authMode
   const apiKey = getApiKey()
   const url = url0
 
   // FormData 日志
-  console.log('[postFormData] 请求详情:', {
-    inputEndpoint: endpoint,
-    resolvedUrl: url0,
-    finalUrl: url,
-    authMode,
-    hasApiKey: !!apiKey,
-    formDataKeys: [...body.keys()],
-    isTauri
-  })
+  if (shouldLogNetworkDebug()) {
+    console.log('[postFormData] 请求详情:', {
+      inputEndpoint: endpoint,
+      resolvedUrl: url0,
+      finalUrl: url,
+      authMode,
+      hasApiKey: !!apiKey,
+      formDataKeys: [...body.keys()],
+      isTauri
+    })
+  }
 
-  // Tauri 环境下增加重试次数
-  const maxRetries = isTauri ? 4 : 3
+  const canRetry = opts?.retryable !== false
+  const maxRetries = canRetry ? (isTauri ? 4 : 3) : 0
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const timeoutMs = Number(opts?.timeoutMs || 0)
     const useSignal = timeoutMs > 0
@@ -416,7 +436,8 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
           Accept: 'application/json',
           ...(multipart ? { 'Content-Type': multipart.contentType } : {}),
           ...(authMode === 'query' && apiKey ? { 'x-goog-api-key': apiKey } : {}),
-          ...(authMode !== 'query' && apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+          ...(authMode !== 'query' && apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+          ...(opts?.extraHeaders || {})
         },
         body: (multipart ? (multipart.body as any) : body) as any
       }

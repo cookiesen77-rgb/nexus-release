@@ -148,6 +148,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
       disableComposite: gate(readDebugFlag(params, 'comp', 'nexus.debug.disableComposite', false)),
     }
   }, [])
+  const shouldLogCanvasDebug = isDev && debugFlags.perfProbe
 
   // 使用 ref 存储定时器和状态，避免任何重渲染
   const saveTimerRef = useRef<number>(0)
@@ -156,6 +157,8 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
   const minimalRef = useRef<HTMLDivElement>(null)
   const zoomTimerRef = useRef<number>(0)
   const applyingViewportRef = useRef(false)
+  const selectedNodeIdsRef = useRef<Set<string>>(new Set())
+  const selectedEdgeIdRef = useRef<string | null>(null)
 
   // 视口同步：Zustand store -> ReactFlow（尤其是 hydrate / 切换项目后，确保“视口中心”计算一致）
   useEffect(() => {
@@ -857,22 +860,54 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     const unsubscribe = useGraphStore.subscribe((state, prev) => {
       if (state.selectedNodeIds === prev.selectedNodeIds && state.selectedEdgeId === prev.selectedEdgeId) return
 
-      const nodeSet = new Set(state.selectedNodeIds || [])
-      const edgeId = state.selectedEdgeId || null
+      const nextNodeSet = new Set(state.selectedNodeIds || [])
+      const prevNodeSet = selectedNodeIdsRef.current
+      const changedNodeIds = new Set<string>()
+      for (const id of prevNodeSet) if (!nextNodeSet.has(id)) changedNodeIds.add(id)
+      for (const id of nextNodeSet) if (!prevNodeSet.has(id)) changedNodeIds.add(id)
 
-      setNodes((prevNodes) =>
-        prevNodes.map((n) => {
-          const nextSelected = nodeSet.has(n.id)
-          return n.selected === nextSelected ? n : { ...n, selected: nextSelected }
+      if (changedNodeIds.size > 0) {
+        setNodes((prevNodes) => {
+          const idxById = new Map<string, number>()
+          for (let i = 0; i < prevNodes.length; i++) idxById.set(prevNodes[i].id, i)
+          let nextNodes: Node[] | null = null
+          for (const id of changedNodeIds) {
+            const idx = idxById.get(id)
+            if (idx === undefined) continue
+            const curr = prevNodes[idx]
+            const nextSelected = nextNodeSet.has(id)
+            if (curr.selected === nextSelected) continue
+            if (!nextNodes) nextNodes = prevNodes.slice()
+            nextNodes[idx] = { ...curr, selected: nextSelected }
+          }
+          return nextNodes || prevNodes
         })
-      )
+      }
 
-      setEdges((prevEdges) =>
-        prevEdges.map((e) => {
-          const nextSelected = edgeId ? e.id === edgeId : false
-          return (e as any).selected === nextSelected ? e : { ...e, selected: nextSelected }
+      const nextEdgeId = state.selectedEdgeId || null
+      const prevEdgeId = selectedEdgeIdRef.current
+      if (nextEdgeId !== prevEdgeId) {
+        setEdges((prevEdges) => {
+          const ids = [prevEdgeId, nextEdgeId].filter(Boolean) as string[]
+          if (ids.length === 0) return prevEdges
+          const idxById = new Map<string, number>()
+          for (let i = 0; i < prevEdges.length; i++) idxById.set(prevEdges[i].id, i)
+          let nextEdges: typeof prevEdges | null = null
+          for (const id of ids) {
+            const idx = idxById.get(id)
+            if (idx === undefined) continue
+            const curr = prevEdges[idx]
+            const nextSelected = nextEdgeId != null && curr.id === nextEdgeId
+            if ((curr as any).selected === nextSelected) continue
+            if (!nextEdges) nextEdges = prevEdges.slice()
+            nextEdges[idx] = { ...curr, selected: nextSelected }
+          }
+          return nextEdges || prevEdges
         })
-      )
+      }
+
+      selectedNodeIdsRef.current = nextNodeSet
+      selectedEdgeIdRef.current = nextEdgeId
     })
     return unsubscribe
   }, [setEdges, setNodes])
@@ -907,12 +942,16 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
       const { nodeId, type } = event.detail || {}
       if (!nodeId) return
       
-      console.log('[ReactFlowCanvas] 收到节点更新事件:', nodeId, type)
+      if (shouldLogCanvasDebug) {
+        console.log('[ReactFlowCanvas] 收到节点更新事件:', nodeId, type)
+      }
       
       // 从 store 获取最新数据
       const storeNode = useGraphStore.getState().nodes.find(n => n.id === nodeId)
       if (!storeNode) {
-        console.warn('[ReactFlowCanvas] 节点不存在:', nodeId)
+        if (shouldLogCanvasDebug) {
+          console.warn('[ReactFlowCanvas] 节点不存在:', nodeId)
+        }
         return
       }
       
@@ -921,7 +960,9 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         const idx = prev.findIndex(n => n.id === nodeId)
         if (idx === -1) {
           // 节点不在 React Flow 中，可能需要添加
-          console.log('[ReactFlowCanvas] 节点不在 React Flow 中，添加:', nodeId)
+          if (shouldLogCanvasDebug) {
+            console.log('[ReactFlowCanvas] 节点不在 React Flow 中，添加:', nodeId)
+          }
           return [...prev, graphNodeToFlowNode(storeNode)]
         }
         
@@ -931,14 +972,16 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
           ...updated[idx],
           data: storeNode.data
         }
-        console.log('[ReactFlowCanvas] 强制刷新节点:', nodeId, 'hasUrl:', !!(storeNode.data as any)?.url, 'dataKeys:', Object.keys(storeNode.data || {}))
+        if (shouldLogCanvasDebug) {
+          console.log('[ReactFlowCanvas] 强制刷新节点:', nodeId, 'hasUrl:', !!(storeNode.data as any)?.url, 'dataKeys:', Object.keys(storeNode.data || {}))
+        }
         return updated
       })
     }
     
     window.addEventListener('nexus:node-updated', handleNodeUpdated as EventListener)
     return () => window.removeEventListener('nexus:node-updated', handleNodeUpdated as EventListener)
-  }, [setNodes])
+  }, [setNodes, shouldLogCanvasDebug])
 
   // 监听边数据变化（imageRole / order / handles 等），同步到 ReactFlow edge state，确保自定义边 UI 更新
   useEffect(() => {
@@ -1012,17 +1055,11 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     e.preventDefault()
     e.stopPropagation()
     e.dataTransfer.dropEffect = 'copy'
-    console.log('[ReactFlowCanvas] dragOver 事件触发')
   }, [])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    console.log('[ReactFlowCanvas] drop 事件触发', {
-      files: e.dataTransfer?.files?.length,
-      types: e.dataTransfer?.types
-    })
-    
     const isSupportedMediaFile = (f: File) => {
       const t = String((f as any)?.type || '').toLowerCase()
       if (/^(image|audio|video)\//i.test(t)) return true
@@ -1038,10 +1075,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     }
 
     const files = Array.from(e.dataTransfer?.files || []).filter(isSupportedMediaFile)
-    console.log('[ReactFlowCanvas] 过滤后的媒体文件数:', files.length)
-    
     if (files.length > 0 && onFileDrop) {
-      console.log('[ReactFlowCanvas] 调用 onFileDrop')
       onFileDrop(files, { x: e.clientX, y: e.clientY })
       return
     }
@@ -1077,7 +1111,6 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
       onDragEnter={(e) => {
         e.preventDefault()
         e.stopPropagation()
-        console.log('[ReactFlowCanvas] dragEnter')
       }}
     >
       <ReactFlow

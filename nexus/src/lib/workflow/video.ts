@@ -12,6 +12,15 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 
 // 检测是否在 Tauri 环境中
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
+const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV === true
+const shouldLogVideoDebug = () => {
+  if (!isDev || typeof window === 'undefined') return false
+  try {
+    return localStorage.getItem('nexus.debug.video') === '1'
+  } catch {
+    return false
+  }
+}
 
 // 根据环境选择 fetch 实现（带兜底）
 // Windows 用户环境下 Tauri plugin-http 可能因代理/证书链问题失败，fallback 到 WebView fetch
@@ -243,8 +252,8 @@ const pickFirstHttpUrlFromText = (text: string) => {
 const normalizeMediaUrl = (raw: any) => {
   const v = typeof raw === 'string' ? raw.trim() : ''
   if (!v) return ''
-  // 支持 data:, blob:, http(s):, 以及相对路径 /v1/...
-  if (v.startsWith('data:') || v.startsWith('blob:') || isHttpUrl(v) || v.startsWith('/v1/')) return v
+  // 支持 data:, blob:, http(s):, 以及常见 API 相对路径
+  if (v.startsWith('data:') || v.startsWith('blob:') || isHttpUrl(v) || isApiRelativeUrl(v)) return v
   const picked = pickFirstHttpUrlFromText(v)
   return picked || ''
 }
@@ -260,16 +269,17 @@ const extractVideoUrlDeep = (payload: any) => {
 
   const push = (val: any, isFromVideoKey = false) => {
     if (typeof val !== 'string') return
-    if (!val.startsWith('http')) return
-    if (seen.has(val)) return
+    const normalized = normalizeMediaUrl(val)
+    if (!normalized) return
+    if (seen.has(normalized)) return
     // 排除明显的图片 URL
-    if (isImageUrl(val)) return
-    seen.add(val)
+    if (isImageUrl(normalized)) return
+    seen.add(normalized)
     // 优先添加明确的视频 URL
-    if (isVideoUrl(val)) {
-      urls.unshift(val) // 添加到开头
+    if (isVideoUrl(normalized)) {
+      urls.unshift(normalized) // 添加到开头
     } else if (isFromVideoKey) {
-      urls.push(val) // 来自视频相关字段的 URL
+      urls.push(normalized) // 来自视频相关字段的 URL
     }
   }
 
@@ -1005,23 +1015,29 @@ const pollVideoTask = async (id: string, modelCfg: any, nodeId?: string, videoNo
                      response?.VideoUrl || response?.video_url ||
                      resp?.VideoUrl || resp?.video_url || resp?.result_url || resp?.data?.video_url
     
-    console.log(`[pollVideoTask] 轮询 ${i + 1}/${maxAttempts} (${elapsed}s):`, {
-      status,
-      hasVideoUrl: !!videoUrl,
-      videoUrlPreview: videoUrl?.slice?.(0, 80),
-      outputVideo: outputVideo?.slice?.(0, 80),
-      downloadUrl: typeof downloadUrl === 'string' ? downloadUrl?.slice?.(0, 80) : null
-    })
+    if (shouldLogVideoDebug()) {
+      console.log(`[pollVideoTask] 轮询 ${i + 1}/${maxAttempts} (${elapsed}s):`, {
+        status,
+        hasVideoUrl: !!videoUrl,
+        videoUrlPreview: videoUrl?.slice?.(0, 80),
+        outputVideo: outputVideo?.slice?.(0, 80),
+        downloadUrl: typeof downloadUrl === 'string' ? downloadUrl?.slice?.(0, 80) : null
+      })
+    }
 
     // 如果直接有视频 URL，返回
-    if (typeof videoUrl === 'string' && /^https?:\/\//i.test(videoUrl)) {
-      console.log('[pollVideoTask] 获取到视频 URL:', videoUrl.slice(0, 80))
+    if (typeof videoUrl === 'string' && (isHttpUrl(videoUrl) || isApiRelativeUrl(videoUrl))) {
+      if (shouldLogVideoDebug()) {
+        console.log('[pollVideoTask] 获取到视频 URL:', videoUrl.slice(0, 80))
+      }
       return videoUrl
     }
 
     const direct = extractVideoUrlDeep(resp)
     if (direct) {
-      console.log('[pollVideoTask] 深度解析获取到视频 URL:', direct?.slice(0, 80))
+      if (shouldLogVideoDebug()) {
+        console.log('[pollVideoTask] 深度解析获取到视频 URL:', direct?.slice(0, 80))
+      }
       return direct
     }
 
@@ -1035,7 +1051,9 @@ const pollVideoTask = async (id: string, modelCfg: any, nodeId?: string, videoNo
       // 使用相对路径，让请求通过 Vite 代理（避免 CORS 问题）
       if (modelCfg.format === 'sora-openai') {
         const contentUrl = `/v1/videos/${id}/content`
-        console.log('[pollVideoTask] Sora OpenAI 格式：构造视频下载 URL:', contentUrl)
+        if (shouldLogVideoDebug()) {
+          console.log('[pollVideoTask] Sora OpenAI 格式：构造视频下载 URL:', contentUrl)
+        }
         return contentUrl
       }
       
@@ -1043,14 +1061,16 @@ const pollVideoTask = async (id: string, modelCfg: any, nodeId?: string, videoNo
       const errCode = aigcTask?.ErrCode || aigcTask?.err_code || aigcTask?.error_code
       const errMsg = aigcTask?.Message || aigcTask?.message || aigcTask?.error_message || aigcTask?.error
       
-      console.warn('[pollVideoTask] 状态已完成但未找到视频 URL，详细结构:', {
-        'ErrCode': errCode,
-        'Message': errMsg,
-        'Progress': aigcTask?.Progress,
-        'FileInfos': fileInfos,
-        'AigcOutput keys': Object.keys(aigcOutput || {}),
-        'fullResp': JSON.stringify(resp)?.slice(0, 2000)
-      })
+      if (shouldLogVideoDebug()) {
+        console.warn('[pollVideoTask] 状态已完成但未找到视频 URL，详细结构:', {
+          ErrCode: errCode,
+          Message: errMsg,
+          Progress: aigcTask?.Progress,
+          FileInfos: fileInfos,
+          AigcOutputKeys: Object.keys(aigcOutput || {}),
+          fullResp: JSON.stringify(resp)?.slice(0, 600)
+        })
+      }
       
       // 只在明确有错误信息时判定失败；避免误把“暂未补齐 URL”当失败
       if (errCode || errMsg) {
@@ -1286,7 +1306,7 @@ export const generateVideoFromConfigNode = async (
     if (forcedNode?.type === 'video' || forcedNode?.type === 'videoConfig') {
       forceOutput = true
       // 强制使用指定输出节点
-      store.updateNode(forcedOutputId, { data: { loading: true, error: '' } } as any)
+      store.patchNodeDataSilent(forcedOutputId, { loading: true, error: '' })
     } else {
       console.warn('[generateVideo] 指定 outputNodeId 无效，回退到默认创建/复用:', forcedOutputId, forcedNode?.type)
       videoNodeId = findConnectedOutputVideoNode(configNodeId)
@@ -1308,7 +1328,7 @@ export const generateVideoFromConfigNode = async (
       
       if (regenerateMode === 'replace') {
         // 替代模式：直接更新现有节点
-        store.updateNode(videoNodeId, { data: { loading: true, error: '' } } as any)
+        store.patchNodeDataSilent(videoNodeId, { loading: true, error: '' })
       } else {
         // 新建模式：如果已有节点有内容，创建新节点
         if (oldVideoData?.url) {
@@ -1334,7 +1354,7 @@ export const generateVideoFromConfigNode = async (
           })
         } else {
           // 复用已有的空白视频节点
-          store.updateNode(videoNodeId, { data: { loading: true, error: '' } } as any)
+          store.patchNodeDataSilent(videoNodeId, { loading: true, error: '' })
         }
       }
     } else {

@@ -33,6 +33,7 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
   const [editing, setEditing] = useState(false)
   const [showActions, setShowActions] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const openEditorTokenRef = useRef<any>(null)
 
   const hasContent = !!displayContent.trim()
   const isEmpty = !hasContent && !editing
@@ -44,6 +45,14 @@ export const TextNodeComponent = memo(function TextNode({ id, data, selected }: 
       setDisplayContent(nodeData.content || '')
     }
   }, [nodeData?.content])
+
+  useEffect(() => {
+    const token = (nodeData as any)?._openEditorToken
+    if (!token || token === openEditorTokenRef.current) return
+    openEditorTokenRef.current = token
+    setEditing(true)
+    setTimeout(() => textareaRef.current?.focus(), 50)
+  }, [(nodeData as any)?._openEditorToken])
 
   const syncToStore = useCallback(() => {
     setTimeout(() => {

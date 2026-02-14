@@ -52,18 +52,34 @@ const toFormData = (data) => {
   return fd
 }
 
+const createRequestKey = (prefix = 'img') => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `${prefix}-${crypto.randomUUID()}`
+    }
+  } catch {
+    // ignore
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 // 生成图片
 export const generateImage = (data, options = {}) => {
   const { requestType = 'json', endpoint = '/images/generations', authMode, timeout } = options
   const url = buildUrl(endpoint)
+  const requestKey = createRequestKey('image')
+  const requestHeaders = {
+    'Idempotency-Key': requestKey,
+    'X-Client-Request-Id': requestKey
+  }
 
   // Tauri 环境：使用 safeFetch 封装的 request（避免 WebView CORS）
   if (isTauri) {
     if (requestType === 'formdata' || (typeof FormData !== 'undefined' && data instanceof FormData)) {
       const form = toFormData(data)
-      return postFormData(url, form, { authMode, timeoutMs: timeout })
+      return postFormData(url, form, { authMode, timeoutMs: timeout, extraHeaders: requestHeaders, retryable: false })
     }
-    return postJson(url, data, { authMode, timeoutMs: timeout })
+    return postJson(url, data, { authMode, timeoutMs: timeout, extraHeaders: requestHeaders, retryable: false })
   }
 
   // Web 环境：保持 axios 行为（含 key 轮换与拦截器）
@@ -73,6 +89,8 @@ export const generateImage = (data, options = {}) => {
     data,
     authMode,
     timeout,
-    headers: requestType === 'formdata' ? { 'Content-Type': 'multipart/form-data' } : {}
+    headers: requestType === 'formdata'
+      ? { 'Content-Type': 'multipart/form-data', ...requestHeaders }
+      : requestHeaders
   })
 }

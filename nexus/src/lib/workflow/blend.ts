@@ -385,7 +385,7 @@ async function blendViaGemini(
           maxOutputTokens: 1024
         }
       },
-      { authMode: 'query', timeoutMs: 120000 }
+      { authMode: 'query', timeoutMs: 120000, retryable: false }
     )
 
     // 从响应中提取图像
@@ -437,7 +437,7 @@ async function blendViaKling(
         quality: '2k',
         n: 1
       },
-      { authMode: 'bearer', timeoutMs: 120000 }
+      { authMode: 'bearer', timeoutMs: 120000, retryable: false }
     )
 
     const rsp = response as any

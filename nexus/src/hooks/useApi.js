@@ -619,6 +619,40 @@ export const useImageGeneration = () => {
     return urls
   }
 
+  const IMAGE_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif|svg)(\?|$)/i
+  const NON_IMAGE_EXT_RE = /\.(mp4|webm|mov|m4v|m3u8|avi|mkv|mp3|wav|m4a|aac|ogg|flac|json|txt|pdf)(\?|$)/i
+  const NEGATIVE_HINT_RE = /(preview|thumb|thumbnail|small|icon|avatar|mask|watermark|frame|border|sprite)/i
+  const POSITIVE_HINT_RE = /(original|origin|source|full|final|result|output|download|raw|hd|hires|image)/i
+
+  const scoreImageUrl = (url) => {
+    const u = String(url || '').trim()
+    if (!u) return -999
+    let score = 0
+    if (/^data:image\//i.test(u)) score += 120
+    else if (/^data:/i.test(u)) score += 90
+    else if (IMAGE_EXT_RE.test(u)) score += 40
+    else if (NON_IMAGE_EXT_RE.test(u)) score -= 120
+    else score += 8
+    if (NEGATIVE_HINT_RE.test(u)) score -= 45
+    if (POSITIVE_HINT_RE.test(u)) score += 14
+    if (/(^|\/)preview(\/|$)/i.test(u)) score -= 35
+    if (/(^|\/)thumbs?(\/|$)/i.test(u)) score -= 30
+    score += Math.min(10, Math.floor(u.length / 100))
+    return score
+  }
+
+  const pickBestImageUrl = (urls) => {
+    if (!Array.isArray(urls) || urls.length === 0) return ''
+    return urls
+      .map((u) => String(u || '').trim())
+      .filter(Boolean)
+      .sort((a, b) => {
+        const scoreDiff = scoreImageUrl(b) - scoreImageUrl(a)
+        if (scoreDiff !== 0) return scoreDiff
+        return b.length - a.length
+      })[0] || ''
+  }
+
   const pollKlingImageTask = async (taskId, { endpoint, authMode, maxAttempts = 120, interval = 3000, onDebug } = {}) => {
     if (!taskId) throw new Error('未获取到 Kling 生图任务 ID')
     const statusUrl = `${endpoint.replace(/\/$/, '')}/${encodeURIComponent(String(taskId))}`
@@ -958,8 +992,8 @@ export const useImageGeneration = () => {
           // Prefer deep URL extraction (covers {image_url:{url}}, nested structures, etc.)
           const urls = extractUrlsDeep(resp)
           if (urls.length > 0) {
-            const first = urls[0]
-            generatedImages = [{ url: first, base64: first.startsWith('data:') ? first : '', revisedPrompt: '' }]
+            const best = pickBestImageUrl(urls) || urls[0]
+            generatedImages = [{ url: best, base64: best.startsWith('data:') ? best : '', revisedPrompt: '' }]
             break
           }
 
