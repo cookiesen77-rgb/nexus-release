@@ -266,16 +266,11 @@ const getConnectedInputs = async (configId: string) => {
 
   console.log('[getConnectedInputs] 结果 - 提示词数:', promptParts.length, '参考图数:', refImages.length)
 
-  // 支持 all-in-one 节点的内联提示词（_inlinePrompt）
+  // 支持 all-in-one 节点的内联提示词（_inlinePrompt）— 追加到上游文本之后
   const cfgNode = byId.get(configId)
   const inlinePrompt = normalizeText((cfgNode?.data as any)?._inlinePrompt || '')
   if (inlinePrompt) {
-    // 内联提示词优先于连接的文本节点
-    if (promptParts.length === 0) {
-      promptParts.push(inlinePrompt)
-    } else {
-      promptParts.unshift(inlinePrompt)
-    }
+    promptParts.push(inlinePrompt)
   }
 
   // 支持 all-in-one 节点的内联参考图（_inlineRefImages）

@@ -118,14 +118,14 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   const [aperture, setAperture] = useState(3)
   const [loopCount, setLoopCount] = useState(1)
 
-  // 直接订阅连接的参考图完整信息
-  const edgesSnapshot = useGraphStore(s => s.edges)
-  const nodesSnapshot = useGraphStore(s => s.nodes)
+  // 只订阅到当前节点的边数量变化，避免全量订阅导致性能问题
+  const incomingEdgeCount = useGraphStore(s => s.edges.filter(e => e.target === nodeId).length)
   const [refUrlMap, setRefUrlMap] = useState<Record<string, string>>({})
 
   const sortedRefImages = useMemo(() => {
-    const byId = new Map(nodesSnapshot.map(n => [n.id, n]))
-    return edgesSnapshot
+    const s = useGraphStore.getState()
+    const byId = new Map(s.nodes.map(n => [n.id, n]))
+    return s.edges
       .filter(e => e.target === nodeId)
       .map(e => {
         const src = byId.get(e.source)
@@ -138,14 +138,13 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
       })
       .filter(Boolean)
       .sort((a: any, b: any) => (a.order || 999) - (b.order || 999)) as Array<{ nodeId: string; url: string; label: string; order: number; edgeId: string; mediaId: string }>
-  }, [nodeId, edgesSnapshot, nodesSnapshot])
+  }, [nodeId, incomingEdgeCount])
 
   useEffect(() => {
     let cancelled = false
     const load = async () => {
       for (const img of sortedRefImages) {
-        if (!img || img.url) continue
-        if (refUrlMap[img.nodeId]) continue
+        if (!img || img.url || cancelled) continue
         let url = ''
         try {
           if (img.mediaId) {
@@ -163,7 +162,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
     }
     void load()
     return () => { cancelled = true }
-  }, [sortedRefImages, refUrlMap])
+  }, [sortedRefImages])
 
   const modelCfg = useMemo(() => (IMAGE_MODELS as any[]).find((m: any) => m.key === model) || IMAGE_MODELS[0], [model]) as any
   const sizeOptions = useMemo(() => (modelCfg?.sizes || ['1:1','16:9','9:16','4:3','3:4']).map((s: any) => typeof s === 'string' ? { key: s, label: s } : s), [modelCfg])
@@ -175,7 +174,8 @@ function ImagePanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   }, [cameraOpen, cameraBody, cameraLens, focalLength, aperture])
 
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() && !nodeData?.url) { window.$message?.warning?.('请输入描述'); return }
+    const hasUpstreamText = useGraphStore.getState().edges.some(e => e.target === nodeId && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'text')
+    if (!prompt.trim() && !nodeData?.url && !hasUpstreamText) { window.$message?.warning?.('请输入描述或连接文本节点'); return }
     setLoading(true)
     try {
       const store = useGraphStore.getState()
@@ -405,7 +405,9 @@ function VideoPanel({ nodeId, nodeData, isConfigNode }: { nodeId: string; nodeDa
   }, [])
 
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim()) { window.$message?.warning?.('请输入描述'); return }
+    const hasUpstreamText = useGraphStore.getState().edges.some(e => e.target === nodeId && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'text')
+    const hasUpstreamImage = useGraphStore.getState().edges.some(e => e.target === nodeId && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'image')
+    if (!prompt.trim() && !hasUpstreamText && !hasUpstreamImage) { window.$message?.warning?.('请输入描述或连接上游节点'); return }
     setLoading(true)
     try {
       const store = useGraphStore.getState()
