@@ -63,15 +63,16 @@ const getDb = (): Promise<IDBDatabase> => {
 // ==================== 类型定义 ====================
 
 export interface MediaRecord {
-  id: string              // 唯一 ID
-  nodeId: string          // 关联的节点 ID
-  projectId: string       // 关联的项目 ID
-  type: 'image' | 'video' | 'audio' // 媒体类型
-  data: string            // base64 数据或 URL
-  sourceUrl?: string      // 原始 URL（如果有）
-  model?: string          // 生成模型
-  createdAt: number       // 创建时间
-  lastAccessedAt: number  // 最后访问时间（用于 LRU 缓存）
+  id: string
+  nodeId: string
+  projectId: string
+  type: 'image' | 'video' | 'audio'
+  data: string
+  thumbnailData?: string
+  sourceUrl?: string
+  model?: string
+  createdAt: number
+  lastAccessedAt: number
 }
 
 // ==================== 核心 API ====================
@@ -513,3 +514,48 @@ export const getStorageDetails = async (): Promise<{
 // 旧逻辑会在启动后自动清理 7 天前的数据，这会与"素材跨重启可恢复"的目标冲突。
 // 改为由显式调用 cleanupOldMedia() 或项目/节点删除时清理（见 store 层）。
 // 新增 LRU 清理策略，当存储空间超出配额时自动清理最久未访问的数据。
+
+// ==================== 缩略图生成 ====================
+
+const MAX_THUMB_WIDTH = 512
+
+export const generateThumbnail = async (dataUrl: string): Promise<string> => {
+  if (!dataUrl) return ''
+  return new Promise<string>((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      if (img.naturalWidth <= MAX_THUMB_WIDTH) { resolve(dataUrl); return }
+      const scale = MAX_THUMB_WIDTH / img.naturalWidth
+      const w = Math.round(img.naturalWidth * scale)
+      const h = Math.round(img.naturalHeight * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { resolve(''); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', 0.75))
+    }
+    img.onerror = () => resolve('')
+    img.src = dataUrl
+  })
+}
+
+export const saveThumbnailForMedia = async (mediaId: string, thumbData: string): Promise<void> => {
+  if (!mediaId || !thumbData) return
+  const db = await getDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const store = tx.objectStore(STORE_NAME)
+    const req = store.get(mediaId)
+    req.onsuccess = () => {
+      const record = req.result as MediaRecord | undefined
+      if (!record) { resolve(); return }
+      record.thumbnailData = thumbData
+      const putReq = store.put(record)
+      putReq.onsuccess = () => resolve()
+      putReq.onerror = () => reject(putReq.error)
+    }
+    req.onerror = () => reject(req.error)
+  })
+}

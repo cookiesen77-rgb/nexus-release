@@ -452,12 +452,30 @@ export const resolveCachedMediaUrl = async (url: string) => {
       })
       if (!response.ok) {
         console.error('[resolveCachedMediaUrl] 下载失败:', response.status)
-        // 返回空 URL，避免浏览器尝试直接加载需要鉴权的 URL
         return { displayUrl: '', localPath: '', error: `下载失败: ${response.status}` }
       }
       const blob = await response.blob()
+
+      // 视频持久化到 IndexedDB（避免 blob URL 失效）
+      if (blob.size < 50 * 1024 * 1024) {
+        try {
+          const reader = new FileReader()
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+          if (dataUrl) {
+            console.log('[resolveCachedMediaUrl] 视频已转 dataURL 持久化, 大小:', (dataUrl.length / 1024 / 1024).toFixed(1), 'MB')
+            return { displayUrl: dataUrl, localPath: '' }
+          }
+        } catch {
+          // fallback to blob URL
+        }
+      }
+
       const blobUrl = URL.createObjectURL(blob)
-      console.log('[resolveCachedMediaUrl] 转换为 blob URL:', blobUrl.slice(0, 50))
+      console.log('[resolveCachedMediaUrl] 视频过大(>50MB)，使用临时 blob URL:', blobUrl.slice(0, 50))
       return { displayUrl: blobUrl, localPath: '' }
     } catch (err) {
       console.error('[resolveCachedMediaUrl] 下载视频失败:', err)

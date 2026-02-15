@@ -46,15 +46,10 @@ export const ImageRoleEdge = memo(function ImageRoleEdge({
   const edgeData = data as ImageRoleEdgeData | undefined
   const { setEdges } = useReactFlow()
 
-  const hoveredEdgeId = useGraphStore(s => s.hoveredEdgeId)
-  const isHighlighted = !hoveredEdgeId || useGraphStore.getState().highlightedEdgeIds.has(id)
   const color = getEdgeColor('imageRole')
 
-  // 订阅目标 videoConfig 节点的模型（用于动态过滤角色选项）
-  const targetModelKey = useGraphStore((s) => {
-    const n = s.nodes.find((x) => x.id === target)
-    return String((n?.data as any)?.model || '').trim()
-  })
+  // 目标模型从 edge.data 传入（由 ReactFlowCanvas 同步注入），避免 O(N) 查询
+  const targetModelKey = String((edgeData as any)?._targetModelKey || '').trim()
   const caps = useMemo(() => getVideoModelCaps(targetModelKey), [targetModelKey])
   const allowedRoles = useMemo(() => new Set(getAllowedVideoImageRoles(caps)), [caps])
   const roleOptions = useMemo(
@@ -165,12 +160,8 @@ export const ImageRoleEdge = memo(function ImageRoleEdge({
         d={edgePath}
         fill="none"
         className="react-flow__edge-path"
-        style={{
-          strokeWidth: 2,
-          strokeOpacity: isHighlighted ? 0.9 : 0.5,
-          transition: 'stroke-opacity 0.3s',
-          stroke: color,
-        }}
+        stroke={color}
+        strokeWidth={2}
       />
       <path d={edgePath} fill="none" strokeOpacity="0" strokeWidth="20" className="react-flow__edge-interaction" />
 

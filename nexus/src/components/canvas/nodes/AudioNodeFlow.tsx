@@ -8,6 +8,7 @@ import { TapNodeHandle } from './shared/TapNodeHandle'
 import { Trash2, Download, Music, X } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
 import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
+import { useInView } from '@/hooks/useInView'
 
 interface AudioNodeData {
   label?: string
@@ -32,6 +33,7 @@ const formatDuration = (seconds: number) => {
 export const AudioNodeComponent = memo(function AudioNode({ id, data, selected }: NodeProps) {
   const nodeData = data as AudioNodeData
   const [showActions, setShowActions] = useState(false)
+  const { ref: inViewRef, inView } = useInView({ rootMargin: '500px', triggerOnce: false })
 
   const displayUrl = nodeData?.url || ''
   const loadAttemptedRef = useRef(false)
@@ -157,6 +159,7 @@ export const AudioNodeComponent = memo(function AudioNode({ id, data, selected }
 
   return (
     <div
+      ref={inViewRef}
       className="relative"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
@@ -207,9 +210,15 @@ export const AudioNodeComponent = memo(function AudioNode({ id, data, selected }
             </div>
           )}
 
-          {!nodeData?.loading && !nodeData?.error && displayUrl && (
+          {!nodeData?.loading && !nodeData?.error && displayUrl && inView && (
             <div className="rounded-lg bg-[var(--bg-tertiary)] p-2">
               <audio src={displayUrl} controls className="w-full nodrag" />
+            </div>
+          )}
+
+          {!nodeData?.loading && !nodeData?.error && displayUrl && !inView && (
+            <div className="h-10 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center">
+              <Music size={14} className="text-[var(--text-secondary)] opacity-30" />
             </div>
           )}
 

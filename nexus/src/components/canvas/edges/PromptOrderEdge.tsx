@@ -13,8 +13,6 @@ export const PromptOrderEdge = memo(function PromptOrderEdge({
 
   const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition })
 
-  const hoveredEdgeId = useGraphStore(s => s.hoveredEdgeId)
-  const isHighlighted = !hoveredEdgeId || useGraphStore.getState().highlightedEdgeIds.has(id)
   const color = getEdgeColor('promptOrder')
   const order = (data as any)?.promptOrder || 1
 
@@ -41,7 +39,7 @@ export const PromptOrderEdge = memo(function PromptOrderEdge({
 
   return (
     <>
-      <path d={edgePath} fill="none" className="react-flow__edge-path" style={{ strokeWidth: 2, strokeOpacity: isHighlighted ? 0.9 : 0.5, transition: 'stroke-opacity 0.3s', stroke: color }} />
+      <path d={edgePath} fill="none" className="react-flow__edge-path" stroke={color} strokeWidth={2} />
       <path d={edgePath} fill="none" strokeOpacity="0" strokeWidth="20" className="react-flow__edge-interaction" />
       <EdgeLabelRenderer>
         {/* Direction arrow */}

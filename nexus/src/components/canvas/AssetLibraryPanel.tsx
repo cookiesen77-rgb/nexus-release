@@ -1,11 +1,14 @@
 import React, { useMemo, useState } from 'react'
 import { useAssetsStore, type AssetType } from '@/store/assets'
+import { useGraphStore } from '@/graph/store'
 import { Star, Tag, Trash2, X } from 'lucide-react'
 
 type FilterTab = 'all' | 'image' | 'video' | 'favorite'
 
 export default function AssetLibraryPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const assets = useAssetsStore(s => s.assets)
+  const allAssets = useAssetsStore(s => s.assets)
+  const currentProjectId = useGraphStore(s => s.projectId)
+  const assets = useMemo(() => allAssets.filter(a => !a.projectId || a.projectId === currentProjectId), [allAssets, currentProjectId])
   const removeAsset = useAssetsStore(s => s.removeAsset)
   const toggleFavorite = useAssetsStore(s => s.toggleFavorite)
   const setTags = useAssetsStore(s => s.setTags)
@@ -79,7 +82,7 @@ export default function AssetLibraryPanel({ open, onClose }: { open: boolean; on
           ) : (
             <div className="grid grid-cols-4 gap-3">
               {filtered.map(a => (
-                <div key={a.id} className="group relative overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)]">
+                <div key={a.id} className="asset-grid-item group relative overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)]">
                   {/* Thumbnail */}
                   <div className="aspect-square cursor-pointer overflow-hidden" onClick={() => setPreview(a.id)}>
                     {a.type === 'video' ? (

@@ -6,7 +6,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { X, RotateCcw, Check } from 'lucide-react'
+import { X, RotateCcw, Check, FlipHorizontal, FlipVertical, RotateCw } from 'lucide-react'
 
 interface Props {
   open: boolean
@@ -228,58 +228,65 @@ export default function ImageCropModal({ open, imageUrl, onClose, onCrop }: Prop
       height: initialH,
     })
     setAspectRatio(null)
+    setFlipH(false)
+    setFlipV(false)
+    setRotation(0)
   }, [displaySize])
 
-  // 执行裁剪
+  // 变换状态
+  const [flipH, setFlipH] = useState(false)
+  const [flipV, setFlipV] = useState(false)
+  const [rotation, setRotation] = useState(0)
+
+  // 执行裁剪（含变换）
   const handleCrop = useCallback(() => {
     if (!imageLoaded || displaySize.width === 0) return
-    
+
     const scaleX = imageSize.width / displaySize.width
     const scaleY = imageSize.height / displaySize.height
-    
-    // 使用 Math.round 取整，避免浮点数导致的边缘问题（尤其在 Windows 上）
+
     const realCrop = {
       x: Math.round(cropArea.x * scaleX),
       y: Math.round(cropArea.y * scaleY),
       width: Math.round(cropArea.width * scaleX),
       height: Math.round(cropArea.height * scaleY),
     }
-    
-    // 确保尺寸至少为 1
     realCrop.width = Math.max(1, realCrop.width)
     realCrop.height = Math.max(1, realCrop.height)
-    
-    // 确保不超出图片边界
     realCrop.x = Math.min(realCrop.x, imageSize.width - realCrop.width)
     realCrop.y = Math.min(realCrop.y, imageSize.height - realCrop.height)
     realCrop.x = Math.max(0, realCrop.x)
     realCrop.y = Math.max(0, realCrop.y)
-    
+
+    const isRotated90 = rotation === 90 || rotation === 270
+    const outW = isRotated90 ? realCrop.height : realCrop.width
+    const outH = isRotated90 ? realCrop.width : realCrop.height
     const canvas = document.createElement('canvas')
-    canvas.width = realCrop.width
-    canvas.height = realCrop.height
-    
+    canvas.width = outW
+    canvas.height = outH
+
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    
-    // 禁用图像平滑，保持像素精确
-    ctx.imageSmoothingEnabled = false
-    
+
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
+      ctx.save()
+      ctx.translate(outW / 2, outH / 2)
+      ctx.rotate((rotation * Math.PI) / 180)
+      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1)
       ctx.drawImage(
         img,
         realCrop.x, realCrop.y, realCrop.width, realCrop.height,
-        0, 0, realCrop.width, realCrop.height
+        -realCrop.width / 2, -realCrop.height / 2, realCrop.width, realCrop.height
       )
-      
-      const croppedDataUrl = canvas.toDataURL('image/png')
-      onCrop(croppedDataUrl)
+      ctx.restore()
+
+      onCrop(canvas.toDataURL('image/png'))
       onClose()
     }
     img.src = imageUrl
-  }, [imageLoaded, imageSize, displaySize, cropArea, imageUrl, onCrop, onClose])
+  }, [imageLoaded, imageSize, displaySize, cropArea, imageUrl, onCrop, onClose, flipH, flipV, rotation])
 
   if (!open) return null
 
@@ -317,7 +324,7 @@ export default function ImageCropModal({ open, imageUrl, onClose, onCrop }: Prop
           </button>
         </div>
 
-        {/* Aspect Ratio Selector */}
+        {/* Aspect Ratio + Transform */}
         <div className="flex items-center gap-2 border-b border-[var(--border-color)] px-5 py-3">
           <span className="text-xs text-[var(--text-secondary)]">比例：</span>
           {ASPECT_RATIOS.map((ratio) => (
@@ -334,6 +341,24 @@ export default function ImageCropModal({ open, imageUrl, onClose, onCrop }: Prop
               {ratio.label}
             </button>
           ))}
+
+          <div className="mx-2 h-4 w-px bg-[var(--border-color)]" />
+
+          <button onClick={() => setFlipH(v => !v)} title="水平镜像"
+            className={cn('rounded-full border p-1.5 transition-colors', flipH ? 'border-[var(--accent-color)] bg-[rgb(var(--accent-rgb)/0.1)] text-[var(--accent-color)]' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]')}>
+            <FlipHorizontal className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => setFlipV(v => !v)} title="垂直镜像"
+            className={cn('rounded-full border p-1.5 transition-colors', flipV ? 'border-[var(--accent-color)] bg-[rgb(var(--accent-rgb)/0.1)] text-[var(--accent-color)]' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]')}>
+            <FlipVertical className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => setRotation(r => (r + 90) % 360)} title="旋转 90°"
+            className="rounded-full border border-[var(--border-color)] p-1.5 text-[var(--text-secondary)] transition-colors hover:border-[var(--text-secondary)]">
+            <RotateCw className="h-3.5 w-3.5" />
+          </button>
+          {rotation !== 0 && (
+            <span className="text-[10px] text-[var(--text-secondary)]">{rotation}°</span>
+          )}
         </div>
 
         {/* Crop Area */}
@@ -352,6 +377,7 @@ export default function ImageCropModal({ open, imageUrl, onClose, onCrop }: Prop
                 alt="Original"
                 className="absolute inset-0 h-full w-full object-contain"
                 draggable={false}
+                style={{ transform: `scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1}) rotate(${rotation}deg)` }}
               />
               
               {/* 暗色遮罩（裁剪框外的区域） */}

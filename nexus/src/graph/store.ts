@@ -11,7 +11,6 @@ import {
   type SpatialIndex
 } from '@/graph/spatialIndex'
 import { coerceVideoImageRole, getVideoModelCaps } from '@/lib/modelCaps'
-import { getConnectedComponent } from '@/graph/graphTraversal'
 
 type PersistedCanvasV1 = {
   version: 1
@@ -44,7 +43,6 @@ let compressTimer: number | null = null
 let compressInProgress = false
 let historyTimer: number | null = null
 let historyPending = false
-let hoverRafId = 0
 
 let history: HistoryEntry[] = []
 let historyIndex = -1
@@ -397,8 +395,6 @@ export type GraphState = {
   selectedNodeIds: string[]
   selectedEdgeId: string | null
   hoveredEdgeId: string | null
-  highlightedNodeIds: Set<string>
-  highlightedEdgeIds: Set<string>
   historyIndex: number
   historyLength: number
 
@@ -455,8 +451,6 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   selectedNodeIds: [],
   selectedEdgeId: null,
   hoveredEdgeId: null,
-  highlightedNodeIds: new Set<string>(),
-  highlightedEdgeIds: new Set<string>(),
   historyIndex: -1,
   historyLength: 0,
 
@@ -586,20 +580,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   setHoveredEdge: (id) => {
-    if (!id) {
-      cancelAnimationFrame(hoverRafId)
-      set({ hoveredEdgeId: null, highlightedNodeIds: new Set(), highlightedEdgeIds: new Set() })
-      return
-    }
-    if (id === get().hoveredEdgeId) return
-    cancelAnimationFrame(hoverRafId)
-    hoverRafId = requestAnimationFrame(() => {
-      const s = get()
-      const edge = s.edges.find(e => e.id === id)
-      if (!edge) return
-      const { nodeIds, edgeIds } = getConnectedComponent(edge.source, s.edges)
-      set({ hoveredEdgeId: id, highlightedNodeIds: nodeIds, highlightedEdgeIds: edgeIds })
-    })
+    set({ hoveredEdgeId: id || null })
   },
 
   setViewport: (vp) => {

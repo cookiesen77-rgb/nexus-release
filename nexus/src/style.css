@@ -302,7 +302,12 @@ select option {
 
 /* 边的样式 */
 .react-flow__edge-path {
-  transition: stroke 0.3s, stroke-opacity 0.3s, opacity 0.2s ease;
+  stroke-opacity: 0.9;
+}
+
+/* Edge hover dimming — CSS-only, 零 JS re-render */
+[data-dimming] .react-flow__edge:not([data-highlighted]) .react-flow__edge-path {
+  stroke-opacity: 0.15 !important;
 }
 
 .react-flow__edge.selected .react-flow__edge-path,
@@ -359,6 +364,15 @@ select option {
   display: none;
 }
 
+/* Edge animation budget — disable animations at scale */
+[data-perf-tier="heavy"] .react-flow__edge-path {
+  animation: none !important;
+}
+[data-perf-tier="extreme"] .react-flow__edge-path {
+  animation: none !important;
+  filter: none !important;
+}
+
 /* Zoom-only LOD: hide edges/background during zoom (keep nodes) */
 .rf-zooming .react-flow__viewport {
   background-image: none;
@@ -376,6 +390,12 @@ select option {
 /* Video node hover control bar */
 .video-controls-bar {
   transition: opacity 0.2s ease-out, transform 0.2s ease-out !important;
+}
+
+/* History/Asset panel grid items — skip rendering off-screen cards */
+.asset-grid-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1px auto 160px;
 }
 .group:hover .video-controls-bar {
   opacity: 1 !important;

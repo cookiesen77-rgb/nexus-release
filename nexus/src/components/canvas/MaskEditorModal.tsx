@@ -13,7 +13,7 @@ interface Props {
   imageUrl: string
   mode: 'inpaint' | 'erase'
   onClose: () => void
-  onConfirm: (maskBase64: string, prompt?: string, model?: string, resolution?: string) => void
+  onConfirm: (maskBase64: string, prompt?: string, model?: string, resolution?: string, aspectRatio?: string) => void
 }
 
 interface HistoryEntry {
@@ -35,6 +35,14 @@ const RESOLUTION_OPTIONS = [
   { key: '4K', label: '4K' },
 ]
 
+const RATIO_OPTIONS = [
+  { key: '1:1', label: '1:1' },
+  { key: '4:3', label: '4:3' },
+  { key: '3:4', label: '3:4' },
+  { key: '16:9', label: '16:9' },
+  { key: '9:16', label: '9:16' },
+]
+
 export default memo(function MaskEditorModal({ open, imageUrl, mode, onClose, onConfirm }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
@@ -49,6 +57,7 @@ export default memo(function MaskEditorModal({ open, imageUrl, mode, onClose, on
 
   const [selectedModel, setSelectedModel] = useState('nano-banana-pro')
   const [selectedResolution, setSelectedResolution] = useState('2K')
+  const [selectedRatio, setSelectedRatio] = useState('1:1')
   const [isConfirming, setIsConfirming] = useState(false)
 
   const imageModels = getImageModels()
@@ -297,8 +306,8 @@ export default memo(function MaskEditorModal({ open, imageUrl, mode, onClose, on
       setIsConfirming(false)
       return
     }
-    onConfirm(maskBase64, mode === 'inpaint' ? prompt : undefined, selectedModel, selectedResolution)
-  }, [mode, prompt, selectedModel, selectedResolution, onConfirm, hasMaskContent, convertMaskToWhite])
+    onConfirm(maskBase64, mode === 'inpaint' ? prompt : undefined, selectedModel, selectedResolution, selectedRatio)
+  }, [mode, prompt, selectedModel, selectedResolution, selectedRatio, onConfirm, hasMaskContent, convertMaskToWhite])
 
   if (!open) return null
 
@@ -480,6 +489,26 @@ export default memo(function MaskEditorModal({ open, imageUrl, mode, onClose, on
                   )}
                 >
                   {r.key}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 比例 */}
+          <div>
+            <label className="block text-xs text-white/70 mb-1.5">比例</label>
+            <div className="flex gap-1.5">
+              {RATIO_OPTIONS.map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => setSelectedRatio(r.key)}
+                  disabled={isConfirming}
+                  className={cn(
+                    'flex-1 py-1.5 rounded-lg text-xs font-medium transition',
+                    selectedRatio === r.key ? 'bg-blue-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                  )}
+                >
+                  {r.label}
                 </button>
               ))}
             </div>

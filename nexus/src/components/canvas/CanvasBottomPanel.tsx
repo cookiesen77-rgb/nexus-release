@@ -92,7 +92,6 @@ export default memo(function CanvasBottomPanel() {
   })
   const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)
   const [panelSizeByNode, setPanelSizeByNode] = useState<Record<string, PanelSize>>({})
-  const rafRef = useRef(0)
 
   const mode: PanelMode = useMemo(() => {
     if (!selectedNode) return null
@@ -102,29 +101,67 @@ export default memo(function CanvasBottomPanel() {
     return null
   }, [selectedNode?.type])
 
-  // RAF 轮询节点 DOM 位置，确保实时跟随缩放/拖拽
+  // 混合定位: Zustand 订阅 + DOM 事件监听（拖拽/缩放期间 viewport 不入 store）
+  const nodeElRef = useRef<HTMLElement | null>(null)
+  const wrapElRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
     if (!selectedNode) { setPos(null); return }
-    let active = true
-    const tick = () => {
-      if (!active) return
-      const nodeEl = document.querySelector(`[data-id="${selectedNode.id}"]`) as HTMLElement
-      const wrapEl = document.querySelector('[data-canvas-wrap]') as HTMLElement
-      if (nodeEl && wrapEl) {
-        const nodeRect = nodeEl.getBoundingClientRect()
-        const wrapRect = wrapEl.getBoundingClientRect()
-        const left = nodeRect.left - wrapRect.left + nodeRect.width / 2
-        const top = nodeRect.bottom - wrapRect.top + 8
-        const width = Math.max(nodeRect.width, 420)
-        setPos(prev => {
-          if (prev && Math.abs(prev.left - left) < 0.5 && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.width - width) < 0.5) return prev
-          return { left, top, width }
-        })
-      }
-      rafRef.current = requestAnimationFrame(tick)
+
+    const readDOM = () => {
+      if (!nodeElRef.current) nodeElRef.current = document.querySelector(`[data-id="${selectedNode.id}"]`) as HTMLElement
+      if (!wrapElRef.current) wrapElRef.current = document.querySelector('[data-canvas-wrap]') as HTMLElement
+      const nodeEl = nodeElRef.current
+      const wrapEl = wrapElRef.current
+      if (!nodeEl || !wrapEl) return
+      const nodeRect = nodeEl.getBoundingClientRect()
+      const wrapRect = wrapEl.getBoundingClientRect()
+      const left = nodeRect.left - wrapRect.left + nodeRect.width / 2
+      const top = nodeRect.bottom - wrapRect.top + 8
+      const width = Math.max(nodeRect.width, 420)
+      setPos(prev => {
+        if (prev && Math.abs(prev.left - left) < 0.5 && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.width - width) < 0.5) return prev
+        return { left, top, width }
+      })
     }
-    rafRef.current = requestAnimationFrame(tick)
-    return () => { active = false; cancelAnimationFrame(rafRef.current) }
+
+    // 初次定位
+    requestAnimationFrame(readDOM)
+
+    // 监听画布交互事件（拖拽/缩放期间持续跟随）
+    let rafId = 0
+    let interacting = false
+    const tick = () => {
+      if (!interacting) return
+      readDOM()
+      rafId = requestAnimationFrame(tick)
+    }
+    const onInteraction = (e: Event) => {
+      const active = (e as CustomEvent).detail?.active
+      if (active) {
+        interacting = true
+        rafId = requestAnimationFrame(tick)
+      } else {
+        interacting = false
+        cancelAnimationFrame(rafId)
+        readDOM()
+      }
+    }
+
+    window.addEventListener('nexus:canvas-interaction', onInteraction)
+
+    // store 变化也触发（节点增删、选中切换等非拖拽场景）
+    const unsub = useGraphStore.subscribe((s, prev) => {
+      if (s.viewport !== prev.viewport || s.nodes !== prev.nodes) readDOM()
+    })
+
+    return () => {
+      interacting = false
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('nexus:canvas-interaction', onInteraction)
+      unsub()
+      nodeElRef.current = null
+      wrapElRef.current = null
+    }
   }, [selectedNode?.id])
 
   if (!mode || !selectedNode || !pos) return null
@@ -175,7 +212,7 @@ export default memo(function CanvasBottomPanel() {
 
 function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, onPanelResize }: { nodeId: string; nodeData: any; isConfigNode?: boolean; panelSize: PanelSize | null; minPanelWidth: number; onPanelResize: (next: PanelSize | null) => void }) {
   const defaultModel = useSettingsStore(s => s.defaultImageModel) || DEFAULT_IMAGE_MODEL
-  const [model, setModel] = useState(nodeData?._panelModel || nodeData?.params?.model || defaultModel)
+  const [model, setModel] = useState(nodeData?._panelModel || nodeData?.params?.model || nodeData?.model || defaultModel)
   const [size, setSize] = useState(nodeData?._panelSize || nodeData?.params?.aspectRatio || '3:4')
   const [quality, setQuality] = useState(nodeData?._panelQuality || nodeData?.params?.imageSize || '2K')
   const [prompt, setPrompt] = useState(nodeData?.prompt || nodeData?._panelPrompt || '')
@@ -285,6 +322,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
     if (!prompt.trim() && !nodeData?.url && !hasUpstreamText) { window.$message?.warning?.('请输入描述或连接文本节点'); return }
     loadingRef.current = true
     setLoading(true)
+    useGraphStore.getState().patchNodeDataSilent(nodeId, { loading: true, error: '', _awaitingGeneration: false })
     try {
       const store = useGraphStore.getState()
       const node = store.nodes.find(n => n.id === nodeId)
@@ -309,9 +347,11 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
       if (camSuffix) effectivePrompt += ', ' + camSuffix
 
       const genCount = Math.max(1, Math.min(10, loopCount))
-      const regenerateMode = useSettingsStore.getState().regenerateMode || 'create'
       const forceCreateOutputs = genCount > 1
       const placeOutput = createOutputPlacer(node, store.nodes as Array<{ x: number; y: number }>, 'image')
+      let successCount = 0
+      let failCount = 0
+      let lastErrMsg = ''
 
       // 收集上游参考图 URL
       const upstreamRefUrls = store.edges
@@ -322,64 +362,69 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
         .filter(Boolean)
       const allRefImages = [...(nodeData?.url ? [nodeData.url] : []), ...upstreamRefUrls]
 
-      for (let i = 0; i < genCount; i++) {
-        if (i === 0 && isConfigNode && !forceCreateOutputs) {
-          store.updateNode(nodeId, { data: { model, size, quality, prompt: effectivePrompt, _inlinePrompt: effectivePrompt } })
-          store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
-          await generateImageFromConfigNode(nodeId, { model, size, quality }, { outputNodeId: nodeId, selectOutput: false, markConfigExecuted: false })
-          store.updateNode(nodeId, { data: { prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
-          store.patchNodeDataSilent(nodeId, { loading: false })
-        } else if (i === 0 && !isConfigNode && nodeData?.url && regenerateMode === 'replace' && !forceCreateOutputs) {
-          // 替换模式：直接替换当前 image 节点内容
-          const configId = store.addNode('imageConfig', { x: -9999, y: -9999 }, {
-            model, size, quality, prompt: effectivePrompt,
-            _inlinePrompt: effectivePrompt,
-            _inlineRefImages: allRefImages,
-          })
-          store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
-          await generateImageFromConfigNode(configId, { model, size, quality }, { selectOutput: false })
-          const latestStore = useGraphStore.getState()
-          const configNode = latestStore.nodes.find(n => n.id === configId)
-          const fallbackEdge = latestStore.edges.find(e => e.source === configId && (latestStore.nodes.find(n => n.id === e.target)?.type === 'image'))
-          const outputId = String((configNode?.data as any)?.outputNodeId || fallbackEdge?.target || '')
-          const outputNode = outputId ? latestStore.nodes.find(n => n.id === outputId) : null
-          if (outputNode?.data?.url) {
-            latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
-            latestStore.patchNodeDataSilent(nodeId, { loading: false })
-            if (outputId) latestStore.removeNode(outputId)
-          } else {
-            latestStore.patchNodeDataSilent(nodeId, { loading: false })
-          }
-          latestStore.removeNode(configId)
-        } else {
-          // 新建模式：创建新节点
-          const configId = store.addNode('imageConfig', { x: -9999, y: -9999 }, {
-            model, size, quality, prompt: effectivePrompt,
-            _inlinePrompt: effectivePrompt,
-            _inlineRefImages: allRefImages,
-          })
-          await generateImageFromConfigNode(configId, { model, size, quality }, { selectOutput: false })
-          const latestStore = useGraphStore.getState()
-          const configNode = latestStore.nodes.find(n => n.id === configId)
-          const fallbackEdge = latestStore.edges.find(e => e.source === configId && (latestStore.nodes.find(n => n.id === e.target)?.type === 'image'))
-          const outputId = String((configNode?.data as any)?.outputNodeId || fallbackEdge?.target || '')
-          const outputNode = outputId ? latestStore.nodes.find(n => n.id === outputId) : null
-          if (!nodeData?.url && outputNode?.data?.url && !forceCreateOutputs) {
-            latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
-            if (outputId) latestStore.removeNode(outputId)
-          } else if (outputNode) {
-            const pos = placeOutput()
-            latestStore.updateNode(outputNode.id, { x: pos.x, y: pos.y })
-          }
-          latestStore.removeNode(configId)
+      // 并发生成：让 workflow 正常创建 output，生成后搬运结果到预创建节点
+      const spawnAndMove = async (targetNodeId: string, configData: Record<string, unknown>) => {
+        const beforeIds = new Set(useGraphStore.getState().nodes.filter(n => n.type === 'image').map(n => n.id))
+        const configId = useGraphStore.getState().addNode('imageConfig', { x: -9999, y: -9999 }, configData)
+        await generateImageFromConfigNode(configId, { model, size, quality }, { selectOutput: false })
+        const ls = useGraphStore.getState()
+        // 找到 workflow 创建的 output 节点
+        const newOutput = ls.nodes.find(n => n.type === 'image' && !beforeIds.has(n.id) && n.id !== targetNodeId)
+        if (newOutput?.data?.url) {
+          ls.updateNode(targetNodeId, { data: { ...newOutput.data, loading: false } } as any)
+          ls.removeNode(newOutput.id)
         }
+        ls.removeNode(configId)
+        return !!newOutput?.data?.url
       }
-      window.$message?.success?.(genCount > 1 ? `${genCount} 张图片生成成功` : '图片生成成功')
+
+      // 第一张：回填当前节点
+      const firstTask = async () => {
+        store.updateNode(nodeId, { data: { model, size, quality, prompt: effectivePrompt, _inlinePrompt: effectivePrompt, _inlineRefImages: allRefImages } })
+        store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
+        if (isConfigNode) {
+          await generateImageFromConfigNode(nodeId, { model, size, quality }, { outputNodeId: nodeId, selectOutput: false, markConfigExecuted: false })
+        } else {
+          await generateImageFromConfigNode(nodeId, { model, size, quality }, { outputNodeId: nodeId, selectOutput: false, markConfigExecuted: false })
+        }
+        const ls = useGraphStore.getState()
+        ls.updateNode(nodeId, { data: { prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
+        ls.patchNodeDataSilent(nodeId, { loading: false, _awaitingGeneration: false })
+      }
+
+      // 先创建 n-1 个空 image 节点（立即可见 loading 态）
+      const extraNodeIds: string[] = []
+      for (let i = 1; i < genCount; i++) {
+        const pos = placeOutput()
+        const nid = store.addNode('image', pos, { loading: true, prompt: effectivePrompt, model })
+        extraNodeIds.push(nid)
+      }
+
+      // 并发
+      const allTasks = [
+        firstTask()
+          .then(() => successCount++)
+          .catch((e: any) => { failCount++; lastErrMsg = e?.message || '生成失败'; store.patchNodeDataSilent(nodeId, { loading: false, error: lastErrMsg }) }),
+        ...extraNodeIds.map(nid =>
+          spawnAndMove(nid, { model, size, quality, prompt: effectivePrompt, _inlinePrompt: effectivePrompt, _inlineRefImages: allRefImages })
+            .then(ok => { if (ok) successCount++; else { failCount++; lastErrMsg = '未找到生成结果' }; useGraphStore.getState().patchNodeDataSilent(nid, { loading: false }) })
+            .catch((e: any) => { failCount++; lastErrMsg = e?.message || '生成失败'; useGraphStore.getState().patchNodeDataSilent(nid, { loading: false, error: e?.message || '生成失败' }) })
+        ),
+      ]
+      await Promise.all(allTasks)
+
+      if (successCount <= 0) throw new Error(lastErrMsg || '生成失败')
+      if (failCount > 0) {
+        window.$message?.warning?.(`成功 ${successCount} 张，失败 ${failCount} 张：${lastErrMsg || '部分任务失败'}`)
+      } else {
+        window.$message?.success?.(genCount > 1 ? `${successCount} 张图片生成成功` : '图片生成成功')
+      }
     } catch (err: any) {
       window.$message?.error?.(err?.message || '生成失败')
     } finally {
       loadingRef.current = false
       setLoading(false)
+      useGraphStore.getState().patchNodeDataSilent(nodeId, { loading: false })
     }
   }, [nodeId, nodeData?.url, model, size, quality, prompt, loopCount, activeStyle, buildCameraSuffix, isConfigNode])
 
@@ -516,13 +561,19 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
   const defaultModel = useSettingsStore(s => s.defaultVideoModel) || DEFAULT_VIDEO_MODEL
 
   const imageSourceCount = useGraphStore(s => {
-    return s.edges.filter(e => e.target === nodeId && s.nodes.find(n => n.id === e.source)?.type === 'image').length
+    const typeById = new Map<string, string>()
+    for (const n of s.nodes) typeById.set(n.id, n.type)
+    let count = 0
+    for (const e of s.edges) {
+      if (e.target === nodeId && typeById.get(e.source) === 'image') count++
+    }
+    return count
   })
 
   const hasImageSource = imageSourceCount > 0
 
-  const [model, setModel] = useState(nodeData?._panelModel || nodeData?.params?.model || defaultModel)
-  const [ratio, setRatio] = useState(nodeData?._panelRatio || nodeData?.params?.aspectRatio || '16:9')
+  const [model, setModel] = useState(nodeData?._panelModel || nodeData?.params?.model || nodeData?.model || defaultModel)
+  const [ratio, setRatio] = useState(nodeData?._panelRatio || nodeData?.params?.aspectRatio || nodeData?.ratio || '16:9')
   const [prompt, setPrompt] = useState(nodeData?.prompt || nodeData?._panelPrompt || (hasImageSource ? '根据图片生成视频。' : ''))
 
   const savePromptToNode = useCallback((val: string) => {
@@ -557,7 +608,7 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
     return modelCfg?.defaultParams?.duration || durOptions[0]?.key || 8
   })
   const resOptions = useMemo(() => (modelCfg?.resolutions || modelCfg?.sizes || []).map((r: any) => typeof r === 'string' ? { key: r, label: r } : r), [modelCfg])
-  const [resolution, setResolution] = useState(nodeData?._panelResolution || nodeData?.params?.resolution || resOptions[0]?.key || '')
+  const [resolution, setResolution] = useState(nodeData?._panelResolution || nodeData?.params?.resolution || nodeData?.resolution || resOptions[0]?.key || '')
 
   // 切换模型时重置时长和比例为新模型的默认值
   const handleModelChange = useCallback((newModel: string) => {
@@ -608,6 +659,7 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
     if (!prompt.trim() && !hasUpstreamText && !hasUpstreamImage) { window.$message?.warning?.('请输入描述或连接上游节点'); return }
     loadingRef.current = true
     setLoading(true)
+    useGraphStore.getState().patchNodeDataSilent(nodeId, { loading: true, error: '' })
     try {
       const store = useGraphStore.getState()
       const node = store.nodes.find(n => n.id === nodeId)
@@ -616,42 +668,67 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
       const genCount = Math.max(1, Math.min(10, loopCount))
       const forceCreateOutputs = genCount > 1
       const placeOutput = createOutputPlacer(node, store.nodes as Array<{ x: number; y: number }>, 'video')
+      let successCount = 0
+      let failCount = 0
+      let lastErrMsg = ''
 
-      for (let i = 0; i < genCount; i++) {
-        if (i === 0 && isConfigNode && !forceCreateOutputs) {
-          store.updateNode(nodeId, { data: { model, ratio, dur, resolution, prompt, _inlinePrompt: prompt } })
-          store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
-          await generateVideoFromConfigNode(nodeId, { model, ratio, duration: dur }, { outputNodeId: nodeId, selectOutput: false })
-          store.updateNode(nodeId, { data: { prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
-          store.patchNodeDataSilent(nodeId, { loading: false })
-        } else {
-          const configId = store.addNode('videoConfig', { x: -9999, y: -9999 }, {
-            model, ratio, dur, resolution, prompt, _inlinePrompt: prompt,
-            _inlineRefImages: nodeData?.url ? [nodeData.url] : [],
-          })
-          if (nodeData?.url) store.addEdge(nodeId, configId, { sourceHandle: 'right', targetHandle: 'left' })
-          await generateVideoFromConfigNode(configId, { model, ratio, duration: dur }, { selectOutput: false })
-          const latestStore = useGraphStore.getState()
-          const configNode = latestStore.nodes.find(n => n.id === configId)
-          const fallbackEdge = latestStore.edges.find(e => e.source === configId && (latestStore.nodes.find(n => n.id === e.target)?.type === 'video'))
-          const outputId = String((configNode?.data as any)?.outputNodeId || fallbackEdge?.target || '')
-          const outputNode = outputId ? latestStore.nodes.find(n => n.id === outputId) : null
-          if (i === 0 && !isConfigNode && !nodeData?.url && outputNode?.data?.url && !forceCreateOutputs) {
-            latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
-            if (outputId) latestStore.removeNode(outputId)
-          } else if (outputNode) {
-            const pos = placeOutput()
-            latestStore.updateNode(outputNode.id, { x: pos.x, y: pos.y })
-          }
-          latestStore.removeNode(configId)
+      // 并发生成：让 workflow 正常创建 output，生成后搬运结果到预创建节点
+      const spawnAndMoveVideo = async (targetNodeId: string, configData: Record<string, unknown>) => {
+        const beforeIds = new Set(useGraphStore.getState().nodes.filter(n => n.type === 'video').map(n => n.id))
+        const configId = useGraphStore.getState().addNode('videoConfig', { x: -9999, y: -9999 }, configData)
+        if (nodeData?.url) useGraphStore.getState().addEdge(nodeId, configId, { sourceHandle: 'right', targetHandle: 'left' })
+        await generateVideoFromConfigNode(configId, { model, ratio, duration: dur }, { selectOutput: false })
+        const ls = useGraphStore.getState()
+        const newOutput = ls.nodes.find(n => n.type === 'video' && !beforeIds.has(n.id) && n.id !== targetNodeId)
+        if (newOutput?.data?.url) {
+          ls.updateNode(targetNodeId, { data: { ...newOutput.data, loading: false } } as any)
+          ls.removeNode(newOutput.id)
         }
+        ls.removeNode(configId)
+        return !!newOutput?.data?.url
       }
-      window.$message?.success?.(genCount > 1 ? `${genCount} 个视频生成成功` : '视频生成成功')
+
+      const firstVideoTask = async () => {
+        store.updateNode(nodeId, { data: { model, ratio, dur, resolution, prompt, _inlinePrompt: prompt } })
+        store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
+        await generateVideoFromConfigNode(nodeId, { model, ratio, duration: dur }, { outputNodeId: nodeId, selectOutput: false, markConfigExecuted: false })
+        const ls = useGraphStore.getState()
+        ls.updateNode(nodeId, { data: { prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
+        ls.patchNodeDataSilent(nodeId, { loading: false, _awaitingGeneration: false })
+      }
+
+      // 先创建 n-1 个空 video 节点
+      const extraVideoIds: string[] = []
+      for (let i = 1; i < genCount; i++) {
+        const pos = placeOutput()
+        const nid = store.addNode('video', pos, { loading: true, prompt, model })
+        extraVideoIds.push(nid)
+      }
+
+      const configData = { model, ratio, dur, resolution, prompt, _inlinePrompt: prompt, _inlineRefImages: nodeData?.url ? [nodeData.url] : [] }
+      const allVideoTasks = [
+        firstVideoTask()
+          .then(() => successCount++)
+          .catch((e: any) => { failCount++; lastErrMsg = e?.message || '生成失败'; store.patchNodeDataSilent(nodeId, { loading: false, error: lastErrMsg }) }),
+        ...extraVideoIds.map(nid =>
+          spawnAndMoveVideo(nid, configData)
+            .then(ok => { if (ok) successCount++; else { failCount++; lastErrMsg = '未找到生成结果' }; useGraphStore.getState().patchNodeDataSilent(nid, { loading: false }) })
+            .catch((e: any) => { failCount++; lastErrMsg = e?.message || '生成失败'; useGraphStore.getState().patchNodeDataSilent(nid, { loading: false, error: e?.message || '生成失败' }) })
+        ),
+      ]
+      await Promise.all(allVideoTasks)
+      if (successCount <= 0) throw new Error(lastErrMsg || '生成失败')
+      if (failCount > 0) {
+        window.$message?.warning?.(`成功 ${successCount} 个，失败 ${failCount} 个：${lastErrMsg || '部分任务失败'}`)
+      } else {
+        window.$message?.success?.(genCount > 1 ? `${successCount} 个视频生成成功` : '视频生成成功')
+      }
     } catch (err: any) {
       window.$message?.error?.(err?.message || '生成失败')
     } finally {
       loadingRef.current = false
       setLoading(false)
+      useGraphStore.getState().patchNodeDataSilent(nodeId, { loading: false })
     }
   }, [nodeId, nodeData?.url, model, ratio, dur, resolution, prompt, loopCount, isConfigNode])
 

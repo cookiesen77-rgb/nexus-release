@@ -68,8 +68,8 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   
   // 懒加载：只有节点进入可视区域时才加载视频
   const { ref: inViewRef, inView } = useInView({
-    rootMargin: '200px', // 提前 200px 开始加载
-    triggerOnce: true,   // 一旦加载过就不再卸载
+    rootMargin: '500px',
+    triggerOnce: false,
   })
 
   const displayUrl = nodeData?.url || ''
@@ -99,13 +99,17 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     }
 
     const currentUrl = String(nodeData?.url || '').trim()
-    const urlIsUsable = currentUrl && !currentUrl.startsWith('blob:') && currentUrl.length > 10
+    // blob URL 视为不可用（可能已被 GC）
+    const isBlobUrl = currentUrl.startsWith('blob:')
+    const urlIsUsable = currentUrl && !isBlobUrl && currentUrl.length > 10
 
     if (urlIsUsable || nodeData?.loading) {
       return
     }
 
-    // 有 error 标记但有 mediaId/sourceUrl 可恢复时，仍尝试恢复
+    // blob URL 失效时重置恢复标记，允许重新从 IndexedDB/sourceUrl 恢复
+    if (isBlobUrl) loadAttemptedRef.current = false
+
     if (!nodeData?.mediaId && !nodeData?.sourceUrl) {
       return
     }
@@ -682,7 +686,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
                 src={displayUrl}
                 crossOrigin={corsMode === 'anonymous' && isHttpUrl(displayUrl) ? 'anonymous' : undefined}
                 playsInline
-                preload="auto"
+                preload="metadata"
                 className="w-full h-full object-contain pointer-events-none select-none"
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}

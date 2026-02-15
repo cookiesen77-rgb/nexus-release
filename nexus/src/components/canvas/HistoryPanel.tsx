@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
+import { useGraphStore } from '@/graph/store'
 import {
   useAssetsStore,
   getAssetThumbnail,
@@ -49,7 +50,9 @@ export default function HistoryPanel({ onClose, onAddToCanvas }: Props) {
   const [pdfOpen, setPdfOpen] = useState(false)
   const [pdfItems, setPdfItems] = useState<ExportPdfImageItem[]>([])
 
-  const assets = useAssetsStore((s) => s.assets)
+  const allAssets = useAssetsStore((s) => s.assets)
+  const currentProjectId = useGraphStore((s) => s.projectId)
+  const assets = useMemo(() => allAssets.filter(a => !a.projectId || a.projectId === currentProjectId), [allAssets, currentProjectId])
   const historyPerformanceMode = useAssetsStore((s) => s.historyPerformanceMode)
   const localCacheEnabled = useAssetsStore((s) => s.localCacheEnabled)
   const setHistoryPerformanceMode = useAssetsStore((s) => s.setHistoryPerformanceMode)
@@ -401,7 +404,7 @@ export default function HistoryPanel({ onClose, onAddToCanvas }: Props) {
             {visibleAssets.map((asset) => (
               <div
                 key={asset.id}
-                className="group relative aspect-square cursor-grab overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] transition-colors hover:border-[var(--accent-color)] active:cursor-grabbing"
+                className="asset-grid-item group relative aspect-square cursor-grab overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] transition-colors hover:border-[var(--accent-color)] active:cursor-grabbing"
                 draggable={!selectionMode}
                 onDragStart={(e) => (!selectionMode ? handleDragStart(e, asset) : undefined)}
                 onClick={() => (selectionMode ? toggleSelected(asset.id) : onAddToCanvas(asset))}

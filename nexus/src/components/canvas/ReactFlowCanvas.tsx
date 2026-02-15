@@ -26,6 +26,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useGraphStore } from '@/graph/store'
 import type { GraphNode } from '@/graph/types'
+import { getConnectedComponent } from '@/graph/graphTraversal'
 import type { CanvasContextPayload } from './CanvasContextMenu'
 
 // 导入自定义节点组件
@@ -216,7 +217,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         sourceHandle: (e.data as any)?.sourceHandle || 'right',
         targetHandle: (e.data as any)?.targetHandle || 'left',
         type: isConfigEdge ? 'default' : normalizeFlowEdgeType(e.type),
-        data: e.data,
+        data: { ...e.data, _targetModelKey: String((dst?.data as any)?.model || '').trim() },
       }
     })
     initializedRef.current = true
@@ -224,6 +225,14 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodesRef.current)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdgesRef.current)
+
+  // 性能分级: 边数量多时禁用动画
+  useEffect(() => {
+    const wrapper = reactFlowWrapper.current
+    if (!wrapper) return
+    const tier = edges.length > 200 ? 'extreme' : edges.length > 100 ? 'heavy' : 'normal'
+    wrapper.dataset.perfTier = tier
+  }, [edges.length])
 
   // 清理旧的 video dragHandle（此前版本遗留）
   useEffect(() => {
@@ -242,106 +251,14 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     })
   }, [setNodes])
 
-  // 存储当前节点和边的数量（用于快速检测外部变化）
-  const nodeCountRef = useRef(initialNodesRef.current.length)
-  const edgeCountRef = useRef(initialEdgesRef.current.length)
+  // 统一订阅：监听节点/边 增删 + 数据变化，合并为单个 subscribe 避免重复遍历
   const nodeIdsRef = useRef<Set<string>>(new Set(initialNodesRef.current.map(n => n.id)))
   const edgeIdsRef = useRef<Set<string>>(new Set(initialEdgesRef.current.map(e => e.id)))
 
-  // 使用订阅监听外部添加/删除节点
   useEffect(() => {
-    const unsubscribe = useGraphStore.subscribe(
-      (state, prevState) => {
-        // 拖拽/缩放期间会有大量 selection / viewport 更新；nodes/edges 未变化时直接跳过
-        if (state.nodes === prevState.nodes && state.edges === prevState.edges) return
-
-        // 处理节点变化
-        const currentNodeIds = new Set(state.nodes.map(n => n.id))
-        const addedNodes: Node[] = []
-        const removedIds: string[] = []
-        
-        for (const node of state.nodes) {
-          if (!nodeIdsRef.current.has(node.id)) {
-            addedNodes.push(graphNodeToFlowNode(node))
-          }
-        }
-        for (const id of nodeIdsRef.current) {
-          if (!currentNodeIds.has(id)) {
-            removedIds.push(id)
-          }
-        }
-        
-        if (addedNodes.length > 0 || removedIds.length > 0) {
-          setNodes((prev) => {
-            let result = prev
-            if (removedIds.length > 0) {
-              const removeSet = new Set(removedIds)
-              result = result.filter(n => !removeSet.has(n.id))
-            }
-            if (addedNodes.length > 0) {
-              result = [...result, ...addedNodes]
-            }
-            return result
-          })
-          nodeIdsRef.current = currentNodeIds
-          nodeCountRef.current = state.nodes.length
-        }
-        
-        // 处理边变化
-        const currentEdgeIds = new Set(state.edges.map(e => e.id))
-        const addedEdges: any[] = []
-        const removedEdgeIds: string[] = []
-        
-        for (const edge of state.edges) {
-          if (!edgeIdsRef.current.has(edge.id)) {
-            const nodesById = new Map(state.nodes.map(n => [n.id, n]))
-            const src = nodesById.get(edge.source)
-            const dst = nodesById.get(edge.target)
-            const isConfigEdge = src?.type === 'imageConfig' || src?.type === 'videoConfig' || dst?.type === 'imageConfig' || dst?.type === 'videoConfig'
-            addedEdges.push({
-              id: edge.id,
-              source: edge.source,
-              target: edge.target,
-              sourceHandle: (edge.data as any)?.sourceHandle || 'right',
-              targetHandle: (edge.data as any)?.targetHandle || 'left',
-              type: isConfigEdge ? 'default' : normalizeFlowEdgeType(edge.type),
-              data: edge.data,
-            })
-          }
-        }
-        for (const id of edgeIdsRef.current) {
-          if (!currentEdgeIds.has(id)) {
-            removedEdgeIds.push(id)
-          }
-        }
-        
-        if (addedEdges.length > 0 || removedEdgeIds.length > 0) {
-          setEdges((prev) => {
-            let result = prev
-            if (removedEdgeIds.length > 0) {
-              const removeSet = new Set(removedEdgeIds)
-              result = result.filter(e => !removeSet.has(e.id))
-            }
-            if (addedEdges.length > 0) {
-              result = [...result, ...addedEdges]
-            }
-            return result
-          })
-          edgeIdsRef.current = currentEdgeIds
-          edgeCountRef.current = state.edges.length
-        }
-      }
-    )
-    
-    return unsubscribe
-  }, [setNodes, setEdges])
-
-  // 额外订阅：监听节点数据变化（loading/url 等属性更新）
-  useEffect(() => {
-    // 只存需要比较的轻量属性，避免持有 base64 大数据引用
-    // url/sourceUrl 用身份标记（长度+前16字符）代替完整值
+    // --- 节点数据变化检测 ---
     const urlTag = (v: any) => v ? `${String(v).length}:${String(v).slice(0, 16)}` : ''
-    const pick = (d: any) => d ? {
+    const pickNode = (d: any) => d ? {
       loading: d.loading, url: urlTag(d.url), error: d.error, content: d.content,
       executed: d.executed, mediaId: d.mediaId, sourceUrl: urlTag(d.sourceUrl),
       fileName: d.fileName, model: d.model, size: d.size, quality: d.quality,
@@ -351,84 +268,129 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     } : {}
 
     const snaps: Record<string, any> = {}
-    for (const node of useGraphStore.getState().nodes) {
-      snaps[node.id] = pick(node.data)
+    for (const node of useGraphStore.getState().nodes) snaps[node.id] = pickNode(node.data)
+
+    // --- 边数据变化检测 ---
+    const pickEdge = (data: any) => ({
+      imageRole: data?.imageRole, promptOrder: data?.promptOrder,
+      imageOrder: data?.imageOrder, sourceHandle: data?.sourceHandle, targetHandle: data?.targetHandle,
+    })
+    const sameEdge = (a: any, b: any) => {
+      const x = pickEdge(a), y = pickEdge(b)
+      return x.imageRole === y.imageRole && x.promptOrder === y.promptOrder && x.imageOrder === y.imageOrder && x.sourceHandle === y.sourceHandle && x.targetHandle === y.targetHandle
     }
 
-    // 清理已删除节点的快照
-    const cleanupSnaps = (currentIds: Set<string>) => {
-      for (const id of Object.keys(snaps)) {
-        if (!currentIds.has(id)) delete snaps[id]
-      }
-    }
+    const unsubscribe = useGraphStore.subscribe((state, prev) => {
+      const nodesChanged = state.nodes !== prev.nodes
+      const edgesChanged = state.edges !== prev.edges
+      if (!nodesChanged && !edgesChanged) return
 
-    const unsubscribe = useGraphStore.subscribe(
-      (state, prevState) => {
-        // 只在 nodes 引用变化时做字段对比，避免无关状态更新触发整表扫描
-        if (state.nodes === prevState.nodes) return
+      // 共享 nodesById（节点增删 + 边数据同步都需要）
+      const nodesById = nodesChanged || edgesChanged ? new Map(state.nodes.map(n => [n.id, n])) : null
 
+      // ====== 节点增删 + 数据变化 ======
+      if (nodesChanged) {
+        const currentNodeIds = new Set(state.nodes.map(n => n.id))
+        const addedNodes: Node[] = []
+        const removedIds: string[] = []
         const updatedNodes: { id: string; data: any }[] = []
-        const currentIds = new Set<string>()
 
         for (const node of state.nodes) {
-          currentIds.add(node.id)
-          const prev = snaps[node.id]
-          const curr = node.data as any
-
-          if (!prev) {
-            snaps[node.id] = pick(curr)
-            updatedNodes.push({ id: node.id, data: node.data })
-            continue
-          }
-
-          const p = prev
-          const loadingChanged = p.loading !== curr?.loading
-          const urlChanged = p.url !== urlTag(curr?.url)
-          const errorChanged = p.error !== curr?.error
-          const contentChanged = p.content !== curr?.content
-          const executedChanged = p.executed !== curr?.executed
-          const mediaIdChanged = p.mediaId !== curr?.mediaId
-          const sourceUrlChanged = p.sourceUrl !== urlTag(curr?.sourceUrl)
-          const fileNameChanged = p.fileName !== curr?.fileName
-          const modelChanged = p.model !== curr?.model
-          const sizeChanged = p.size !== curr?.size
-          const qualityChanged = p.quality !== curr?.quality
-          const loopCountChanged = p.loopCount !== curr?.loopCount
-          const ratioChanged = p.ratio !== curr?.ratio
-          const durChanged = p.dur !== curr?.dur
-          const statusChanged = p.status !== curr?.status
-          const outputChanged = p.output !== curr?.output
-          const errorMessageChanged = p.errorMessage !== curr?.errorMessage
-          const instructionChanged = p.instruction !== curr?.instruction
-          const splitCountChanged = p.splitCount !== curr?.splitCount
-
-          if (
-            loadingChanged || urlChanged || errorChanged || contentChanged ||
-            executedChanged || mediaIdChanged || sourceUrlChanged || fileNameChanged ||
-            modelChanged || sizeChanged || qualityChanged || loopCountChanged ||
-            ratioChanged || durChanged ||
-            statusChanged || outputChanged || errorMessageChanged ||
-            instructionChanged || splitCountChanged
-          ) {
-            updatedNodes.push({ id: node.id, data: node.data })
-            snaps[node.id] = pick(curr)
+          if (!nodeIdsRef.current.has(node.id)) {
+            addedNodes.push(graphNodeToFlowNode(node))
+            snaps[node.id] = pickNode(node.data)
+          } else {
+            // 数据变化检测
+            const prev = snaps[node.id]
+            const curr = node.data as any
+            if (!prev) {
+              snaps[node.id] = pickNode(curr)
+              updatedNodes.push({ id: node.id, data: node.data })
+            } else {
+              const c = pickNode(curr)
+              let changed = false
+              for (const k of Object.keys(c) as (keyof typeof c)[]) {
+                if (c[k] !== prev[k]) { changed = true; break }
+              }
+              if (changed) {
+                updatedNodes.push({ id: node.id, data: node.data })
+                snaps[node.id] = c
+              }
+            }
           }
         }
+        for (const id of nodeIdsRef.current) {
+          if (!currentNodeIds.has(id)) { removedIds.push(id); delete snaps[id] }
+        }
 
-        cleanupSnaps(currentIds)
-
-        if (updatedNodes.length > 0) {
-          const updatesById = new Map(updatedNodes.map((u) => [u.id, u.data] as const))
-          setNodes((prev) => prev.map((n) => {
-            const nextData = updatesById.get(n.id)
-            return nextData ? { ...n, data: nextData } : n
-          }))
+        if (addedNodes.length > 0 || removedIds.length > 0 || updatedNodes.length > 0) {
+          const removeSet = removedIds.length > 0 ? new Set(removedIds) : null
+          const updatesById = updatedNodes.length > 0 ? new Map(updatedNodes.map(u => [u.id, u.data] as const)) : null
+          setNodes(prev => {
+            let result = prev
+            if (removeSet) result = result.filter(n => !removeSet.has(n.id))
+            if (updatesById) result = result.map(n => { const d = updatesById.get(n.id); return d ? { ...n, data: d } : n })
+            if (addedNodes.length > 0) result = [...result, ...addedNodes]
+            return result
+          })
+          nodeIdsRef.current = currentNodeIds
         }
       }
-    )
+
+      // ====== 边增删 ======
+      if (edgesChanged) {
+        const currentEdgeIds = new Set(state.edges.map(e => e.id))
+        const addedEdges: any[] = []
+        const removedEdgeIds: string[] = []
+        const edgeUpdates = new Map<string, { type: string; data: any }>()
+
+        const prevEdgeById = new Map(prev.edges.map(e => [e.id, e]))
+
+        for (const edge of state.edges) {
+          const dst = nodesById?.get(edge.target)
+          const targetModel = String((dst?.data as any)?.model || '').trim()
+          if (!edgeIdsRef.current.has(edge.id)) {
+            const src = nodesById?.get(edge.source)
+            const isConfigEdge = src?.type === 'imageConfig' || src?.type === 'videoConfig' || dst?.type === 'imageConfig' || dst?.type === 'videoConfig'
+            addedEdges.push({
+              id: edge.id, source: edge.source, target: edge.target,
+              sourceHandle: (edge.data as any)?.sourceHandle || 'right',
+              targetHandle: (edge.data as any)?.targetHandle || 'left',
+              type: isConfigEdge ? 'default' : normalizeFlowEdgeType(edge.type),
+              data: { ...edge.data, _targetModelKey: targetModel },
+            })
+          } else {
+            // 边数据变化检测
+            const p = prevEdgeById.get(edge.id)
+            if (p) {
+              const nextType = normalizeFlowEdgeType(edge.type)
+              const prevType = normalizeFlowEdgeType(p.type)
+              if (nextType !== prevType || !sameEdge(edge.data, p.data) || (edge.data as any)?._targetModelKey !== targetModel) {
+                edgeUpdates.set(edge.id, { type: nextType, data: { ...edge.data, _targetModelKey: targetModel } })
+              }
+            }
+          }
+        }
+        for (const id of edgeIdsRef.current) {
+          if (!currentEdgeIds.has(id)) removedEdgeIds.push(id)
+        }
+
+        if (addedEdges.length > 0 || removedEdgeIds.length > 0 || edgeUpdates.size > 0) {
+          const removeSet = removedEdgeIds.length > 0 ? new Set(removedEdgeIds) : null
+          setEdges(prev => {
+            let result = prev
+            if (removeSet) result = result.filter(e => !removeSet.has(e.id))
+            if (edgeUpdates.size > 0) result = result.map(e => { const u = edgeUpdates.get(e.id); return u ? { ...e, type: u.type, data: u.data } : e })
+            if (addedEdges.length > 0) result = [...result, ...addedEdges]
+            return result
+          })
+          edgeIdsRef.current = currentEdgeIds
+        }
+      }
+    })
 
     return unsubscribe
-  }, [setNodes])
+  }, [setNodes, setEdges])
 
   useEffect(() => {
     if (!debugFlags.minimalCanvas) return
@@ -723,8 +685,10 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
       // 缩放时短暂隐藏边线与背景，降低合成开销
       if (zoomTimerRef.current) window.clearTimeout(zoomTimerRef.current)
       reactFlowWrapper.current?.classList.add('rf-zooming')
+      window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: true } }))
       zoomTimerRef.current = window.setTimeout(() => {
         reactFlowWrapper.current?.classList.remove('rf-zooming')
+        window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: false } }))
       }, 120)
     },
     []
@@ -830,13 +794,33 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     store.clearSelection()
   }, [])
 
-  // 处理边 hover
+  // 处理边 hover — CSS-only dimming, 零组件 re-render
   const handleEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: any) => {
-    useGraphStore.getState().setHoveredEdge(edge.id)
+    const wrapper = reactFlowWrapper.current
+    if (!wrapper) return
+    const s = useGraphStore.getState()
+    const edgeObj = s.edges.find(e => e.id === edge.id)
+    if (!edgeObj) return
+    const { edgeIds } = getConnectedComponent(edgeObj.source, s.edges)
+    wrapper.dataset.dimming = '1'
+    const edgeEls = wrapper.querySelectorAll('.react-flow__edge')
+    for (let i = 0; i < edgeEls.length; i++) {
+      const el = edgeEls[i] as HTMLElement
+      const testId = el.getAttribute('data-testid')
+      if (!testId) continue
+      const eid = testId.slice(9) // strip "rf__edge-"
+      if (edgeIds.has(eid)) el.dataset.highlighted = '1'
+    }
   }, [])
 
   const handleEdgeMouseLeave = useCallback(() => {
-    useGraphStore.getState().setHoveredEdge(null)
+    const wrapper = reactFlowWrapper.current
+    if (!wrapper) return
+    delete wrapper.dataset.dimming
+    const highlighted = wrapper.querySelectorAll('[data-highlighted]')
+    for (let i = 0; i < highlighted.length; i++) {
+      delete (highlighted[i] as HTMLElement).dataset.highlighted
+    }
   }, [])
 
   // 处理边双击 - 线上插入节点
@@ -987,58 +971,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     return () => window.removeEventListener('nexus:node-updated', handleNodeUpdated as EventListener)
   }, [setNodes, shouldLogCanvasDebug])
 
-  // 监听边数据变化（imageRole / order / handles 等），同步到 ReactFlow edge state，确保自定义边 UI 更新
-  useEffect(() => {
-    const pick = (data: any) => ({
-      imageRole: data?.imageRole,
-      promptOrder: data?.promptOrder,
-      imageOrder: data?.imageOrder,
-      sourceHandle: data?.sourceHandle,
-      targetHandle: data?.targetHandle,
-    })
-
-    const same = (a: any, b: any) => {
-      const x = pick(a)
-      const y = pick(b)
-      return (
-        x.imageRole === y.imageRole &&
-        x.promptOrder === y.promptOrder &&
-        x.imageOrder === y.imageOrder &&
-        x.sourceHandle === y.sourceHandle &&
-        x.targetHandle === y.targetHandle
-      )
-    }
-
-    const unsubscribe = useGraphStore.subscribe((state, prev) => {
-      if (state.edges === prev.edges) return
-
-      const prevById = new Map(prev.edges.map((e) => [e.id, e]))
-      const updates = new Map<string, { type: string; data: any }>()
-      for (const e of state.edges) {
-        const p = prevById.get(e.id)
-        if (!p) continue
-        const nextType = normalizeFlowEdgeType(e.type)
-        const prevType = normalizeFlowEdgeType(p.type)
-        if (nextType !== prevType || !same(e.data, p.data)) {
-          updates.set(e.id, { type: nextType, data: e.data })
-        }
-      }
-      if (updates.size === 0) return
-
-      setEdges((prevEdges) =>
-        prevEdges.map((edge) => {
-          const u = updates.get(edge.id)
-          if (!u) return edge
-          return {
-            ...edge,
-            type: u.type,
-            data: u.data,
-          }
-        })
-      )
-    })
-    return unsubscribe
-  }, [setEdges])
+  // 边数据变化已合并到上方统一订阅
 
   // 获取初始视口
   const defaultViewport = useMemo(() => useGraphStore.getState().viewport, [])

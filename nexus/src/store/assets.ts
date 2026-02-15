@@ -5,6 +5,7 @@
 
 import { create } from 'zustand'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
+import { useGraphStore } from '@/graph/store'
 
 // 检测 Tauri 环境
 const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
@@ -39,6 +40,7 @@ export interface Asset {
   tags?: string[]
   category?: string
   favorite?: boolean
+  projectId?: string
 }
 
 export type HistoryPerformanceMode = 'off' | 'normal' | 'ultra'
@@ -138,6 +140,7 @@ const sanitizeForIdb = (list: Asset[]): Asset[] => {
     tags: a.tags,
     category: a.category,
     favorite: a.favorite,
+    projectId: a.projectId,
   }))
 }
 
@@ -238,6 +241,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
   addAsset: (asset) => {
     const id = `asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const projectId = asset.projectId || useGraphStore.getState().projectId || ''
     const newAsset: Asset = {
       id,
       type: asset.type || 'image',
@@ -248,6 +252,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       createdAt: Date.now(),
       localCacheUrl: asset.localCacheUrl || '',
       localFilePath: asset.localFilePath || '',
+      projectId,
     }
 
     set((state) => {

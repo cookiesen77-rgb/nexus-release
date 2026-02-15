@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Trash2, Download, Expand, Loader2, Copy, ImageIcon, Crop, Eye, Video, RefreshCw, Upload } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
-import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
+import { getMedia, getMediaByNodeId, saveMedia, generateThumbnail, saveThumbnailForMedia } from '@/lib/mediaStorage'
 import { downloadFile } from '@/lib/download'
 import { cacheMedia } from '@/lib/workflow/cache'
 import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS } from '@/config/models'
@@ -87,9 +87,12 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   
   // 懒加载：只有节点进入可视区域时才加载图片
   const { ref: inViewRef, inView } = useInView({
-    rootMargin: '200px', // 提前 200px 开始加载
-    triggerOnce: true,   // 一旦加载过就不再卸载
+    rootMargin: '500px',
+    triggerOnce: false,
   })
+
+  // 画布缩略图：优先显示 512px 缩略图，减少 GPU 显存
+  const [thumbUrl, setThumbUrl] = React.useState<string>('')
 
   // 如果没有 url，尝试从 IndexedDB 或 sourceUrl 恢复
   // 优先级：1. IndexedDB (mediaId) 2. sourceUrl (HTTPS URL)
@@ -122,6 +125,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
           console.log('[ImageNode] 从 IndexedDB 加载图片, mediaId:', nodeData.mediaId)
           const record = await getMedia(nodeData.mediaId)
           if (record?.data) {
+            if (record.thumbnailData) setThumbUrl(record.thumbnailData)
             useGraphStore.getState().updateNode(id, {
               data: { url: record.data, loading: false }
             } as any)
@@ -552,15 +556,25 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
           ) : nodeData?.url ? (
             <>
               <img
-                src={nodeData.url}
+                src={thumbUrl || nodeData.url}
                 alt={nodeData.label || '图片'}
                 className="w-full h-full object-cover rounded-xl"
                 draggable={false}
                 loading="lazy"
+                decoding="async"
                 onLoad={(e) => {
                   const img = e.currentTarget
                   if (img.naturalWidth > 0 && img.naturalHeight > 0) {
                     setImgHeight(Math.round(250 * (img.naturalHeight / img.naturalWidth)))
+                  }
+                  // 后台生成缩略图
+                  if (!thumbUrl && nodeData?.url && nodeData.url.startsWith('data:') && nodeData.mediaId) {
+                    generateThumbnail(nodeData.url).then(t => {
+                      if (t && t !== nodeData.url) {
+                        setThumbUrl(t)
+                        saveThumbnailForMedia(nodeData.mediaId!, t).catch(() => {})
+                      }
+                    })
                   }
                 }}
                 onError={() => {

@@ -1434,7 +1434,7 @@ export const generateVideoFromConfigNode = async (
       requestType = 'formdata'
       payload = fd
     } else if (modelCfg.format === 'sora-unified') {
-      const orientation = ratio === '9:16' ? 'portrait' : 'landscape'
+      const orientation = ratio === '9:16' || ratio === '3:4' || ratio === '2:3' ? 'portrait' : ratio === '1:1' ? 'square' : 'landscape'
       const size = overrides?.size || d.size || modelCfg.defaultParams?.size || 'large'
       const dur = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg.defaultParams?.duration || 15)
       payload = {
@@ -1609,11 +1609,10 @@ export const generateVideoFromConfigNode = async (
       payload = fd
     } else if (modelCfg.format === 'sora-openai') {
       // Sora OpenAI 官方格式（multipart/form-data 格式）
-      // 参考文档: https://help.allapi.store/api-412862113
-      // 端点: POST /v1/videos
-      // 查询: GET /v1/videos/{id}
-      // 注意：当有图片输入时，图片尺寸必须与 size 参数完全匹配
-      const sizeValue = overrides?.size || d.size || modelCfg.defaultParams?.size || (ratio === '9:16' ? '720x1280' : '1280x720')
+      const ratioToSize: Record<string, string> = {
+        '9:16': '720x1280', '16:9': '1280x720',
+      }
+      const sizeValue = overrides?.size || d.size || modelCfg.defaultParams?.size || ratioToSize[ratio] || '720x1280'
       const secondsValue = Number.isFinite(duration) && duration > 0 ? String(duration) : '4'
       
       const fd = new FormData()
