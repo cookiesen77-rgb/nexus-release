@@ -367,18 +367,7 @@ select option {
   display: none;
 }
 
-/* During active pan/drag/zoom, reduce heavy media repaint cost */
-.rf-moving .react-flow__node-image img,
-.rf-moving .react-flow__node-imageConfig img,
-.rf-moving .react-flow__node-video video,
-.rf-moving .react-flow__node-videoConfig video,
-.rf-zooming .react-flow__node-image img,
-.rf-zooming .react-flow__node-imageConfig img,
-.rf-zooming .react-flow__node-video video,
-.rf-zooming .react-flow__node-videoConfig video {
-  visibility: hidden;
-}
-
+/* Keep media visible during interaction; only simplify overlay controls */
 .rf-moving .video-controls-bar,
 .rf-zooming .video-controls-bar {
   opacity: 0 !important;

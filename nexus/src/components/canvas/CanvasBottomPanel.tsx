@@ -175,9 +175,9 @@ export default memo(function CanvasBottomPanel() {
 
 function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, onPanelResize }: { nodeId: string; nodeData: any; isConfigNode?: boolean; panelSize: PanelSize | null; minPanelWidth: number; onPanelResize: (next: PanelSize | null) => void }) {
   const defaultModel = useSettingsStore(s => s.defaultImageModel) || DEFAULT_IMAGE_MODEL
-  const [model, setModel] = useState(nodeData?.params?.model || defaultModel)
-  const [size, setSize] = useState(nodeData?.params?.aspectRatio || '3:4')
-  const [quality, setQuality] = useState(nodeData?.params?.imageSize || '2K')
+  const [model, setModel] = useState(nodeData?._panelModel || nodeData?.params?.model || defaultModel)
+  const [size, setSize] = useState(nodeData?._panelSize || nodeData?.params?.aspectRatio || '3:4')
+  const [quality, setQuality] = useState(nodeData?._panelQuality || nodeData?.params?.imageSize || '2K')
   const [prompt, setPrompt] = useState(nodeData?.prompt || nodeData?._panelPrompt || '')
 
   const savePromptToNode = useCallback((val: string) => {
@@ -185,6 +185,9 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
   }, [nodeId])
   const promptRef = useRef(prompt)
   promptRef.current = prompt
+  const savePanelState = useCallback((patch: Record<string, unknown>) => {
+    useGraphStore.getState().patchNodeDataSilent(nodeId, patch)
+  }, [nodeId])
 
   // 卸载时自动保存 prompt 到 store
   useEffect(() => () => {
@@ -202,7 +205,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
   const [cameraLens, setCameraLens] = useState(0)
   const [focalLength, setFocalLength] = useState(1)
   const [aperture, setAperture] = useState(3)
-  const [loopCount, setLoopCount] = useState(1)
+  const [loopCount, setLoopCount] = useState(Math.max(1, Math.min(10, Number(nodeData?._panelLoopCount || 1) || 1)))
   const promptBoxHeight = useMemo(() => {
     if (!panelSize?.height) return 0
     const reserved = cameraOpen ? 270 : 210
@@ -258,6 +261,18 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
   const modelCfg = useMemo(() => (IMAGE_MODELS as any[]).find((m: any) => m.key === model) || IMAGE_MODELS[0], [model]) as any
   const sizeOptions = useMemo(() => (modelCfg?.sizes || ['1:1','16:9','9:16','4:3','3:4']).map((s: any) => typeof s === 'string' ? { key: s, label: s } : s), [modelCfg])
   const qualityOptions = useMemo(() => modelCfg?.qualities || [], [modelCfg])
+  const handleModelChange = useCallback((val: string) => {
+    setModel(val)
+    savePanelState({ _panelModel: val })
+  }, [savePanelState])
+  const handleSizeChange = useCallback((val: string) => {
+    setSize(val)
+    savePanelState({ _panelSize: val })
+  }, [savePanelState])
+  const handleQualityChange = useCallback((val: string) => {
+    setQuality(val)
+    savePanelState({ _panelQuality: val })
+  }, [savePanelState])
 
   const buildCameraSuffix = useCallback(() => {
     if (!cameraOpen) return ''
@@ -322,10 +337,11 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
             _inlineRefImages: allRefImages,
           })
           store.patchNodeDataSilent(nodeId, { loading: true, error: '' })
-          await generateImageFromConfigNode(configId, { model, size, quality })
+          await generateImageFromConfigNode(configId, { model, size, quality }, { selectOutput: false })
           const latestStore = useGraphStore.getState()
           const configNode = latestStore.nodes.find(n => n.id === configId)
-          const outputId = (configNode?.data as any)?.outputNodeId
+          const fallbackEdge = latestStore.edges.find(e => e.source === configId && (latestStore.nodes.find(n => n.id === e.target)?.type === 'image'))
+          const outputId = String((configNode?.data as any)?.outputNodeId || fallbackEdge?.target || '')
           const outputNode = outputId ? latestStore.nodes.find(n => n.id === outputId) : null
           if (outputNode?.data?.url) {
             latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
@@ -342,10 +358,11 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
             _inlinePrompt: effectivePrompt,
             _inlineRefImages: allRefImages,
           })
-          await generateImageFromConfigNode(configId, { model, size, quality })
+          await generateImageFromConfigNode(configId, { model, size, quality }, { selectOutput: false })
           const latestStore = useGraphStore.getState()
           const configNode = latestStore.nodes.find(n => n.id === configId)
-          const outputId = (configNode?.data as any)?.outputNodeId
+          const fallbackEdge = latestStore.edges.find(e => e.source === configId && (latestStore.nodes.find(n => n.id === e.target)?.type === 'image'))
+          const outputId = String((configNode?.data as any)?.outputNodeId || fallbackEdge?.target || '')
           const outputNode = outputId ? latestStore.nodes.find(n => n.id === outputId) : null
           if (!nodeData?.url && outputNode?.data?.url && !forceCreateOutputs) {
             latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt: effectivePrompt, params: { model, aspectRatio: size, imageSize: quality } } })
@@ -445,12 +462,12 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
 
       {/* 底部参数行 */}
       <div className="flex items-center gap-1.5 px-4 pb-2 pt-1 flex-wrap">
-        <MiniSelect value={model} options={(IMAGE_MODELS as any[]).map(m => ({ value: m.key, label: m.label }))} onChange={setModel} icon="🎨" maxW={160} />
-        <MiniSelect value={size} options={sizeOptions.map((o: any) => ({ value: o.key, label: o.label }))} onChange={setSize} icon="□" maxW={80} />
+        <MiniSelect value={model} options={(IMAGE_MODELS as any[]).map(m => ({ value: m.key, label: m.label }))} onChange={handleModelChange} icon="🎨" maxW={160} />
+        <MiniSelect value={size} options={sizeOptions.map((o: any) => ({ value: o.key, label: o.label }))} onChange={handleSizeChange} icon="□" maxW={80} />
         {qualityOptions.length > 0 && (
           <>
             <span className="text-white/20 text-xs">·</span>
-            <MiniSelect value={quality} options={qualityOptions.map((o: any) => ({ value: o.key, label: o.label }))} onChange={setQuality} maxW={55} />
+            <MiniSelect value={quality} options={qualityOptions.map((o: any) => ({ value: o.key, label: o.label }))} onChange={handleQualityChange} maxW={55} />
           </>
         )}
         <span className="text-white/20 text-xs">·</span>
@@ -462,7 +479,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
           <span className="text-[11px]">摄影机</span>
         </button>
         <span className="text-white/20 text-xs">·</span>
-        <MiniSelect value={String(loopCount)} options={Array.from({ length: 10 }, (_, i) => i + 1).map(n => ({ value: String(n), label: `${n}张` }))} onChange={v => setLoopCount(Number(v))} maxW={60} />
+        <MiniSelect value={String(loopCount)} options={Array.from({ length: 10 }, (_, i) => i + 1).map(n => ({ value: String(n), label: `${n}张` }))} onChange={v => { const next = Number(v); setLoopCount(next); savePanelState({ _panelLoopCount: next }) }} maxW={60} />
 
         <div className="flex-1" />
 
@@ -504,18 +521,21 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
 
   const hasImageSource = imageSourceCount > 0
 
-  const [model, setModel] = useState(nodeData?.params?.model || defaultModel)
-  const [ratio, setRatio] = useState(nodeData?.params?.aspectRatio || '16:9')
+  const [model, setModel] = useState(nodeData?._panelModel || nodeData?.params?.model || defaultModel)
+  const [ratio, setRatio] = useState(nodeData?._panelRatio || nodeData?.params?.aspectRatio || '16:9')
   const [prompt, setPrompt] = useState(nodeData?.prompt || nodeData?._panelPrompt || (hasImageSource ? '根据图片生成视频。' : ''))
 
   const savePromptToNode = useCallback((val: string) => {
     useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
   }, [nodeId])
+  const savePanelState = useCallback((patch: Record<string, unknown>) => {
+    useGraphStore.getState().patchNodeDataSilent(nodeId, patch)
+  }, [nodeId])
   const [loading, setLoading] = useState(false)
   const loadingRef = useRef(false)
   useEffect(() => { loadingRef.current = loading }, [loading])
   const [polishing, setPolishing] = useState(false)
-  const [loopCount, setLoopCount] = useState(1)
+  const [loopCount, setLoopCount] = useState(Math.max(1, Math.min(10, Number(nodeData?._panelLoopCount || 1) || 1)))
   const promptBoxHeight = useMemo(() => {
     if (!panelSize?.height) return 0
     const reserved = 210
@@ -532,27 +552,37 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
     return [{ label: '8 秒', key: 8 }]
   }, [modelCfg])
   const [dur, setDur] = useState(() => {
-    const saved = nodeData?.params?.duration
+    const saved = Number(nodeData?._panelDur || nodeData?.params?.duration)
     if (saved && durOptions.some((d: any) => d.key === saved)) return saved
     return modelCfg?.defaultParams?.duration || durOptions[0]?.key || 8
   })
   const resOptions = useMemo(() => (modelCfg?.resolutions || modelCfg?.sizes || []).map((r: any) => typeof r === 'string' ? { key: r, label: r } : r), [modelCfg])
-  const [resolution, setResolution] = useState(nodeData?.params?.resolution || resOptions[0]?.key || '')
+  const [resolution, setResolution] = useState(nodeData?._panelResolution || nodeData?.params?.resolution || resOptions[0]?.key || '')
 
   // 切换模型时重置时长和比例为新模型的默认值
   const handleModelChange = useCallback((newModel: string) => {
     setModel(newModel)
+    const panelPatch: Record<string, unknown> = { _panelModel: newModel }
     const cfg = (VIDEO_MODELS as any[]).find((m: any) => m.key === newModel) as any
-    if (cfg?.defaultParams?.duration) setDur(cfg.defaultParams.duration)
-    if (cfg?.defaultParams?.ratio) setRatio(cfg.defaultParams.ratio)
+    if (cfg?.defaultParams?.duration) {
+      setDur(cfg.defaultParams.duration)
+      panelPatch._panelDur = cfg.defaultParams.duration
+    }
+    if (cfg?.defaultParams?.ratio) {
+      setRatio(cfg.defaultParams.ratio)
+      panelPatch._panelRatio = cfg.defaultParams.ratio
+    }
     const newRes = (cfg?.resolutions || cfg?.sizes || [])
     if (newRes.length > 0) {
       const first = typeof newRes[0] === 'string' ? newRes[0] : newRes[0]?.key
       setResolution(first || '')
+      panelPatch._panelResolution = first || ''
     } else {
       setResolution('')
+      panelPatch._panelResolution = ''
     }
-  }, [])
+    savePanelState(panelPatch)
+  }, [savePanelState])
 
   const handlePolish = useCallback(async () => {
     if (!prompt.trim() || polishing || loading) return
@@ -600,10 +630,11 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
             _inlineRefImages: nodeData?.url ? [nodeData.url] : [],
           })
           if (nodeData?.url) store.addEdge(nodeId, configId, { sourceHandle: 'right', targetHandle: 'left' })
-          await generateVideoFromConfigNode(configId, { model, ratio, duration: dur })
+          await generateVideoFromConfigNode(configId, { model, ratio, duration: dur }, { selectOutput: false })
           const latestStore = useGraphStore.getState()
           const configNode = latestStore.nodes.find(n => n.id === configId)
-          const outputId = (configNode?.data as any)?.outputNodeId
+          const fallbackEdge = latestStore.edges.find(e => e.source === configId && (latestStore.nodes.find(n => n.id === e.target)?.type === 'video'))
+          const outputId = String((configNode?.data as any)?.outputNodeId || fallbackEdge?.target || '')
           const outputNode = outputId ? latestStore.nodes.find(n => n.id === outputId) : null
           if (i === 0 && !isConfigNode && !nodeData?.url && outputNode?.data?.url && !forceCreateOutputs) {
             latestStore.updateNode(nodeId, { data: { url: outputNode.data.url, sourceUrl: (outputNode.data as any).sourceUrl, prompt, params: { model, aspectRatio: ratio, duration: dur, resolution } } })
@@ -657,17 +688,17 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
       {/* 参数行 */}
       <div className="flex items-center gap-1.5 px-4 pb-3 pt-1 flex-wrap">
         <MiniSelect value={model} options={(VIDEO_MODELS as any[]).map(m => ({ value: m.key, label: m.label }))} onChange={handleModelChange} icon="🎬" maxW={160} />
-        <MiniSelect value={ratio} options={ratioOptions.map((o: any) => ({ value: o.key, label: o.label }))} onChange={setRatio} icon="□" maxW={65} />
+        <MiniSelect value={ratio} options={ratioOptions.map((o: any) => ({ value: o.key, label: o.label }))} onChange={(v) => { setRatio(v); savePanelState({ _panelRatio: v }) }} icon="□" maxW={65} />
         <span className="text-white/20 text-xs">·</span>
-        <MiniSelect value={String(dur)} options={durOptions.map((o: any) => ({ value: String(o.key), label: o.label }))} onChange={v => setDur(Number(v))} maxW={60} />
+        <MiniSelect value={String(dur)} options={durOptions.map((o: any) => ({ value: String(o.key), label: o.label }))} onChange={v => { const next = Number(v); setDur(next); savePanelState({ _panelDur: next }) }} maxW={60} />
         {resOptions.length > 0 && (
           <>
             <span className="text-white/20 text-xs">·</span>
-            <MiniSelect value={resolution} options={resOptions.map((o: any) => ({ value: o.key, label: o.label }))} onChange={setResolution} maxW={70} />
+            <MiniSelect value={resolution} options={resOptions.map((o: any) => ({ value: o.key, label: o.label }))} onChange={(v) => { setResolution(v); savePanelState({ _panelResolution: v }) }} maxW={70} />
           </>
         )}
         <span className="text-white/20 text-xs">·</span>
-        <MiniSelect value={String(loopCount)} options={Array.from({ length: 10 }, (_, i) => i + 1).map(n => ({ value: String(n), label: `${n}次` }))} onChange={v => setLoopCount(Number(v))} maxW={60} />
+        <MiniSelect value={String(loopCount)} options={Array.from({ length: 10 }, (_, i) => i + 1).map(n => ({ value: String(n), label: `${n}次` }))} onChange={v => { const next = Number(v); setLoopCount(next); savePanelState({ _panelLoopCount: next }) }} maxW={60} />
 
         <div className="flex-1" />
 
