@@ -88,7 +88,7 @@ function createOutputPlacer(sourceNode: { x?: number; y?: number } | null | unde
 export default memo(function CanvasBottomPanel() {
   const selectedNode = useGraphStore(s => {
     if (!s.selectedNodeId) return null
-    return s.nodes.find(n => n.id === s.selectedNodeId) || null
+    return s.getNode(s.selectedNodeId) || null
   })
   const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)
   const [panelSizeByNode, setPanelSizeByNode] = useState<Record<string, PanelSize>>({})
@@ -255,11 +255,10 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
 
   const sortedRefImages = useMemo(() => {
     const s = useGraphStore.getState()
-    const byId = new Map(s.nodes.map(n => [n.id, n]))
     return s.edges
       .filter(e => e.target === nodeId)
       .map(e => {
-        const src = byId.get(e.source)
+        const src = s.getNode(e.source)
         if (!src || (src.type !== 'image' && src.type !== 'imageConfig')) return null
         const order = Number((e.data as any)?.imageOrder) || 0
         const url = String((src.data as any)?.url || (src.data as any)?.sourceUrl || '').trim()
@@ -318,14 +317,15 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
 
   const handleGenerate = useCallback(async () => {
     if (loadingRef.current) return
-    const hasUpstreamText = useGraphStore.getState().edges.some(e => e.target === nodeId && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'text')
+    const state = useGraphStore.getState()
+    const hasUpstreamText = state.edges.some(e => e.target === nodeId && state.getNode(e.source)?.type === 'text')
     if (!prompt.trim() && !nodeData?.url && !hasUpstreamText) { window.$message?.warning?.('请输入描述或连接文本节点'); return }
     loadingRef.current = true
     setLoading(true)
     useGraphStore.getState().patchNodeDataSilent(nodeId, { loading: true, error: '', _awaitingGeneration: false })
     try {
       const store = useGraphStore.getState()
-      const node = store.nodes.find(n => n.id === nodeId)
+      const node = store.getNode(nodeId)
       if (!node) throw new Error('节点不存在')
 
       let effectivePrompt = prompt.trim()
@@ -333,7 +333,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
       // 收集上游文本节点的提示词
       const upstreamTexts = store.edges
         .filter(e => e.target === nodeId)
-        .map(e => store.nodes.find(n => n.id === e.source))
+        .map(e => store.getNode(e.source))
         .filter(n => n?.type === 'text')
         .map(n => String((n?.data as any)?.content || '').trim())
         .filter(Boolean)
@@ -356,7 +356,7 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
       // 收集上游参考图 URL
       const upstreamRefUrls = store.edges
         .filter(e => e.target === nodeId)
-        .map(e => store.nodes.find(n => n.id === e.source))
+        .map(e => store.getNode(e.source))
         .filter(n => n?.type === 'image' || n?.type === 'imageConfig')
         .map(n => String((n?.data as any)?.url || '').trim())
         .filter(Boolean)
@@ -654,15 +654,16 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
 
   const handleGenerate = useCallback(async () => {
     if (loadingRef.current) return
-    const hasUpstreamText = useGraphStore.getState().edges.some(e => e.target === nodeId && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'text')
-    const hasUpstreamImage = useGraphStore.getState().edges.some(e => e.target === nodeId && useGraphStore.getState().nodes.find(n => n.id === e.source)?.type === 'image')
+    const state = useGraphStore.getState()
+    const hasUpstreamText = state.edges.some(e => e.target === nodeId && state.getNode(e.source)?.type === 'text')
+    const hasUpstreamImage = state.edges.some(e => e.target === nodeId && state.getNode(e.source)?.type === 'image')
     if (!prompt.trim() && !hasUpstreamText && !hasUpstreamImage) { window.$message?.warning?.('请输入描述或连接上游节点'); return }
     loadingRef.current = true
     setLoading(true)
     useGraphStore.getState().patchNodeDataSilent(nodeId, { loading: true, error: '' })
     try {
       const store = useGraphStore.getState()
-      const node = store.nodes.find(n => n.id === nodeId)
+      const node = store.getNode(nodeId)
       if (!node) throw new Error('节点不存在')
 
       const genCount = Math.max(1, Math.min(10, loopCount))

@@ -440,6 +440,7 @@ export default function Canvas() {
 
   const addNode = useGraphStore((s) => s.addNode)
   const setProjectId = useGraphStore((s) => s.setProjectId)
+  const saveNow = useGraphStore((s) => s.saveNow)
   const addEdge = useGraphStore((s) => s.addEdge)
   const setSelected = useGraphStore((s) => s.setSelected)
   const setSelection = useGraphStore((s) => s.setSelection)
@@ -491,6 +492,15 @@ export default function Canvas() {
 
   const dark = useSettingsStore((s) => s.dark)
   const toggleDark = useSettingsStore((s) => s.toggleDark)
+
+  const flushCanvasAndNavigate = useCallback(async (target: string) => {
+    try {
+      await saveNow()
+    } catch {
+      // ignore
+    }
+    nav(target)
+  }, [nav, saveNow])
 
   useEffect(() => {
     const pid = String(id || '').trim() || 'default'
@@ -1117,7 +1127,7 @@ export default function Canvas() {
             <CanvasSidebar
               activeTool={tool}
               nodeMenuOpen={nodeMenuOpen}
-              onBack={() => nav('/')}
+              onBack={() => { void flushCanvasAndNavigate('/') }}
               onChangeTool={(next) => {
                 setTool(next)
                 setNodeMenuOpen(false)
@@ -1140,8 +1150,8 @@ export default function Canvas() {
               canUndo={canUndo}
               canRedo={canRedo}
               onOpenWorkflow={() => setWorkflowTemplatesOpen(true)}
-              onOpenShortDrama={() => nav(`/short-drama/${String(projectId || '').trim() || 'default'}`)}
-              onOpenEcomStudio={() => nav(`/ecommerce/${String(projectId || '').trim() || 'default'}`)}
+              onOpenShortDrama={() => { void flushCanvasAndNavigate(`/short-drama/${String(projectId || '').trim() || 'default'}`) }}
+              onOpenEcomStudio={() => { void flushCanvasAndNavigate(`/ecommerce/${String(projectId || '').trim() || 'default'}`) }}
               onOpenCameraControl={() => setCameraControlOpen(true)}
               onOpenDirector={() => setDirectorOpen(true)}
               onOpenSketch={() => setSketchOpen(true)}

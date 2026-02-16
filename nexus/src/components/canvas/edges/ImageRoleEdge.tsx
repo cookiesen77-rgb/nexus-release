@@ -72,7 +72,7 @@ export const ImageRoleEdge = memo(function ImageRoleEdge({
     // 首先从 props.data 获取
     if (edgeData?.imageRole) return edgeData.imageRole
     // 然后从 store 获取
-    const storeEdge = useGraphStore.getState().edges.find(e => e.id === id)
+    const storeEdge = useGraphStore.getState().getEdge(id)
     return (storeEdge?.data as any)?.imageRole || 'first_frame_image'
   }, [id, edgeData?.imageRole])
 

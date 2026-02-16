@@ -354,6 +354,83 @@ export type ShortDramaScriptAnalysis = {
   }[]
 }
 
+type ShortDramaAnalysisShot = NonNullable<ShortDramaScriptAnalysis['shots']>[number]
+
+const isGridFrameMode = (mode: ShotFrameMode) => mode === 'grid_4' || mode === 'grid_6' || mode === 'grid_9' || mode === 'grid_25'
+
+const normalizeNameArray = (arr: unknown) =>
+  Array.isArray(arr) ? arr.map((x) => normalizeText(x)).filter(Boolean) : []
+
+const normalizeGridPrompts = (arr: unknown) =>
+  Array.isArray(arr) ? arr.map((x) => normalizeText(x)).filter(Boolean) : []
+
+const normalizeAnalysisShot = (
+  raw: any,
+  index: number,
+  defaultFrameMode: ShotFrameMode,
+  fallback?: ShortDramaAnalysisShot
+): ShortDramaAnalysisShot => {
+  const fallbackStart = normalizeText(fallback?.endPrompt || fallback?.startPrompt)
+  const seedStart = fallbackStart || `中景，延续上一镜头的人物与场景，镜头 ${index + 1} 起始画面，角色外观保持一致`
+  const seedEnd = normalizeText(fallback?.endPrompt) || seedStart
+
+  const startPrompt = normalizeText(raw?.startPrompt) || seedStart
+  const endPromptRaw = normalizeText(raw?.endPrompt)
+  const endPrompt = defaultFrameMode === 'first_only' ? '' : (endPromptRaw || seedEnd)
+
+  const shot: ShortDramaAnalysisShot = {
+    title: normalizeText(raw?.title) || `镜头 ${index + 1}`,
+    beat: normalizeText(raw?.beat),
+    scriptExcerpt: normalizeText(raw?.scriptExcerpt),
+    scene: normalizeText(raw?.scene),
+    characters: normalizeNameArray(raw?.characters),
+    assets: normalizeNameArray(raw?.assets),
+    startPrompt,
+    endPrompt,
+    videoPrompt: normalizeText(raw?.videoPrompt) || normalizeText(fallback?.videoPrompt),
+  }
+
+  if (isGridFrameMode(defaultFrameMode)) {
+    const gridCount = SHOT_FRAME_MODES.find((m) => m.value === defaultFrameMode)?.count || 4
+    const fromRaw = normalizeGridPrompts(raw?.gridPrompts)
+    const fromFallback = normalizeGridPrompts(fallback?.gridPrompts)
+    const seed = fromRaw.length > 0 ? fromRaw : fromFallback
+    const gridPrompts = seed.slice(0, gridCount)
+    while (gridPrompts.length < gridCount) {
+      const idx = gridPrompts.length + 1
+      gridPrompts.push(`${startPrompt}（分镜 ${idx}/${gridCount}）`)
+    }
+    shot.gridPrompts = gridPrompts
+  } else {
+    shot.gridPrompts = []
+  }
+
+  return shot
+}
+
+const enforceAnalysisShotCount = (
+  shots: unknown,
+  targetShotCount: number,
+  defaultFrameMode: ShotFrameMode
+): ShortDramaAnalysisShot[] => {
+  const list = Array.isArray(shots) ? shots : []
+  const normalized: ShortDramaAnalysisShot[] = []
+  for (let i = 0; i < list.length; i++) {
+    const prev = i > 0 ? normalized[i - 1] : undefined
+    normalized.push(normalizeAnalysisShot(list[i], i, defaultFrameMode, prev))
+  }
+
+  if (targetShotCount <= 0) return normalized
+  if (normalized.length > targetShotCount) return normalized.slice(0, targetShotCount)
+
+  while (normalized.length < targetShotCount) {
+    const i = normalized.length
+    const prev = i > 0 ? normalized[i - 1] : undefined
+    normalized.push(normalizeAnalysisShot({}, i, defaultFrameMode, prev))
+  }
+  return normalized
+}
+
 export async function analyzeShortDramaScriptToDraftV2(opts: {
   draft: ShortDramaDraftV2
   modelKey?: string
@@ -513,6 +590,8 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     assets: Array.isArray((parsed as any).assets) ? (parsed as any).assets : [],
     shots: Array.isArray((parsed as any).shots) ? (parsed as any).shots : [],
   }
+
+  analysis.shots = enforceAnalysisShotCount(analysis.shots, targetShotCount, defaultFrameMode)
 
   const next: ShortDramaDraftV2 = { ...opts.draft }
   next.script = { ...next.script, text: script, importedAt: Date.now(), source: { type: 'paste' } as any }
@@ -677,6 +756,34 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
       shot.frames.end.prompt = endPrompt
       if (gridPrompts.length > 0) shot.gridPrompts = gridPrompts
       mergedShots.push(shot)
+    }
+  }
+
+  if (targetShotCount > 0) {
+    if (mergedShots.length > targetShotCount) {
+      mergedShots.length = targetShotCount
+    } else if (mergedShots.length < targetShotCount) {
+      while (mergedShots.length < targetShotCount) {
+        const idx = mergedShots.length
+        const prev = idx > 0 ? mergedShots[idx - 1] : null
+        const shot = createEmptyShot(`镜头 ${idx + 1}`)
+        shot.frameMode = defaultFrameMode
+        if (prev) {
+          shot.sceneId = prev.sceneId
+          shot.characterIds = Array.isArray(prev.characterIds) ? [...prev.characterIds] : []
+          shot.assetIds = Array.isArray(prev.assetIds) ? [...prev.assetIds] : []
+          shot.frames.start.prompt = String(prev.frames?.end?.prompt || prev.frames?.start?.prompt || '').trim()
+          shot.frames.end.prompt = defaultFrameMode === 'first_only'
+            ? ''
+            : String(prev.frames?.end?.prompt || prev.frames?.start?.prompt || '').trim()
+          if (isGridFrameMode(defaultFrameMode)) {
+            const gridCount = SHOT_FRAME_MODES.find((m) => m.value === defaultFrameMode)?.count || 4
+            const seed = String((prev.gridPrompts || [])[0] || shot.frames.start.prompt || '').trim()
+            shot.gridPrompts = Array.from({ length: gridCount }, (_, i) => `${seed}（分镜 ${i + 1}/${gridCount}）`)
+          }
+        }
+        mergedShots.push(shot)
+      }
     }
   }
 

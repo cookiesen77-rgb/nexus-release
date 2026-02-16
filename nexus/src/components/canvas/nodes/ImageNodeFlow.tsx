@@ -52,9 +52,9 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
 
   const computeRole = useCallback(() => {
     const state = useGraphStore.getState()
-    const outgoingEdges = state.edges.filter(e => e.source === id)
-    for (const edge of outgoingEdges) {
-      const targetNode = state.nodes.find(n => n.id === edge.target)
+    for (const edge of state.edges) {
+      if (edge.source !== id) continue
+      const targetNode = state.getNode(edge.target)
       if (!targetNode) continue
       if (targetNode.type === 'videoConfig') {
         const role = String((edge.data as any)?.imageRole || '').trim()
@@ -62,11 +62,24 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
         if (tag) return { tag, edgeId: edge.id, type: 'video' as const }
       }
       if (targetNode.type === 'imageConfig') {
-        const configEdges = state.edges.filter(e => e.target === targetNode.id && state.nodes.find(n => n.id === e.source)?.type === 'image')
-        if (configEdges.length > 1) {
-          const myEdge = configEdges.find(e => e.source === id)
-          const order = Number((myEdge?.data as any)?.imageOrder) || (configEdges.findIndex(e => e.source === id) + 1)
-          return { tag: `参考图${order}`, edgeId: myEdge?.id || null, type: 'image' as const }
+        let imageInputCount = 0
+        let myEdgeId: string | null = null
+        let explicitOrder = 0
+        let fallbackOrder = 0
+        for (const configEdge of state.edges) {
+          if (configEdge.target !== targetNode.id) continue
+          const sourceNode = state.getNode(configEdge.source)
+          if (sourceNode?.type !== 'image') continue
+          imageInputCount++
+          if (configEdge.source === id) {
+            myEdgeId = configEdge.id
+            explicitOrder = Number((configEdge.data as any)?.imageOrder) || 0
+            fallbackOrder = imageInputCount
+          }
+        }
+        if (imageInputCount > 1 && myEdgeId) {
+          const order = explicitOrder > 0 ? explicitOrder : Math.max(1, fallbackOrder)
+          return { tag: `参考图${order}`, edgeId: myEdgeId, type: 'image' as const }
         }
       }
     }
@@ -214,7 +227,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   const handleDuplicate = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
-    const node = store.nodes.find((n) => n.id === id)
+    const node = store.getNode(id)
     if (node) {
       store.addNode('image', { x: node.x + 50, y: node.y + 50 }, { ...node.data })
     }
@@ -257,7 +270,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   const handleImageGen = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
-    const node = store.nodes.find((n) => n.id === id)
+    const node = store.getNode(id)
     if (node) {
       store.patchNodeDataSilent(id, { _fromWorkflow: true })
       const newId = store.addNode('imageConfig', { x: node.x + 350, y: node.y }, { label: '图片生成', _awaitingGeneration: true })
@@ -280,7 +293,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   const handleCropComplete = useCallback((croppedDataUrl: string) => {
     // 创建新的图片节点，保留原图
     const store = useGraphStore.getState()
-    const node = store.nodes.find((n) => n.id === id)
+    const node = store.getNode(id)
     if (node) {
       store.addNode('image', { x: node.x + 50, y: node.y + 50 }, {
         label: '裁剪图',
@@ -309,7 +322,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   const handleVideoGen = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
-    const node = store.nodes.find((n) => n.id === id)
+    const node = store.getNode(id)
     if (node) {
       store.patchNodeDataSilent(id, { _fromWorkflow: true })
       const videoId = store.addNode('videoConfig', { x: node.x + 350, y: node.y }, { label: '视频生成', _awaitingGeneration: true })
@@ -322,7 +335,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
   const handleFirstFrameVideo = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     const store = useGraphStore.getState()
-    const node = store.nodes.find((n) => n.id === id)
+    const node = store.getNode(id)
     if (node) {
       store.patchNodeDataSilent(id, { _fromWorkflow: true })
       const videoId = store.addNode('videoConfig', { x: node.x + 350, y: node.y }, { label: '视频生成', _awaitingGeneration: true })
@@ -580,7 +593,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
                 onError={() => {
                   try {
                     const store = useGraphStore.getState()
-                    const cur = store.nodes.find((n) => n.id === id)
+                    const cur = store.getNode(id)
                     const curUrl = String((cur?.data as any)?.url || '').trim()
                     const sourceUrl = String((cur?.data as any)?.sourceUrl || '').trim()
                     if (isTauri && sourceUrl && /^https?:\/\//i.test(sourceUrl) && loadErrorFallbackRef.current !== sourceUrl) {

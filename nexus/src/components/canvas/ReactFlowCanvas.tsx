@@ -204,9 +204,9 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
   
   if (!initializedRef.current) {
     const state = useGraphStore.getState()
+    const nodesById = new Map(state.nodes.map(n => [n.id, n]))
     initialNodesRef.current = state.nodes.map(graphNodeToFlowNode)
     initialEdgesRef.current = state.edges.map((e) => {
-      const nodesById = new Map(state.nodes.map(n => [n.id, n]))
       const src = nodesById.get(e.source)
       const dst = nodesById.get(e.target)
       const isConfigEdge = src?.type === 'imageConfig' || src?.type === 'videoConfig' || dst?.type === 'imageConfig' || dst?.type === 'videoConfig'
@@ -587,8 +587,8 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
 
       // 获取源节点和目标节点类型
       const store = useGraphStore.getState()
-      const sourceNode = store.nodes.find((n) => n.id === params.source)
-      const targetNode = store.nodes.find((n) => n.id === params.target)
+      const sourceNode = store.getNode(params.source)
+      const targetNode = store.getNode(params.target)
 
       // 根据节点类型决定边类型和数据
       const edgeData: Record<string, unknown> = {
@@ -616,7 +616,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     (_event: any, params: { nodeId: string | null; handleType: 'source' | 'target' | null }) => {
       if (!params.nodeId) return
       const store = useGraphStore.getState()
-      const sourceNode = store.nodes.find((n) => n.id === params.nodeId)
+      const sourceNode = store.getNode(params.nodeId)
       if (sourceNode) {
         const selectedIds = store.selectedNodeIds
         const allSourceIds = selectedIds.includes(sourceNode.id) && selectedIds.length > 1
@@ -799,7 +799,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     const wrapper = reactFlowWrapper.current
     if (!wrapper) return
     const s = useGraphStore.getState()
-    const edgeObj = s.edges.find(e => e.id === edge.id)
+    const edgeObj = s.getEdge(edge.id)
     if (!edgeObj) return
     const { edgeIds } = getConnectedComponent(edgeObj.source, s.edges)
     wrapper.dataset.dimming = '1'
@@ -935,7 +935,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
       }
       
       // 从 store 获取最新数据
-      const storeNode = useGraphStore.getState().nodes.find(n => n.id === nodeId)
+      const storeNode = useGraphStore.getState().getNode(nodeId)
       if (!storeNode) {
         if (shouldLogCanvasDebug) {
           console.warn('[ReactFlowCanvas] 节点不存在:', nodeId)

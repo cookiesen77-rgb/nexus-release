@@ -407,7 +407,7 @@ export const requestQueue = new RequestQueue({
 
 // 将“生成性能模式”映射到并发数（更快 vs 更稳）
 const concurrencyByPerformanceMode = (mode: PerformanceMode) => {
-  if (mode === 'ultra') return 5
+  if (mode === 'ultra') return 15
   if (mode === 'normal') return 3
   return 2
 }

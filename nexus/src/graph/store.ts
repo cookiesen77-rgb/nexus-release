@@ -406,6 +406,8 @@ export type GraphState = {
 
   // 更新节点数据并持久化，但不进入 undo/redo 历史（用于 mediaId 等后台写回）
   patchNodeDataSilent: (id: string, patch: Record<string, unknown>) => void
+  getNode: (id: string) => GraphNode | undefined
+  getEdge: (id: string) => GraphEdge | undefined
 
   setSelected: (id: string | null) => void
   setSelection: (ids: string[], primaryId?: string | null) => void
@@ -456,6 +458,10 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   setProjectId: async (projectId) => {
     const id = String(projectId || '').trim() || 'default'
+    const cur = String(get().projectId || '').trim() || 'default'
+    // 同项目重复进入时避免重复 hydrate 覆盖内存中的最新画布
+    // 首次启动 historyIndex 为 -1，仍需要执行 hydrate
+    if (cur === id && historyIndex >= 0) return
     await get().hydrate(id)
   },
 
@@ -528,6 +534,22 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     patchNodeDataSilently(tid, patch || {})
     // 只做持久化，不进入历史
     scheduleSave()
+  },
+
+  getNode: (id) => {
+    const tid = String(id || '').trim()
+    if (!tid) return undefined
+    const idx = nodeIndexById.get(tid)
+    if (idx === undefined) return undefined
+    return get().nodes[idx]
+  },
+
+  getEdge: (id) => {
+    const tid = String(id || '').trim()
+    if (!tid) return undefined
+    const idx = edgeIndexById.get(tid)
+    if (idx === undefined) return undefined
+    return get().edges[idx]
   },
 
   setSelected: (id) => {
@@ -1048,7 +1070,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   insertNodeOnEdge: (edgeId, nodeType, position) => {
     const s = get()
-    const edge = s.edges.find(e => e.id === edgeId)
+    const edge = s.getEdge(edgeId)
     if (!edge) return null
     const sourceHandle = (edge.data as any)?.sourceHandle || 'right'
     const targetHandle = (edge.data as any)?.targetHandle || 'left'

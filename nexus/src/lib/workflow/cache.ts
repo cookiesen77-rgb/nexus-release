@@ -399,18 +399,14 @@ export const resolveCachedMediaUrl = async (url: string) => {
     }
     if (!/^https?:\/\//i.test(absoluteUrl)) return { displayUrl: absoluteUrl, localPath: '' }
 
-    // 非鉴权公网视频：直接返回原始 URL，避免 Tauri 缓存大视频文件导致超时
-    if (!isLikelyAuthRequiredUrl(absoluteUrl)) {
-      return { displayUrl: absoluteUrl, localPath: '' }
-    }
-
     try {
       const token = getApiKey()
       console.log('[resolveCachedMediaUrl] Tauri: 调用 cache_remote_media 命令')
       const path = await tauriInvoke<string>('cache_remote_media', { url: absoluteUrl, authToken: token || null })
       if (!path) {
-        // 缓存失败时回退到原始 URL（修复 Windows 媒体不显示问题）
-        console.warn('[resolveCachedMediaUrl] Tauri: cache_remote_media 返回空，回退到原始 URL')
+        // 对 Tauri 来说，直接使用第三方远程视频 URL 容易触发 WebView CORS。
+        // 这里仍回退原始 URL，但打日志提示优先排查 Rust 侧缓存失败原因。
+        console.warn('[resolveCachedMediaUrl] Tauri: cache_remote_media 返回空，回退到原始 URL（可能触发 CORS）')
         return { displayUrl: absoluteUrl, localPath: '', error: '缓存媒体失败，使用原始URL' }
       }
 
@@ -418,8 +414,8 @@ export const resolveCachedMediaUrl = async (url: string) => {
       console.log('[resolveCachedMediaUrl] Tauri: 缓存成功, displayUrl:', displayUrl.slice(0, 80))
       return { displayUrl, localPath: path }
     } catch (err) {
-      // 缓存异常时回退到原始 URL（修复 Windows 媒体不显示问题）
-      console.error('[resolveCachedMediaUrl] Tauri: cache_remote_media 异常，回退到原始 URL:', err)
+      // 缓存异常时回退到原始 URL（并明确标注潜在 CORS 风险）
+      console.error('[resolveCachedMediaUrl] Tauri: cache_remote_media 异常，回退到原始 URL（可能触发 CORS）:', err)
       return { displayUrl: absoluteUrl, localPath: '', error: String(err) }
     }
   }
