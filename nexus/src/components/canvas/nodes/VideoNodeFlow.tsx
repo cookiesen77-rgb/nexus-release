@@ -48,7 +48,19 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }: NodeProps) {
+const runWhenIdle = (cb: () => void) => {
+  const w = window as any
+  if (typeof w.requestIdleCallback === 'function') {
+    const id = w.requestIdleCallback(() => cb(), { timeout: 220 })
+    return () => {
+      if (typeof w.cancelIdleCallback === 'function') w.cancelIdleCallback(id)
+    }
+  }
+  const timer = window.setTimeout(cb, 0)
+  return () => window.clearTimeout(timer)
+}
+
+export const VideoNodeComponent = memo(function VideoNode({ id, data, selected, dragging }: NodeProps) {
   const nodeData = data as VideoNodeData
   const [showActions, setShowActions] = useState(false)
   const [videoError, setVideoError] = useState('')
@@ -65,6 +77,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [dragFrameUrl, setDragFrameUrl] = useState('')
   
   // 懒加载：只有节点进入可视区域时才加载视频
   const { ref: inViewRef, inView } = useInView({
@@ -86,7 +99,13 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     setVideoError('')
     setCorsMode('anonymous')
     loadErrorFallbackRef.current = ''
+    setDragFrameUrl('')
   }, [displayUrl])
+
+  useEffect(() => {
+    if (!dragging) return
+    setShowActions(false)
+  }, [dragging])
 
   // 如果没有 url，尝试从 IndexedDB 或 sourceUrl 恢复
   // 使用 ref 防止重复尝试
@@ -231,6 +250,51 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     const v = videoRef.current
     if (v && duration === 0 && Number.isFinite(v.duration) && v.duration > 0) setDuration(v.duration)
   }, [duration])
+
+  useEffect(() => {
+    if (!displayUrl || dragFrameUrl) return
+    const v = videoRef.current
+    if (!v) return
+    let cancelled = false
+    let cancelIdle: (() => void) | null = null
+
+    const captureFrame = () => {
+      if (cancelled || dragFrameUrl) return
+      const videoEl = videoRef.current
+      if (!videoEl || videoEl.videoWidth <= 0 || videoEl.videoHeight <= 0) return
+      try {
+        const maxW = 640
+        const scale = Math.min(1, maxW / videoEl.videoWidth)
+        const w = Math.max(1, Math.round(videoEl.videoWidth * scale))
+        const h = Math.max(1, Math.round(videoEl.videoHeight * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        ctx.drawImage(videoEl, 0, 0, w, h)
+        const snapshot = canvas.toDataURL('image/jpeg', 0.72)
+        if (!cancelled && snapshot) setDragFrameUrl(snapshot)
+      } catch {
+        // Cross-origin 视频可能禁止抽帧，失败则保留原视频渲染
+      }
+    }
+
+    const scheduleCapture = () => {
+      cancelIdle?.()
+      cancelIdle = runWhenIdle(captureFrame)
+    }
+
+    if (v.readyState >= 2) scheduleCapture()
+    const onLoadedData = () => scheduleCapture()
+    v.addEventListener('loadeddata', onLoadedData)
+
+    return () => {
+      cancelled = true
+      cancelIdle?.()
+      v.removeEventListener('loadeddata', onLoadedData)
+    }
+  }, [displayUrl, dragFrameUrl])
 
   const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current
@@ -628,14 +692,21 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     setVideoError('视频加载失败')
   }, [corsMode, displayUrl, id, nodeData?.sourceUrl, nodeData?.mediaId])
 
-  const showToolbar = (showActions || selected) && displayUrl && !nodeData?.loading
+  const showToolbar = !dragging && (showActions || selected) && displayUrl && !nodeData?.loading
 
   return (
     <div
       ref={inViewRef}
       className="relative"
-      onMouseEnter={() => { if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }; setShowActions(true) }}
-      onMouseLeave={() => { hideTimerRef.current = setTimeout(() => setShowActions(false), 400) }}
+      onMouseEnter={() => {
+        if (dragging) return
+        if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }
+        setShowActions(true)
+      }}
+      onMouseLeave={() => {
+        if (dragging) return
+        hideTimerRef.current = setTimeout(() => setShowActions(false), 400)
+      }}
     >
       {/* 节点主体 - 纯内容卡片 */}
       <div
@@ -688,6 +759,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
                 playsInline
                 preload="metadata"
                 className="w-full h-full object-contain pointer-events-none select-none"
+                style={dragging && !!dragFrameUrl ? { visibility: 'hidden' } : undefined}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
                 onError={handleVideoError}
@@ -698,6 +770,14 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
               />
+              {dragging && !!dragFrameUrl && (
+                <img
+                  src={dragFrameUrl}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
+                  draggable={false}
+                />
+              )}
               <div className="absolute inset-0 z-10" onDoubleClick={(e) => { e.stopPropagation(); togglePlay() }} />
               {/* TapNow-style hover control bar */}
               <div className="video-controls-bar nodrag absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2.5 pt-8 flex items-center gap-2.5 opacity-0 translate-y-1 pointer-events-none">
@@ -759,6 +839,7 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       {/* TapNow: 视频悬浮工具栏 (选中有内容时显示) */}
       {showToolbar && (
         <div
+          data-node-float-toolbar
           className="absolute left-1/2 z-[1001] nodrag"
           style={{ top: -56, transform: 'translateX(-50%)' }}
           onMouseDown={e => e.stopPropagation()}

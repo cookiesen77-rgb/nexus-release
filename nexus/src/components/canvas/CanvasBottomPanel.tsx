@@ -14,6 +14,7 @@ import { inferPolishModeFromText, buildPolishUserText, buildPolishSystemPrompt }
 type PanelMode = 'image' | 'video' | 'text' | null
 type PanelSize = { width: number; height: number }
 type PlacementMode = 'image' | 'video'
+type PanelAnchorRect = { left: number; top: number; width: number }
 
 const STYLE_PRESETS = [
   { id: 'anime', name: '动漫', suffix: 'anime style, vibrant colors' },
@@ -37,6 +38,11 @@ const STYLE_PRESETS = [
   { id: 'pop', name: '波普', suffix: 'pop art style, bold colors, halftone dots, Andy Warhol inspired' },
   { id: 'dark', name: '暗黑', suffix: 'dark gothic aesthetic, moody lighting, dramatic shadows, dark fantasy' },
 ]
+
+const isTauriRuntime = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
+const PROMPT_COMMIT_DEBOUNCE_MS = 300
+const POS_EPSILON = 0.25
+const WIDTH_EPSILON = 0.5
 
 const getSafeNumber = (v: unknown, fallback = 0) => {
   const n = Number(v)
@@ -92,6 +98,10 @@ export default memo(function CanvasBottomPanel() {
   })
   const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)
   const [panelSizeByNode, setPanelSizeByNode] = useState<Record<string, PanelSize>>({})
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const runtimeRectRef = useRef<PanelAnchorRect | null>(null)
+  const lastPaintRef = useRef<{ left: number; top: number; width: number } | null>(null)
+  const selectedPanelSize = selectedNode ? panelSizeByNode[selectedNode.id] || null : null
 
   const mode: PanelMode = useMemo(() => {
     if (!selectedNode) return null
@@ -105,45 +115,88 @@ export default memo(function CanvasBottomPanel() {
   const nodeElRef = useRef<HTMLElement | null>(null)
   const wrapElRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
-    if (!selectedNode) { setPos(null); return }
+    if (!selectedNode) {
+      setPos(null)
+      runtimeRectRef.current = null
+      lastPaintRef.current = null
+      return
+    }
 
-    const readDOM = () => {
+    const isSameRect = (a: PanelAnchorRect | null, b: PanelAnchorRect) => {
+      if (!a) return false
+      return (
+        Math.abs(a.left - b.left) <= POS_EPSILON &&
+        Math.abs(a.top - b.top) <= POS_EPSILON &&
+        Math.abs(a.width - b.width) <= WIDTH_EPSILON
+      )
+    }
+
+    const getPanelWidth = (anchorWidth: number) => {
+      const base = Math.max(anchorWidth, 420)
+      return selectedPanelSize ? Math.max(base, selectedPanelSize.width) : base
+    }
+
+    const measurePanelAnchor = (): PanelAnchorRect | null => {
       if (!nodeElRef.current) nodeElRef.current = document.querySelector(`[data-id="${selectedNode.id}"]`) as HTMLElement
       if (!wrapElRef.current) wrapElRef.current = document.querySelector('[data-canvas-wrap]') as HTMLElement
       const nodeEl = nodeElRef.current
       const wrapEl = wrapElRef.current
-      if (!nodeEl || !wrapEl) return
+      if (!nodeEl || !wrapEl) return null
       const nodeRect = nodeEl.getBoundingClientRect()
       const wrapRect = wrapEl.getBoundingClientRect()
-      const left = nodeRect.left - wrapRect.left + nodeRect.width / 2
-      const top = nodeRect.bottom - wrapRect.top + 8
-      const width = Math.max(nodeRect.width, 420)
-      setPos(prev => {
-        if (prev && Math.abs(prev.left - left) < 0.5 && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.width - width) < 0.5) return prev
-        return { left, top, width }
-      })
+      return {
+        left: nodeRect.left - wrapRect.left + nodeRect.width / 2,
+        top: nodeRect.bottom - wrapRect.top + 8,
+        width: Math.max(nodeRect.width, 420),
+      }
+    }
+
+    const applyPanelStyle = (rect: PanelAnchorRect, force = false) => {
+      const el = panelRef.current
+      if (!el) return
+      const width = getPanelWidth(rect.width)
+      const next = { left: rect.left, top: rect.top, width }
+      if (!force && isSameRect(lastPaintRef.current, next)) return
+      el.style.left = `${next.left}px`
+      el.style.top = `${next.top}px`
+      el.style.width = `${next.width}px`
+      el.style.transform = 'translate3d(-50%, 0, 0)'
+      lastPaintRef.current = next
+    }
+
+    const commitPanelState = (rect: PanelAnchorRect) => {
+      setPos((prev) => (isSameRect(prev, rect) ? prev : rect))
+    }
+
+    const syncFromDOM = (opts?: { forcePaint?: boolean; commitState?: boolean }) => {
+      const rect = measurePanelAnchor()
+      if (!rect) return
+      runtimeRectRef.current = rect
+      applyPanelStyle(rect, !!opts?.forcePaint)
+      if (opts?.commitState) commitPanelState(rect)
     }
 
     // 初次定位
-    requestAnimationFrame(readDOM)
+    requestAnimationFrame(() => syncFromDOM({ forcePaint: true, commitState: true }))
 
     // 监听画布交互事件（拖拽/缩放期间持续跟随）
     let rafId = 0
     let interacting = false
     const tick = () => {
       if (!interacting) return
-      readDOM()
+      syncFromDOM()
       rafId = requestAnimationFrame(tick)
     }
     const onInteraction = (e: Event) => {
       const active = (e as CustomEvent).detail?.active
       if (active) {
+        syncFromDOM({ forcePaint: true })
         interacting = true
         rafId = requestAnimationFrame(tick)
       } else {
         interacting = false
         cancelAnimationFrame(rafId)
-        readDOM()
+        syncFromDOM({ forcePaint: true, commitState: true })
       }
     }
 
@@ -151,7 +204,20 @@ export default memo(function CanvasBottomPanel() {
 
     // store 变化也触发（节点增删、选中切换等非拖拽场景）
     const unsub = useGraphStore.subscribe((s, prev) => {
-      if (s.viewport !== prev.viewport || s.nodes !== prev.nodes) readDOM()
+      const viewportChanged = s.viewport !== prev.viewport
+      const selectedChanged = s.selectedNodeId !== prev.selectedNodeId
+      const currNode = s.getNode(selectedNode.id)
+      const prevNode = prev.getNode(selectedNode.id)
+      const nodeRectChanged = !!currNode && !!prevNode && (
+        currNode.x !== prevNode.x ||
+        currNode.y !== prevNode.y ||
+        currNode.width !== prevNode.width ||
+        currNode.height !== prevNode.height
+      )
+      if (!(viewportChanged || selectedChanged || nodeRectChanged)) return
+      if (!interacting) {
+        syncFromDOM({ commitState: true })
+      }
     })
 
     return () => {
@@ -162,11 +228,11 @@ export default memo(function CanvasBottomPanel() {
       nodeElRef.current = null
       wrapElRef.current = null
     }
-  }, [selectedNode?.id])
+  }, [selectedNode?.id, selectedPanelSize?.width])
 
   if (!mode || !selectedNode || !pos) return null
   const minPanelWidth = Math.max(pos.width, 420)
-  const panelSize = panelSizeByNode[selectedNode.id] || null
+  const panelSize = selectedPanelSize
   const panelWidth = panelSize ? Math.max(minPanelWidth, panelSize.width) : pos.width
   const handlePanelResize = (next: PanelSize | null) => {
     const id = selectedNode.id
@@ -189,6 +255,7 @@ export default memo(function CanvasBottomPanel() {
 
   return (
     <div
+      ref={panelRef}
       className="pointer-events-auto absolute z-40"
       style={{
         left: pos.left,
@@ -217,20 +284,46 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
   const [quality, setQuality] = useState(nodeData?._panelQuality || nodeData?.params?.imageSize || '2K')
   const [prompt, setPrompt] = useState(nodeData?.prompt || nodeData?._panelPrompt || '')
 
-  const savePromptToNode = useCallback((val: string) => {
-    useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
+  const commitPromptToNode = useCallback((val: string) => {
+    const state = useGraphStore.getState()
+    const current = String((state.getNode(nodeId)?.data as any)?._panelPrompt || '')
+    if (current === val) return
+    state.patchNodeDataSilent(nodeId, { _panelPrompt: val })
   }, [nodeId])
+  const promptCommitTimerRef = useRef<number | null>(null)
+  const clearPromptCommitTimer = useCallback(() => {
+    if (promptCommitTimerRef.current === null) return
+    window.clearTimeout(promptCommitTimerRef.current)
+    promptCommitTimerRef.current = null
+  }, [])
+  const schedulePromptCommit = useCallback((val: string) => {
+    if (!isTauriRuntime) {
+      commitPromptToNode(val)
+      return
+    }
+    clearPromptCommitTimer()
+    promptCommitTimerRef.current = window.setTimeout(() => {
+      promptCommitTimerRef.current = null
+      commitPromptToNode(val)
+    }, PROMPT_COMMIT_DEBOUNCE_MS)
+  }, [clearPromptCommitTimer, commitPromptToNode])
   const promptRef = useRef(prompt)
   promptRef.current = prompt
+  const flushPromptCommit = useCallback((val?: string) => {
+    const next = typeof val === 'string' ? val : String(promptRef.current || '')
+    clearPromptCommitTimer()
+    commitPromptToNode(next)
+  }, [clearPromptCommitTimer, commitPromptToNode])
   const savePanelState = useCallback((patch: Record<string, unknown>) => {
     useGraphStore.getState().patchNodeDataSilent(nodeId, patch)
   }, [nodeId])
 
   // 卸载时自动保存 prompt 到 store
   useEffect(() => () => {
+    flushPromptCommit()
     const p = promptRef.current?.trim()
     if (p) useGraphStore.getState().patchNodeDataSilent(nodeId, { prompt: p, _inlinePrompt: p })
-  }, [nodeId])
+  }, [flushPromptCommit, nodeId])
 
   const [loading, setLoading] = useState(false)
   const loadingRef = useRef(false)
@@ -487,8 +580,19 @@ function ImagePanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
         <div className="relative">
           <textarea
             value={prompt}
-            onChange={e => { setPrompt(e.target.value); savePromptToNode(e.target.value) }}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
+            onChange={e => {
+              const next = e.target.value
+              setPrompt(next)
+              schedulePromptCommit(next)
+            }}
+            onBlur={e => flushPromptCommit(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                flushPromptCommit(e.currentTarget.value)
+                handleGenerate()
+              }
+            }}
             placeholder="描述你想要生成的内容..."
             rows={2}
             className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 resize-none outline-none pr-20"
@@ -576,12 +680,42 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
   const [ratio, setRatio] = useState(nodeData?._panelRatio || nodeData?.params?.aspectRatio || nodeData?.ratio || '16:9')
   const [prompt, setPrompt] = useState(nodeData?.prompt || nodeData?._panelPrompt || (hasImageSource ? '根据图片生成视频。' : ''))
 
-  const savePromptToNode = useCallback((val: string) => {
-    useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
+  const commitPromptToNode = useCallback((val: string) => {
+    const state = useGraphStore.getState()
+    const current = String((state.getNode(nodeId)?.data as any)?._panelPrompt || '')
+    if (current === val) return
+    state.patchNodeDataSilent(nodeId, { _panelPrompt: val })
   }, [nodeId])
+  const promptRef = useRef(prompt)
+  promptRef.current = prompt
+  const promptCommitTimerRef = useRef<number | null>(null)
+  const clearPromptCommitTimer = useCallback(() => {
+    if (promptCommitTimerRef.current === null) return
+    window.clearTimeout(promptCommitTimerRef.current)
+    promptCommitTimerRef.current = null
+  }, [])
+  const schedulePromptCommit = useCallback((val: string) => {
+    if (!isTauriRuntime) {
+      commitPromptToNode(val)
+      return
+    }
+    clearPromptCommitTimer()
+    promptCommitTimerRef.current = window.setTimeout(() => {
+      promptCommitTimerRef.current = null
+      commitPromptToNode(val)
+    }, PROMPT_COMMIT_DEBOUNCE_MS)
+  }, [clearPromptCommitTimer, commitPromptToNode])
+  const flushPromptCommit = useCallback((val?: string) => {
+    const next = typeof val === 'string' ? val : String(promptRef.current || '')
+    clearPromptCommitTimer()
+    commitPromptToNode(next)
+  }, [clearPromptCommitTimer, commitPromptToNode])
   const savePanelState = useCallback((patch: Record<string, unknown>) => {
     useGraphStore.getState().patchNodeDataSilent(nodeId, patch)
   }, [nodeId])
+  useEffect(() => () => {
+    flushPromptCommit()
+  }, [flushPromptCommit])
   const [loading, setLoading] = useState(false)
   const loadingRef = useRef(false)
   useEffect(() => { loadingRef.current = loading }, [loading])
@@ -745,8 +879,19 @@ function VideoPanel({ nodeId, nodeData, isConfigNode, panelSize, minPanelWidth, 
         <div className="relative">
           <textarea
             value={prompt}
-            onChange={e => { setPrompt(e.target.value); savePromptToNode(e.target.value) }}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
+            onChange={e => {
+              const next = e.target.value
+              setPrompt(next)
+              schedulePromptCommit(next)
+            }}
+            onBlur={e => flushPromptCommit(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                flushPromptCommit(e.currentTarget.value)
+                handleGenerate()
+              }
+            }}
             placeholder="描述你想要生成的视频内容..."
             rows={2}
             className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 resize-none outline-none pr-20"
@@ -806,9 +951,39 @@ function TextPanel({ nodeId, nodeData, panelSize, minPanelWidth, onPanelResize }
     return Math.max(120, panelSize.height - 140)
   }, [panelSize?.height])
 
-  const savePromptToNode = useCallback((val: string) => {
-    useGraphStore.getState().patchNodeDataSilent(nodeId, { _panelPrompt: val })
+  const commitPromptToNode = useCallback((val: string) => {
+    const state = useGraphStore.getState()
+    const current = String((state.getNode(nodeId)?.data as any)?._panelPrompt || '')
+    if (current === val) return
+    state.patchNodeDataSilent(nodeId, { _panelPrompt: val })
   }, [nodeId])
+  const promptRef = useRef(prompt)
+  promptRef.current = prompt
+  const promptCommitTimerRef = useRef<number | null>(null)
+  const clearPromptCommitTimer = useCallback(() => {
+    if (promptCommitTimerRef.current === null) return
+    window.clearTimeout(promptCommitTimerRef.current)
+    promptCommitTimerRef.current = null
+  }, [])
+  const schedulePromptCommit = useCallback((val: string) => {
+    if (!isTauriRuntime) {
+      commitPromptToNode(val)
+      return
+    }
+    clearPromptCommitTimer()
+    promptCommitTimerRef.current = window.setTimeout(() => {
+      promptCommitTimerRef.current = null
+      commitPromptToNode(val)
+    }, PROMPT_COMMIT_DEBOUNCE_MS)
+  }, [clearPromptCommitTimer, commitPromptToNode])
+  const flushPromptCommit = useCallback((val?: string) => {
+    const next = typeof val === 'string' ? val : String(promptRef.current || '')
+    clearPromptCommitTimer()
+    commitPromptToNode(next)
+  }, [clearPromptCommitTimer, commitPromptToNode])
+  useEffect(() => () => {
+    flushPromptCommit()
+  }, [flushPromptCommit])
 
   useEffect(() => {
     const next = String(nodeData?._panelModel || assistantModel || AI_ASSISTANT_MODELS[0].key)
@@ -871,8 +1046,19 @@ function TextPanel({ nodeId, nodeData, panelSize, minPanelWidth, onPanelResize }
       <div className="px-4 py-3">
         <textarea
           value={prompt}
-          onChange={e => { setPrompt(e.target.value); savePromptToNode(e.target.value) }}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
+          onChange={e => {
+            const next = e.target.value
+            setPrompt(next)
+            schedulePromptCommit(next)
+          }}
+          onBlur={e => flushPromptCommit(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              flushPromptCommit(e.currentTarget.value)
+              handleGenerate()
+            }
+          }}
           placeholder="输入润色指令；若节点为空，也可直接输入要润色的提示词..."
           rows={2}
           className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 resize-none outline-none"

@@ -4,6 +4,11 @@ import App from './App'
 import './style.css'
 import { initGlobalMessage } from '@/lib/message'
 
+const isTauriRuntime = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
+if (isTauriRuntime) {
+  document.documentElement.classList.add('tauri-host')
+}
+
 // 初始化全局消息系统（兼容 Vue 版本的 window.$message）
 initGlobalMessage()
 
@@ -156,7 +161,9 @@ window.addEventListener('error', (event) => {
 })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  isTauriRuntime ? <App /> : (
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  )
 )

@@ -27,7 +27,7 @@ interface ConfigData {
   _fromWorkflow?: boolean
 }
 
-export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data, selected }: NodeProps) {
+export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data, selected, dragging }: NodeProps) {
   const nodeData = data as ConfigData
   const [showActions, setShowActions] = useState(false)
   const [editToolbarBusy, setEditToolbarBusy] = useState(false)
@@ -37,10 +37,11 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   const replaceInputRef = useRef<HTMLInputElement>(null)
   const loadAttemptedRef = useRef(false)
   const persistAttemptedRef = useRef<string>('')
+  const [dragPreviewUrl, setDragPreviewUrl] = useState('')
 
   // 检查是否有上游图片连接
   const hasUpstreamImage = useGraphStore(s => s.edges.some(e => {
-    const src = s.nodes.find(n => n.id === e.source)
+    const src = s.getNode(e.source)
     return e.target === id && (src?.type === 'image' || src?.type === 'imageConfig')
   }))
 
@@ -48,8 +49,9 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   // 'menu' = 显示"尝试"菜单, 'upload' = 可上传参考图, 'awaiting' = 待生成
   const [mode, setMode] = useState<'menu' | 'upload' | 'awaiting'>(() => {
     if ((nodeData as any)?._awaitingGeneration) return 'awaiting'
-    const initHasUpstream = useGraphStore.getState().edges.some(e => {
-      const src = useGraphStore.getState().nodes.find(n => n.id === e.source)
+    const state = useGraphStore.getState()
+    const initHasUpstream = state.edges.some(e => {
+      const src = state.getNode(e.source)
       return e.target === id && (src?.type === 'image' || src?.type === 'imageConfig')
     })
     if (initHasUpstream && !nodeData?.url) return 'awaiting'
@@ -70,6 +72,13 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   }, [hasUpstreamImage, nodeData?.url, mode, nodeData?._fromWorkflow])
 
   const hasUrl = !!nodeData?.url
+  useEffect(() => {
+    if (!dragging) return
+    setShowActions(false)
+  }, [dragging])
+  useEffect(() => {
+    setDragPreviewUrl('')
+  }, [nodeData?.url])
 
   // 从 IndexedDB 恢复
   useEffect(() => {
@@ -213,8 +222,15 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
   return (
     <div
       className="relative"
-      onMouseEnter={() => { cancelHide(); setShowActions(true) }}
-      onMouseLeave={scheduleHide}
+      onMouseEnter={() => {
+        if (dragging) return
+        cancelHide()
+        setShowActions(true)
+      }}
+      onMouseLeave={() => {
+        if (dragging) return
+        scheduleHide()
+      }}
     >
       <div
         className="group relative overflow-visible rounded-xl bg-[var(--bg-secondary)]"
@@ -255,11 +271,31 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
           ) : hasUrl ? (
             <div className="relative">
               <img
-                src={nodeData.url}
+                src={(dragging && dragPreviewUrl) ? dragPreviewUrl : nodeData.url}
                 alt={nodeData.label || '图片'}
                 className="w-full rounded-xl"
                 draggable={false}
                 loading="lazy"
+                onLoad={(e) => {
+                  const img = e.currentTarget
+                  if (dragPreviewUrl || img.naturalWidth <= 640) return
+                  try {
+                    const maxW = 640
+                    const scale = maxW / img.naturalWidth
+                    const w = Math.max(1, Math.round(img.naturalWidth * scale))
+                    const h = Math.max(1, Math.round(img.naturalHeight * scale))
+                    const canvas = document.createElement('canvas')
+                    canvas.width = w
+                    canvas.height = h
+                    const ctx = canvas.getContext('2d')
+                    if (!ctx) return
+                    ctx.drawImage(img, 0, 0, w, h)
+                    const preview = canvas.toDataURL('image/jpeg', 0.72)
+                    if (preview) setDragPreviewUrl(preview)
+                  } catch {
+                    // Cross-origin 图片可能禁止抽帧，失败则继续使用原图
+                  }
+                }}
                 onError={() => useGraphStore.getState().updateNode(id, { data: { loading: false, error: '图片加载失败' } } as any)}
               />
               <button
@@ -300,7 +336,7 @@ export const ImageConfigNodeComponent = memo(function ImageConfigNode({ id, data
         <ImageEditToolbar
           nodeId={id}
           imageUrl={nodeData.url!}
-          visible={showActions || editToolbarBusy || editToolbarHover}
+          visible={!dragging && (showActions || editToolbarBusy || editToolbarHover)}
           onBusyChange={setEditToolbarBusy}
           onHoverChange={handleToolbarHoverChange}
           onReplace={() => handleReplaceClick()}

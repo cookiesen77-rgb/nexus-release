@@ -220,6 +220,7 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
       {/* 悬浮工具栏 - 全屏弹窗打开时隐藏 */}
       {showToolbar && (
         <div
+          data-node-float-toolbar
           className="absolute left-1/2 z-[1001]"
           style={{ top: -60, transform: 'translateX(-50%) translateY(-100%)' }}
           onMouseDown={(e) => e.stopPropagation()}

@@ -157,9 +157,25 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
   const viewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null)
   const minimalRef = useRef<HTMLDivElement>(null)
   const zoomTimerRef = useRef<number>(0)
+  const interactionActiveRef = useRef(false)
   const applyingViewportRef = useRef(false)
   const selectedNodeIdsRef = useRef<Set<string>>(new Set())
   const selectedEdgeIdRef = useRef<string | null>(null)
+  const isMediaLikeNodeType = useCallback((type: string | undefined) => (
+    type === 'image' || type === 'video' || type === 'imageConfig' || type === 'videoConfig'
+  ), [])
+
+  const beginCanvasInteraction = useCallback(() => {
+    if (interactionActiveRef.current) return
+    interactionActiveRef.current = true
+    window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: true } }))
+  }, [])
+
+  const endCanvasInteraction = useCallback(() => {
+    if (!interactionActiveRef.current) return
+    interactionActiveRef.current = false
+    window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: false } }))
+  }, [])
 
   // 视口同步：Zustand store -> ReactFlow（尤其是 hydrate / 切换项目后，确保“视口中心”计算一致）
   useEffect(() => {
@@ -555,7 +571,8 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
   const handleNodeDragStop: OnNodeDrag<Node> = useCallback(
     (_event: any, node: any) => {
       reactFlowWrapper.current?.classList.remove('rf-moving')
-      window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: false } }))
+      if (isMediaLikeNodeType(node?.type)) reactFlowWrapper.current?.classList.remove('rf-drag-media')
+      endCanvasInteraction()
       // 使用 requestIdleCallback 延迟同步，不阻塞 UI
       const sync = () => {
         const store = useGraphStore.getState()
@@ -572,13 +589,14 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         setTimeout(sync, 0)
       }
     },
-    []
+    [endCanvasInteraction, isMediaLikeNodeType]
   )
 
-  const handleNodeDragStart: OnNodeDrag<Node> = useCallback(() => {
+  const handleNodeDragStart: OnNodeDrag<Node> = useCallback((_event, node) => {
     reactFlowWrapper.current?.classList.add('rf-moving')
-    window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: true } }))
-  }, [])
+    if (isMediaLikeNodeType(node?.type)) reactFlowWrapper.current?.classList.add('rf-drag-media')
+    beginCanvasInteraction()
+  }, [beginCanvasInteraction, isMediaLikeNodeType])
 
   // 处理连接
   const handleConnect = useCallback(
@@ -685,19 +703,22 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
       // 缩放时短暂隐藏边线与背景，降低合成开销
       if (zoomTimerRef.current) window.clearTimeout(zoomTimerRef.current)
       reactFlowWrapper.current?.classList.add('rf-zooming')
-      window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: true } }))
+      beginCanvasInteraction()
       zoomTimerRef.current = window.setTimeout(() => {
         reactFlowWrapper.current?.classList.remove('rf-zooming')
-        window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: false } }))
+        // 若仍处于拖动画布状态，等待 onMoveEnd/onNodeDragStop 再结束交互
+        if (reactFlowWrapper.current?.classList.contains('rf-moving')) return
+        endCanvasInteraction()
       }, 120)
     },
-    []
+    [beginCanvasInteraction, endCanvasInteraction]
   )
 
   const handleMoveEnd = useCallback(
     (_event: unknown, vp: { x: number; y: number; zoom: number }) => {
       reactFlowWrapper.current?.classList.remove('rf-moving')
-      window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: false } }))
+      reactFlowWrapper.current?.classList.remove('rf-drag-media')
+      endCanvasInteraction()
       viewportRef.current = vp
       const commit = () => {
         if (!viewportRef.current) return
@@ -710,13 +731,22 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
         saveTimerRef.current = window.setTimeout(commit, 0)
       }
     },
-    []
+    [endCanvasInteraction]
   )
 
   const handleMoveStart = useCallback(() => {
     reactFlowWrapper.current?.classList.add('rf-moving')
-    window.dispatchEvent(new CustomEvent('nexus:canvas-interaction', { detail: { active: true } }))
-  }, [])
+    beginCanvasInteraction()
+  }, [beginCanvasInteraction])
+
+  useEffect(() => {
+    return () => {
+      if (zoomTimerRef.current) window.clearTimeout(zoomTimerRef.current)
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+      reactFlowWrapper.current?.classList.remove('rf-drag-media')
+      endCanvasInteraction()
+    }
+  }, [endCanvasInteraction])
 
   // 处理画布右键菜单
   const handlePaneContextMenu = useCallback(

@@ -245,6 +245,18 @@ select option {
   backface-visibility: visible;
 }
 
+/* Tauri WebView 下减少图层与滤镜开销，优先保证拖拽/缩放流畅度 */
+.tauri-host .react-flow__node {
+  will-change: auto;
+}
+.tauri-host .dark .canvas-layer {
+  background-image: none;
+}
+.tauri-host .react-flow__edge.selected .react-flow__edge-path,
+.tauri-host .react-flow__edge:hover .react-flow__edge-path {
+  filter: none;
+}
+
 /* Improve focus visibility | 提升焦点可见性 */
 :focus-visible {
   outline: none;
@@ -385,6 +397,11 @@ select option {
 .rf-moving .video-controls-bar,
 .rf-zooming .video-controls-bar {
   opacity: 0 !important;
+}
+
+/* Media drag LOD: 拖拽图/视频节点时隐藏重型悬浮工具层（毛玻璃 + 阴影） */
+.rf-drag-media [data-node-float-toolbar] {
+  display: none !important;
 }
 
 /* Video node hover control bar */

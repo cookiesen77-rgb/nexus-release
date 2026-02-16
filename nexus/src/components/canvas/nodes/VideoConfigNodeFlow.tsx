@@ -20,6 +20,18 @@ const isHttpUrl = (v: string) => /^https?:\/\//i.test(String(v || '').trim())
 const isApiRelativeUrl = (v: string) => { const u = String(v || '').trim(); return u.startsWith('/v1/') || u.startsWith('/v1beta') || u.startsWith('/kling') || u.startsWith('/tencent-vod') || u.startsWith('/video') }
 const isRecoverableSourceUrl = (v: string) => isHttpUrl(v) || isApiRelativeUrl(v)
 
+const runWhenIdle = (cb: () => void) => {
+  const w = window as any
+  if (typeof w.requestIdleCallback === 'function') {
+    const id = w.requestIdleCallback(() => cb(), { timeout: 220 })
+    return () => {
+      if (typeof w.cancelIdleCallback === 'function') w.cancelIdleCallback(id)
+    }
+  }
+  const timer = window.setTimeout(cb, 0)
+  return () => window.clearTimeout(timer)
+}
+
 const formatDuration = (seconds: number) => {
   if (!seconds || !Number.isFinite(seconds)) return '0:00'
   const mins = Math.floor(seconds / 60)
@@ -37,7 +49,7 @@ interface ConfigData {
   _fromWorkflow?: boolean
 }
 
-export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data, selected }: NodeProps) {
+export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data, selected, dragging }: NodeProps) {
   const nodeData = data as ConfigData
   const [showActions, setShowActions] = useState(false)
   const [videoError, setVideoError] = useState('')
@@ -53,20 +65,22 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [dragFrameUrl, setDragFrameUrl] = useState('')
 
   const isFromWorkflow = !!nodeData?._fromWorkflow
   const isAwaitingGeneration = !!(nodeData as any)?._awaitingGeneration
 
   const hasUpstreamImage = useGraphStore(s => s.edges.some(e => {
-    const src = s.nodes.find(n => n.id === e.source)
+    const src = s.getNode(e.source)
     return e.target === id && (src?.type === 'image' || src?.type === 'imageConfig')
   }))
 
   // Local mode state — 即时切换 UI
   const [mode, setMode] = useState<'menu' | 'upload' | 'awaiting'>(() => {
     if (isAwaitingGeneration) return 'awaiting'
-    const initHasUpstream = useGraphStore.getState().edges.some(e => {
-      const src = useGraphStore.getState().nodes.find(n => n.id === e.source)
+    const state = useGraphStore.getState()
+    const initHasUpstream = state.edges.some(e => {
+      const src = state.getNode(e.source)
       return e.target === id && (src?.type === 'image' || src?.type === 'imageConfig')
     })
     if (initHasUpstream && !nodeData?.url) return 'awaiting'
@@ -93,7 +107,12 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
     return !!v.closest('.rf-moving, .rf-zooming')
   }, [])
 
-  useEffect(() => { setVideoError(''); setCorsMode('anonymous'); loadErrorFallbackRef.current = '' }, [displayUrl])
+  useEffect(() => { setVideoError(''); setCorsMode('anonymous'); loadErrorFallbackRef.current = ''; setDragFrameUrl('') }, [displayUrl])
+
+  useEffect(() => {
+    if (!dragging) return
+    setShowActions(false)
+  }, [dragging])
 
   // 从 IndexedDB / sourceUrl 恢复
   useEffect(() => {
@@ -154,6 +173,50 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
     setCurrentTime((prev) => (Math.abs(prev - next) < 0.08 ? prev : next))
   }, [isCanvasInteracting])
   const handleLoadedMetadata = useCallback(() => { const v = videoRef.current; if (v) setDuration(v.duration) }, [])
+  useEffect(() => {
+    if (!displayUrl || dragFrameUrl) return
+    const v = videoRef.current
+    if (!v) return
+    let cancelled = false
+    let cancelIdle: (() => void) | null = null
+
+    const captureFrame = () => {
+      if (cancelled || dragFrameUrl) return
+      const videoEl = videoRef.current
+      if (!videoEl || videoEl.videoWidth <= 0 || videoEl.videoHeight <= 0) return
+      try {
+        const maxW = 640
+        const scale = Math.min(1, maxW / videoEl.videoWidth)
+        const w = Math.max(1, Math.round(videoEl.videoWidth * scale))
+        const h = Math.max(1, Math.round(videoEl.videoHeight * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        ctx.drawImage(videoEl, 0, 0, w, h)
+        const snapshot = canvas.toDataURL('image/jpeg', 0.72)
+        if (!cancelled && snapshot) setDragFrameUrl(snapshot)
+      } catch {
+        // Cross-origin 视频可能禁止抽帧，失败则保留原视频渲染
+      }
+    }
+
+    const scheduleCapture = () => {
+      cancelIdle?.()
+      cancelIdle = runWhenIdle(captureFrame)
+    }
+
+    if (v.readyState >= 2) scheduleCapture()
+    const onLoadedData = () => scheduleCapture()
+    v.addEventListener('loadeddata', onLoadedData)
+
+    return () => {
+      cancelled = true
+      cancelIdle?.()
+      v.removeEventListener('loadeddata', onLoadedData)
+    }
+  }, [displayUrl, dragFrameUrl])
   const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current
     if (!v) return
@@ -320,8 +383,8 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
   return (
     <div
       className="relative"
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
+      onMouseEnter={() => { if (!dragging) setShowActions(true) }}
+      onMouseLeave={() => { if (!dragging) setShowActions(false) }}
     >
       {/* 标签 */}
       <div className="absolute -translate-y-full text-left left-0 -top-0 pb-2 w-full text-[var(--text-secondary)] overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontSize: '17.1429px' }}>
@@ -358,6 +421,7 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
                 crossOrigin={corsMode === 'anonymous' && isHttpUrl(displayUrl) ? 'anonymous' : undefined}
                 playsInline preload="auto"
                 className="w-full h-full object-contain pointer-events-none select-none"
+                style={dragging && !!dragFrameUrl ? { visibility: 'hidden' } : undefined}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
                 onError={handleVideoError}
@@ -367,6 +431,14 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
               />
+              {dragging && !!dragFrameUrl && (
+                <img
+                  src={dragFrameUrl}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
+                  draggable={false}
+                />
+              )}
               <div className="absolute inset-0 z-10" />
               {/* 控制栏 */}
               <div className="video-controls-bar nodrag absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2.5 pt-8 flex items-center gap-2.5 opacity-0 translate-y-1 pointer-events-none">
@@ -425,8 +497,8 @@ export const VideoConfigNodeComponent = memo(function VideoConfigNode({ id, data
       </div>
 
       {/* 悬浮工具栏 */}
-      {showActions && displayUrl && !nodeData?.loading && (
-        <div className="absolute left-1/2 z-[1001]" style={{ top: -56, transform: 'translateX(-50%)' }} onPointerDown={e => e.stopPropagation()}>
+      {!dragging && showActions && displayUrl && !nodeData?.loading && (
+        <div data-node-float-toolbar className="absolute left-1/2 z-[1001]" style={{ top: -56, transform: 'translateX(-50%)' }} onPointerDown={e => e.stopPropagation()}>
           <div className="w-fit h-10 p-1 rounded-full flex items-center gap-0.5 whitespace-nowrap" style={{ backgroundColor: 'rgba(20,20,20,0.8)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}>
             <button
               onPointerDown={(e) => e.stopPropagation()}

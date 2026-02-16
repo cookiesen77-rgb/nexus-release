@@ -32,7 +32,7 @@ interface ImageNodeData {
   error?: string
 }
 
-export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }: NodeProps) {
+export const ImageNodeComponent = memo(function ImageNode({ id, data, selected, dragging }: NodeProps) {
   const nodeData = data as ImageNodeData
   const [showActions, setShowActions] = useState(false)
   const [editToolbarBusy, setEditToolbarBusy] = useState(false)
@@ -52,6 +52,35 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
 
   const computeRole = useCallback(() => {
     const state = useGraphStore.getState()
+    const imageConfigMeta = new Map<string, {
+      count: number
+      myEdgeId: string | null
+      explicitOrder: number
+      fallbackOrder: number
+    }>()
+
+    for (const edge of state.edges) {
+      const targetNode = state.getNode(edge.target)
+      if (targetNode?.type !== 'imageConfig') continue
+      const sourceNode = state.getNode(edge.source)
+      if (sourceNode?.type !== 'image') continue
+
+      const prev = imageConfigMeta.get(edge.target) || {
+        count: 0,
+        myEdgeId: null,
+        explicitOrder: 0,
+        fallbackOrder: 0,
+      }
+      const count = prev.count + 1
+      const next = { ...prev, count }
+      if (edge.source === id) {
+        next.myEdgeId = edge.id
+        next.explicitOrder = Number((edge.data as any)?.imageOrder) || 0
+        next.fallbackOrder = count
+      }
+      imageConfigMeta.set(edge.target, next)
+    }
+
     for (const edge of state.edges) {
       if (edge.source !== id) continue
       const targetNode = state.getNode(edge.target)
@@ -62,24 +91,10 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
         if (tag) return { tag, edgeId: edge.id, type: 'video' as const }
       }
       if (targetNode.type === 'imageConfig') {
-        let imageInputCount = 0
-        let myEdgeId: string | null = null
-        let explicitOrder = 0
-        let fallbackOrder = 0
-        for (const configEdge of state.edges) {
-          if (configEdge.target !== targetNode.id) continue
-          const sourceNode = state.getNode(configEdge.source)
-          if (sourceNode?.type !== 'image') continue
-          imageInputCount++
-          if (configEdge.source === id) {
-            myEdgeId = configEdge.id
-            explicitOrder = Number((configEdge.data as any)?.imageOrder) || 0
-            fallbackOrder = imageInputCount
-          }
-        }
-        if (imageInputCount > 1 && myEdgeId) {
-          const order = explicitOrder > 0 ? explicitOrder : Math.max(1, fallbackOrder)
-          return { tag: `参考图${order}`, edgeId: myEdgeId, type: 'image' as const }
+        const meta = imageConfigMeta.get(targetNode.id)
+        if (meta && meta.count > 1 && meta.myEdgeId) {
+          const order = meta.explicitOrder > 0 ? meta.explicitOrder : Math.max(1, meta.fallbackOrder)
+          return { tag: `参考图${order}`, edgeId: meta.myEdgeId, type: 'image' as const }
         }
       }
     }
@@ -106,6 +121,15 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
 
   // 画布缩略图：优先显示 512px 缩略图，减少 GPU 显存
   const [thumbUrl, setThumbUrl] = React.useState<string>('')
+  const [dragPreviewUrl, setDragPreviewUrl] = useState('')
+
+  useEffect(() => {
+    if (!dragging) return
+    setShowActions(false)
+  }, [dragging])
+  useEffect(() => {
+    setDragPreviewUrl('')
+  }, [nodeData?.url])
 
   // 如果没有 url，尝试从 IndexedDB 或 sourceUrl 恢复
   // 优先级：1. IndexedDB (mediaId) 2. sourceUrl (HTTPS URL)
@@ -490,8 +514,15 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     <div
       ref={inViewRef}
       className="relative"
-      onMouseEnter={() => { cancelHide(); setShowActions(true) }}
-      onMouseLeave={scheduleHide}
+      onMouseEnter={() => {
+        if (dragging) return
+        cancelHide()
+        setShowActions(true)
+      }}
+      onMouseLeave={() => {
+        if (dragging) return
+        scheduleHide()
+      }}
     >
       {/* TapNow: 节点主体 */}
       <div
@@ -569,7 +600,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
           ) : nodeData?.url ? (
             <>
               <img
-                src={thumbUrl || nodeData.url}
+                src={(dragging && dragPreviewUrl) ? dragPreviewUrl : (thumbUrl || nodeData.url)}
                 alt={nodeData.label || '图片'}
                 className="w-full h-full object-cover rounded-xl"
                 draggable={false}
@@ -579,6 +610,25 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
                   const img = e.currentTarget
                   if (img.naturalWidth > 0 && img.naturalHeight > 0) {
                     setImgHeight(Math.round(250 * (img.naturalHeight / img.naturalWidth)))
+                  }
+                  if (!dragPreviewUrl && img.naturalWidth > 640) {
+                    try {
+                      const maxW = 640
+                      const scale = maxW / img.naturalWidth
+                      const w = Math.max(1, Math.round(img.naturalWidth * scale))
+                      const h = Math.max(1, Math.round(img.naturalHeight * scale))
+                      const canvas = document.createElement('canvas')
+                      canvas.width = w
+                      canvas.height = h
+                      const ctx = canvas.getContext('2d')
+                      if (ctx) {
+                        ctx.drawImage(img, 0, 0, w, h)
+                        const preview = canvas.toDataURL('image/jpeg', 0.72)
+                        if (preview) setDragPreviewUrl(preview)
+                      }
+                    } catch {
+                      // Cross-origin 图片可能禁止抽帧，失败则继续使用原图
+                    }
                   }
                   // 后台生成缩略图
                   if (!thumbUrl && nodeData?.url && nodeData.url.startsWith('data:') && nodeData.mediaId) {
@@ -659,7 +709,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
         <ImageEditToolbar
           nodeId={id}
           imageUrl={nodeData.url}
-          visible={showActions || editToolbarBusy || editToolbarHover}
+          visible={!dragging && (showActions || editToolbarBusy || editToolbarHover)}
           onBusyChange={setEditToolbarBusy}
           onHoverChange={handleToolbarHoverChange}
           onReplace={() => handleReplaceClick()}
