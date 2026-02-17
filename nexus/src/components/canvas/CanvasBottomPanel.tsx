@@ -182,8 +182,11 @@ export default memo(function CanvasBottomPanel() {
     // 监听画布交互事件（拖拽/缩放期间持续跟随）
     let rafId = 0
     let interacting = false
+    let skipNext = false
     const tick = () => {
       if (!interacting) return
+      skipNext = !skipNext
+      if (skipNext) { rafId = requestAnimationFrame(tick); return }
       syncFromDOM()
       rafId = requestAnimationFrame(tick)
     }

@@ -161,11 +161,15 @@ select option {
 }
 
 .react-flow__node {
+  contain: layout style;
+  backface-visibility: hidden;
+  overflow: visible !important;
+}
+
+/* 拖拽中的节点才启用 GPU 合成层 */
+.react-flow__node.dragging {
   will-change: transform;
   transform: translateZ(0);
-  backface-visibility: hidden;
-  contain: layout style;
-  overflow: visible !important;
 }
 
 /* 节点浅灰边框 — 纯黑背景下区分边界 */

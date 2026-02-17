@@ -34,6 +34,14 @@ const safeFetch: typeof webFetch = (async (input: any, init?: any) => {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+// Tauri plugin-http 的 res.json() 偶发抛 "Request cancelled"（body 流被中断）
+// 改用 res.text() + JSON.parse()：text() 使用缓冲式读取，更稳定
+const safeReadJson = async <T = any>(res: Response): Promise<T> => {
+  if (!isTauri) return res.json()
+  const text = await res.text()
+  return JSON.parse(text) as T
+}
+
 const isRetryableStatus = (status: number) => status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504
 
 const isHtmlLike = (text: string) => {
@@ -317,7 +325,7 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: PostReque
 
       if (res.ok) {
         try {
-          return (await res.json()) as T
+          return await safeReadJson<T>(res)
         } catch (e: any) {
           // JSON 解析失败：在 Tauri 环境下可能是响应被截断或格式问题，应该重试
           const errMsg = String(e?.message || e || '')
@@ -448,7 +456,7 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
 
       if (res.ok) {
         try {
-          return (await res.json()) as T
+          return await safeReadJson<T>(res)
         } catch (e: any) {
           // JSON 解析失败：在 Tauri 环境下可能是响应被截断或格式问题，应该重试
           const errMsg = String(e?.message || e || '')
@@ -564,7 +572,7 @@ export const getJson = async <T,>(endpoint: string, query?: Record<string, any>,
 
       if (res.ok) {
         try {
-          return (await res.json()) as T
+          return await safeReadJson<T>(res)
         } catch (e: any) {
           // JSON 解析失败：在 Tauri 环境下可能是响应被截断或格式问题，应该重试
           const errMsg = String(e?.message || e || '')

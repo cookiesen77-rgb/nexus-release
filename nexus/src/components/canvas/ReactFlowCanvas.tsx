@@ -134,6 +134,8 @@ interface ReactFlowCanvasInnerProps {
 
 function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: ReactFlowCanvasInnerProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
+  const edgeElMapRef = useRef<Map<string, HTMLElement> | null>(null)
+  const edgeElMapEdgesRef = useRef<number>(0)
   const { screenToFlowPosition, setViewport: setRfViewport, getViewport } = useReactFlow()
   
   const debugFlags = useMemo(() => {
@@ -825,6 +827,23 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
   }, [])
 
   // 处理边 hover — CSS-only dimming, 零组件 re-render
+  // edgeElMap: 按 edgeId 索引 DOM 元素，避免每次 hover 做 O(N) querySelectorAll
+  const buildEdgeElMap = useCallback(() => {
+    const wrapper = reactFlowWrapper.current
+    if (!wrapper) return null
+    const map = new Map<string, HTMLElement>()
+    const edgeEls = wrapper.querySelectorAll('.react-flow__edge')
+    for (let i = 0; i < edgeEls.length; i++) {
+      const el = edgeEls[i] as HTMLElement
+      const testId = el.getAttribute('data-testid')
+      if (!testId) continue
+      map.set(testId.slice(9), el) // strip "rf__edge-"
+    }
+    edgeElMapRef.current = map
+    edgeElMapEdgesRef.current = edges.length
+    return map
+  }, [edges.length])
+
   const handleEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: any) => {
     const wrapper = reactFlowWrapper.current
     if (!wrapper) return
@@ -833,15 +852,15 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     if (!edgeObj) return
     const { edgeIds } = getConnectedComponent(edgeObj.source, s.edges)
     wrapper.dataset.dimming = '1'
-    const edgeEls = wrapper.querySelectorAll('.react-flow__edge')
-    for (let i = 0; i < edgeEls.length; i++) {
-      const el = edgeEls[i] as HTMLElement
-      const testId = el.getAttribute('data-testid')
-      if (!testId) continue
-      const eid = testId.slice(9) // strip "rf__edge-"
-      if (edgeIds.has(eid)) el.dataset.highlighted = '1'
+    let map = edgeElMapRef.current
+    if (!map || edgeElMapEdgesRef.current !== edges.length) map = buildEdgeElMap()
+    if (map) {
+      for (const eid of edgeIds) {
+        const el = map.get(eid)
+        if (el) el.dataset.highlighted = '1'
+      }
     }
-  }, [])
+  }, [edges.length, buildEdgeElMap])
 
   const handleEdgeMouseLeave = useCallback(() => {
     const wrapper = reactFlowWrapper.current

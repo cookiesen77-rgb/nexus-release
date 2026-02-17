@@ -122,6 +122,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected, 
   // 画布缩略图：优先显示 512px 缩略图，减少 GPU 显存
   const [thumbUrl, setThumbUrl] = React.useState<string>('')
   const [dragPreviewUrl, setDragPreviewUrl] = useState('')
+  const dragPreviewSrcRef = useRef('')
 
   useEffect(() => {
     if (!dragging) return
@@ -129,6 +130,7 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected, 
   }, [dragging])
   useEffect(() => {
     setDragPreviewUrl('')
+    dragPreviewSrcRef.current = ''
   }, [nodeData?.url])
 
   // 如果没有 url，尝试从 IndexedDB 或 sourceUrl 恢复
@@ -611,7 +613,9 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected, 
                   if (img.naturalWidth > 0 && img.naturalHeight > 0) {
                     setImgHeight(Math.round(250 * (img.naturalHeight / img.naturalWidth)))
                   }
-                  if (!dragPreviewUrl && img.naturalWidth > 640) {
+                  const imgSrc = img.src
+                  if (!dragPreviewUrl && img.naturalWidth > 640 && dragPreviewSrcRef.current !== imgSrc) {
+                    dragPreviewSrcRef.current = imgSrc
                     try {
                       const maxW = 640
                       const scale = maxW / img.naturalWidth
@@ -627,7 +631,6 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected, 
                         if (preview) setDragPreviewUrl(preview)
                       }
                     } catch {
-                      // Cross-origin 图片可能禁止抽帧，失败则继续使用原图
                     }
                   }
                   // 后台生成缩略图

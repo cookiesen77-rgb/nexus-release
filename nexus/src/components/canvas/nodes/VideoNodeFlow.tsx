@@ -746,7 +746,19 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected, 
             </div>
           )}
 
-          {(inView || displayUrl) && !nodeData?.error && !videoError && displayUrl && (
+          {!inView && !nodeData?.error && !videoError && displayUrl && (
+            <div className="aspect-video bg-black">
+              {dragFrameUrl ? (
+                <img src={dragFrameUrl} alt="" className="w-full h-full object-contain" draggable={false} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Video size={28} className="text-white/20" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {inView && !nodeData?.error && !videoError && displayUrl && (
             <div
               className="aspect-video bg-black relative"
               onDoubleClick={(e) => { e.stopPropagation(); togglePlay() }}
