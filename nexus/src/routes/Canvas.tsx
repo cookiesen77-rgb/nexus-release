@@ -40,6 +40,7 @@ import { saveMedia } from '@/lib/mediaStorage'
 import { ChevronDown, ChevronLeft, Download, History, Moon, Play, Settings, Sun, Type, SlidersHorizontal, Settings2, Image, Video, Loader2 } from 'lucide-react'
 import { runWorkflow } from '@/lib/workflow/run'
 import { saveCurrentAsTemplate } from '@/lib/workflowTemplates'
+import { computeAutoLayout } from '@/graph/autoLayout'
 
 // 功能开关
 // USE_REACT_FLOW: 使用 React Flow（推荐，完全对齐 Huobao 架构）
@@ -488,6 +489,23 @@ export default function Canvas() {
     setViewport({ x, y, zoom })
   }, [setViewport])
 
+  const handleArrangeNodes = useCallback(() => {
+    const s = useGraphStore.getState()
+    if (s.nodes.length === 0) return
+    const positions = computeAutoLayout(s.nodes, s.edges)
+    canvasWrapRef.current?.classList.add('rf-arranging')
+    s.withBatchUpdates(() => {
+      for (const [id, pos] of positions) {
+        s.updateNode(id, { x: pos.x, y: pos.y })
+      }
+    })
+    s.commitNodePosition(s.nodes[0].id)
+    useGraphStore.setState({ _layoutVersion: s._layoutVersion + 1 })
+    setTimeout(() => {
+      canvasWrapRef.current?.classList.remove('rf-arranging')
+    }, 350)
+  }, [])
+
   const projects = useProjectsStore((s) => s.projects)
 
   const dark = useSettingsStore((s) => s.dark)
@@ -582,6 +600,11 @@ export default function Canvas() {
         if (e.key === 'l' || e.key === 'L') {
           e.preventDefault()
           setTool('connect')
+          return
+        }
+        if (e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+          e.preventDefault()
+          handleArrangeNodes()
           return
         }
       }
@@ -705,7 +728,7 @@ export default function Canvas() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [addEdge, addNode, redo, removeEdge, removeNodes, setSelection, undo])
+  }, [addEdge, addNode, handleArrangeNodes, redo, removeEdge, removeNodes, setSelection, undo])
 
   const onTransientViewportChange = useCallback((vp: Viewport | null) => {
     transientViewportRef.current = vp
@@ -1166,6 +1189,7 @@ export default function Canvas() {
               onOpenHistory={() => setHistoryPanelOpen(v => !v)}
               onOpenSettings={() => setSettingsOpen(true)}
               dark={dark}
+              onArrangeNodes={handleArrangeNodes}
             />
 
 

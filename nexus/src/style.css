@@ -166,6 +166,14 @@ select option {
   overflow: visible !important;
 }
 
+/* 一键整理时启用节点平滑滑动 */
+.rf-arranging .react-flow__node {
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+.rf-arranging .react-flow__node.dragging {
+  transition: none !important;
+}
+
 /* 拖拽中的节点才启用 GPU 合成层 */
 .react-flow__node.dragging {
   will-change: transform;

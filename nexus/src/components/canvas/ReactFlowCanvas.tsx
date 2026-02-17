@@ -287,6 +287,7 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
 
     const snaps: Record<string, any> = {}
     for (const node of useGraphStore.getState().nodes) snaps[node.id] = pickNode(node.data)
+    let lastLayoutVersion = useGraphStore.getState()._layoutVersion
 
     // --- 边数据变化检测 ---
     const pickEdge = (data: any) => ({
@@ -301,7 +302,18 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     const unsubscribe = useGraphStore.subscribe((state, prev) => {
       const nodesChanged = state.nodes !== prev.nodes
       const edgesChanged = state.edges !== prev.edges
-      if (!nodesChanged && !edgesChanged) return
+      const layoutChanged = state._layoutVersion !== prev._layoutVersion
+      if (!nodesChanged && !edgesChanged && !layoutChanged) return
+
+      // 一键整理：_layoutVersion 变化时批量同步所有节点位置到 React Flow
+      if (layoutChanged) {
+        const posMap = new Map(state.nodes.map(n => [n.id, { x: n.x, y: n.y }]))
+        setNodes(prev => prev.map(n => {
+          const p = posMap.get(n.id)
+          return p ? { ...n, position: p } : n
+        }))
+        lastLayoutVersion = state._layoutVersion
+      }
 
       // 共享 nodesById（节点增删 + 边数据同步都需要）
       const nodesById = nodesChanged || edgesChanged ? new Map(state.nodes.map(n => [n.id, n])) : null

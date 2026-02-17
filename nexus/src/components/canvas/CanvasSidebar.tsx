@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import {
-  Archive, Brush, Camera, Film, Hand, LayoutGrid, Link2,
+  Archive, Brush, Camera, Film, Hand, LayoutGrid, Link2, AlignStartVertical,
   MousePointer, Music, Plus, Video, BookOpen, Undo2, Redo2, ScanSearch,
   Save, Wand2, ShoppingBag, Sparkles, Clapperboard, MessageCircle,
   History, ImageIcon, ChevronDown, ChevronLeft, Moon, Sun, Download, Settings
@@ -36,6 +36,7 @@ type Props = {
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
+  onArrangeNodes?: () => void
 }
 
 const DockIcon = ({ title, onClick, active, children }: {
@@ -60,7 +61,7 @@ export default function CanvasSidebar({
   onOpenPromptLibrary, onOpenPromptReverse, onOpenCameraControl,
   onOpenEcomStudio, onOpenAssetLibrary, onOpenPromptAgent, onSaveAsTemplate,
   onToggleDark, onOpenDownload, onOpenHistory, onOpenSettings, dark,
-  onUndo, onRedo, canUndo, canRedo,
+  onUndo, onRedo, canUndo, canRedo, onArrangeNodes,
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false)
 
@@ -153,6 +154,9 @@ export default function CanvasSidebar({
         </DockIcon>
         <DockIcon title="连线 (L)" onClick={() => onChangeTool('connect')} active={activeTool === 'connect'}>
           <Link2 size={16} />
+        </DockIcon>
+        <DockIcon title="一键整理 (Shift+A)" onClick={() => onArrangeNodes?.()}>
+          <AlignStartVertical size={16} />
         </DockIcon>
         <div className="w-5 h-px bg-[var(--border-color)]/30 my-0.5" />
         <DockIcon title="主题" onClick={() => onToggleDark?.()}>

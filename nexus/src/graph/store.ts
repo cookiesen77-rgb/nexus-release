@@ -395,6 +395,7 @@ export type GraphState = {
   selectedNodeIds: string[]
   selectedEdgeId: string | null
   hoveredEdgeId: string | null
+  _layoutVersion: number
   historyIndex: number
   historyLength: number
 
@@ -453,6 +454,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   selectedNodeIds: [],
   selectedEdgeId: null,
   hoveredEdgeId: null,
+  _layoutVersion: 0,
   historyIndex: -1,
   historyLength: 0,
 
