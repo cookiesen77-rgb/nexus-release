@@ -34,12 +34,18 @@ const safeFetch: typeof webFetch = (async (input: any, init?: any) => {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-// Tauri plugin-http 的 res.json() 偶发抛 "Request cancelled"（body 流被中断）
-// 改用 res.text() + JSON.parse()：text() 使用缓冲式读取，更稳定
+// Tauri plugin-http: AbortController 已禁用后 json() 通常可用，
+// 但偶发仍可能失败，因此 clone() 前置，json() 优先、text() 兜底
 const safeReadJson = async <T = any>(res: Response): Promise<T> => {
   if (!isTauri) return res.json()
-  const text = await res.text()
-  return JSON.parse(text) as T
+  const backup = res.clone()
+  try {
+    return (await res.json()) as T
+  } catch {
+    const text = await backup.text()
+    if (!text) throw new Error('empty response body')
+    return JSON.parse(text) as T
+  }
 }
 
 const isRetryableStatus = (status: number) => status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504
@@ -296,10 +302,10 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: PostReque
   const canRetry = opts?.retryable !== false
   const maxRetries = canRetry ? (isTauri ? 4 : 3) : 0
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    // Tauri HTTP 插件在某些平台（特别是 Windows）上对 AbortController 支持不完善
-    // 因此只在非 Tauri 环境或明确设置超时时使用 signal
+    // Tauri HTTP 插件对 AbortController 支持不完善，signal 可能导致 "Request cancelled"
+    // 仅在非 Tauri 环境下使用 signal 超时
     const timeoutMs = Number(opts?.timeoutMs || 0)
-    const useSignal = timeoutMs > 0
+    const useSignal = !isTauri && timeoutMs > 0
     const controller = useSignal ? new AbortController() : null
     const t = useSignal ? window.setTimeout(() => {
       try { controller?.abort() } catch { /* ignore */ }
@@ -429,7 +435,7 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
   const maxRetries = canRetry ? (isTauri ? 4 : 3) : 0
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const timeoutMs = Number(opts?.timeoutMs || 0)
-    const useSignal = timeoutMs > 0
+    const useSignal = !isTauri && timeoutMs > 0
     const controller = useSignal ? new AbortController() : null
     const t = useSignal ? window.setTimeout(() => {
       try { controller?.abort() } catch { /* ignore */ }
@@ -550,7 +556,7 @@ export const getJson = async <T,>(endpoint: string, query?: Record<string, any>,
   const maxRetries = isTauri ? 4 : 3
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const timeoutMs = Number(opts?.timeoutMs || 0)
-    const useSignal = timeoutMs > 0
+    const useSignal = !isTauri && timeoutMs > 0
     const controller = useSignal ? new AbortController() : null
     const t = useSignal ? window.setTimeout(() => {
       try { controller?.abort() } catch { /* ignore */ }

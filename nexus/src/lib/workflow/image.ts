@@ -591,7 +591,7 @@ export const generateImageFromConfigNode = async (
         }
       }
 
-      // 针对偶发“200 但无图片”的情况，额外做一次轻量重试（不影响并发）
+      // 针对偶发"200 但无图片"的情况，额外做一次轻量重试（不影响并发）
       for (let attempt = 0; attempt < 2; attempt++) {
         const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })
         const parts = rsp?.candidates?.[0]?.content?.parts || []
