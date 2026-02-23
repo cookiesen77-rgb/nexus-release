@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import { X, Upload, Loader2, Copy, Check, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { streamChatCompletions } from '@/api'
+import { useSettingsStore } from '@/store/settings'
 
 interface Props {
   open: boolean
@@ -120,7 +121,7 @@ const SYSTEM_PROMPT = `你是一位顶级图像分析与逆向提示词专家。
   "negative_prompt_suggestions": ["建议排除的元素，如变形、低质量等"]
 }`
 
-const DEFAULT_CHAT_MODEL = 'gpt-5-mini'
+const DEFAULT_CHAT_MODEL = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
 
 export default function PromptReverseModal({ open, onClose }: Props) {
   const [image, setImage] = useState<string | null>(null)

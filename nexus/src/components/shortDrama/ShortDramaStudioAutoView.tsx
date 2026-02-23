@@ -1356,7 +1356,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                     onChange={(e) => patchModels({ analysisModelKey: e.target.value })}
                     className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
                   >
-                    {(CHAT_MODELS as any[]).filter((m: any) => ['gemini-3-pro-preview-thinking', 'claude-opus-4-6', 'claude-opus-4-5-20251101'].includes(m.key)).map((m: any) => (
+                    {(CHAT_MODELS as any[]).filter((m: any) => ['gemini-3.1-pro-preview', 'gemini-3-pro-preview-thinking', 'claude-opus-4-6', 'claude-opus-4-5-20251101'].includes(m.key)).map((m: any) => (
                       <option key={m.key} value={m.key}>
                         {m.label}
                       </option>

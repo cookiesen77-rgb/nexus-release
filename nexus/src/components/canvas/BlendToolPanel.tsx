@@ -8,6 +8,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { X, Upload, Wand2, Plus, AlertCircle, ImageIcon, Sparkles, Loader2, Layers, User, Package, ChevronDown, ChevronUp, Trash2, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useGraphStore } from '@/graph/store'
+import { useSettingsStore } from '@/store/settings'
 import type { GraphNode } from '@/graph/types'
 import { useAssetsStore } from '@/store/assets'
 import { postJson } from '@/lib/workflow/request'
@@ -98,7 +99,7 @@ Be extremely specific about identifiable features. Max 100 words.`
   const results = await Promise.all(images.map(async (img) => {
     const base64 = extractBase64(await ensureBase64(img))
     const result = await chatCompletions({
-      model: 'gpt-5-mini',
+      model: useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking',
       messages: [
         {
           role: 'user',

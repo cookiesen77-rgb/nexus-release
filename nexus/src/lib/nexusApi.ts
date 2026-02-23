@@ -302,7 +302,7 @@ export const streamChatCompletions = async function* (
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify({ ...data, stream: true })
+    body: JSON.stringify({ max_tokens: 16384, ...data, stream: true })
   }
   if (!isTauri && signal) {
     fetchOptions.signal = signal
@@ -428,7 +428,7 @@ export async function chatCompletions(data: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify(data)
+    body: JSON.stringify({ max_tokens: 16384, ...data })
   })
 
   if (!response.ok) {
@@ -580,18 +580,24 @@ export function filterThinkingContent(text: string): string {
 export async function callAiAssistant(
   modelKey: string,
   messages: ChatMessage[],
-  options: { signal?: AbortSignal; filterThinking?: boolean } = {}
+  options: { signal?: AbortSignal; filterThinking?: boolean; timeoutMs?: number } = {}
 ): Promise<string> {
-  const { signal, filterThinking = true } = options
+  const { filterThinking = true, timeoutMs = 180_000 } = options
   const apiKey = getApiKey()
-  
+
   if (!apiKey) {
     throw new Error('未配置 API Key')
   }
 
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), timeoutMs)
+  if (options.signal) {
+    options.signal.addEventListener('abort', () => ac.abort(), { once: true })
+  }
+
   // 所有模型都通过代理统一使用 OpenAI 兼容格式
   const endpoint = resolveEndpointUrl('/chat/completions')
-  
+
   const fetchOptions: RequestInit = {
     method: 'POST',
     headers: {
@@ -601,15 +607,21 @@ export async function callAiAssistant(
     body: JSON.stringify({
       model: modelKey,
       messages,
-      stream: false
+      stream: false,
+      max_tokens: 16384
     })
   }
-  
-  if (!isTauri && signal) {
-    fetchOptions.signal = signal
+
+  if (!isTauri) {
+    fetchOptions.signal = ac.signal
   }
 
-  const response = await safeFetch(endpoint, fetchOptions)
+  let response: Response
+  try {
+    response = await safeFetch(endpoint, fetchOptions)
+  } finally {
+    clearTimeout(timer)
+  }
   
   if (!response.ok) {
     let errorText = ''
@@ -771,19 +783,26 @@ async function* streamGeminiChat(
         const parts = parsed?.candidates?.[0]?.content?.parts || []
         for (const part of parts) {
           if (filterThinking && part?.thought) continue
-          const text = part?.text || ''
+          let text = part?.text || ''
           if (!text) continue
           if (filterThinking) {
+            text = text.replace(/<think>[\s\S]*?<\/think>/gi, '')
+              .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
             if (text.includes('<think>') || text.includes('<thinking>')) {
               inThinkingBlock = true
             }
-            if (text.includes('</think>') || text.includes('</thinking>')) {
-              inThinkingBlock = false
+            if (inThinkingBlock) {
+              const closeIdx = text.search(/<\/think>|<\/thinking>/i)
+              if (closeIdx >= 0) {
+                inThinkingBlock = false
+                text = text.replace(/<\/think>|<\/thinking>/gi, '').slice(closeIdx > 0 ? 0 : 0)
+                const after = (part.text as string).split(/<\/think>|<\/thinking>/i).pop() || ''
+                if (after.trim()) { yield after.trim(); continue }
+              }
               continue
             }
-            if (inThinkingBlock) continue
           }
-          yield text
+          if (text.trim()) yield text
         }
       } catch {}
     }
@@ -811,10 +830,10 @@ async function* streamOpenAIChat(
     body: JSON.stringify({
       model: modelKey,
       messages,
-      stream: true
+      stream: true,
+      max_tokens: 16384
     })
   }
-
   if (!isTauri && signal) {
     fetchOptions.signal = signal
   }
@@ -850,17 +869,20 @@ async function* streamOpenAIChat(
 
       try {
         const parsed = JSON.parse(payload)
-        const content = parsed.choices?.[0]?.delta?.content
+        let content = parsed.choices?.[0]?.delta?.content
         if (content) {
           if (filterThinking) {
             if (content.includes('<think>') || content.includes('<thinking>')) {
               inThinkingBlock = true
             }
-            if (content.includes('</think>') || content.includes('</thinking>')) {
-              inThinkingBlock = false
+            if (inThinkingBlock) {
+              if (content.includes('</think>') || content.includes('</thinking>')) {
+                inThinkingBlock = false
+                const after = content.split(/<\/think>|<\/thinking>/i).pop() || ''
+                if (after.trim()) yield after.trim()
+              }
               continue
             }
-            if (inThinkingBlock) continue
           }
           yield content
         }

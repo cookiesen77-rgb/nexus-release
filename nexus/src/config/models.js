@@ -1521,6 +1521,13 @@ export const KLING_AUDIO_TOOLS = [
 // Chat/LLM models | 对话模型
 export const CHAT_MODELS = [
     {
+        label: 'Gemini 3.1 Pro',
+        key: 'gemini-3.1-pro-preview',
+        endpoint: toAbsoluteUrl('/v1beta/models/gemini-3.1-pro-preview:generateContent'),
+        authMode: 'query',
+        format: 'gemini-chat'
+    },
+    {
         label: 'Gemini 3 Pro Thinking',
         key: 'gemini-3-pro-preview-thinking',
         endpoint: '/v1beta/models/gemini-3-pro-preview-thinking:generateContent',

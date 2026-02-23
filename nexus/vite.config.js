@@ -239,6 +239,23 @@ export default defineConfig(({ mode }) => {
             })
           }
         },
+        // Suno 音乐生成接口
+        '/suno': {
+          target: 'https://nexusapi.cn',
+          changeOrigin: true,
+          secure: true,
+          timeout: 300000,
+          proxyTimeout: 300000,
+          agent: httpsAgent,
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.log('[Proxy Error]', err.message)
+            })
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.setHeader('Connection', 'keep-alive')
+            })
+          }
+        },
         // Cloudflare R2 存储代理（绕过浏览器 CORS）
         '/r2-upload': {
           target: 'https://aeb71d0aea1f77ff49955e4535ab344b.r2.cloudflarestorage.com',

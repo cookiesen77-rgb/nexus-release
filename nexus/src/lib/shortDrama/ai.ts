@@ -5,7 +5,7 @@ import { createEmptyImageSlot, createEmptyShot, createEmptyAsset } from '@/lib/s
 import type { ShortDramaDraftV2, ShortDramaAssetCategory, ShotFrameMode } from '@/lib/shortDrama/types'
 import { SHOT_FRAME_MODES } from '@/lib/shortDrama/types'
 
-const DEFAULT_ANALYSIS_MODEL = 'gemini-3-pro-preview-thinking'
+const DEFAULT_ANALYSIS_MODEL = 'gemini-3.1-pro-preview'
 
 type ChatRole = 'system' | 'user' | 'assistant'
 type ChatMessage = { role: ChatRole; content: string }

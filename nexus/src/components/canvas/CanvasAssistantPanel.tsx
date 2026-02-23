@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button'
 import { useGraphStore } from '@/graph/store'
 import { buildCanvasContext, buildChatMessages, type ChatMessage } from '@/lib/contextEngine'
 import { loadMemoryState, saveMemoryState, searchMemory, type MemoryItem } from '@/lib/memory'
-import { twoStageStream, checkApiKey, classifyError } from '@/lib/nexusApi'
+import { twoStageStream, checkApiKey, classifyError, callAiAssistant } from '@/lib/nexusApi'
 import { saveMedia } from '@/lib/mediaStorage'
 import { cn } from '@/lib/utils'
+import { useSettingsStore } from '@/store/settings'
 import {
   buildPolishSystemPrompt,
   buildPolishUserText,
@@ -655,8 +656,47 @@ export default function CanvasAssistantPanel({ onClose, onOpenSettings, variant 
         console.log('[CanvasAssistant] 调用 executeWorkflow...')
         await executeWorkflow(workflowParams, position)
         console.log('[CanvasAssistant] executeWorkflow 完成')
+      } else if (mode === 'polish') {
+        // 润色模式：直接调用 callAiAssistant 替换输入框内容，不走对话流
+        const graphSnapshot = useGraphStore.getState()
+        const inferredMode = inferPolishModeFromGraph(graphSnapshot.selectedNodeId || null, graphSnapshot.nodes, graphSnapshot.edges)
+        const polishMode = inferredMode || inferPolishModeFromText(text)
+
+        const upstream = await collectUpstreamInputsForFocusAsync({
+          focusNodeId: graphSnapshot.selectedNodeId || null,
+          nodes: graphSnapshot.nodes,
+          edges: graphSnapshot.edges
+        })
+
+        const promptTemplate = await selectBestPromptTemplate({
+          mode: polishMode,
+          userText: text,
+          contextText: ''
+        })
+
+        const systemPrompt = buildPolishSystemPrompt(polishMode)
+        const userMessage = buildPolishUserText({
+          mode: polishMode,
+          userText: text,
+          promptTemplate,
+          upstreamInputs: upstream
+        })
+
+        const aiModel = useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking'
+        const polished = await callAiAssistant(
+          aiModel,
+          [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }],
+          { filterThinking: true, signal: controllerRef.current?.signal }
+        )
+
+        if (polished) {
+          setInput(polished)
+          window.$message?.success?.('润色完成，结果已填入输入框')
+        } else {
+          setError('润色失败：未获取到结果')
+        }
       } else {
-        // Chat mode
+        // Chat mode — 纯对话，不涉及润色
         const conversation: ChatMessage[] = messages.map((m) => ({ role: m.role, content: m.content }))
         const userMsg: UiMessage = { id: makeId(), role: 'user', content: text, createdAt: Date.now() }
         const assistantId = makeId()
@@ -673,43 +713,10 @@ export default function CanvasAssistantPanel({ onClose, onOpenSettings, variant 
 
         const mem = memoryRef.current
         const hits = memoryEnabled ? await searchMemory(text, mem.items || [], 6, 0.12) : []
-        const isPolish = mode === 'polish'
-        const inferredMode = inferPolishModeFromGraph(graphSnapshot.selectedNodeId || null, graphSnapshot.nodes, graphSnapshot.edges)
-        const polishMode = isPolish ? inferredMode || inferPolishModeFromText(text) : null
-
-        const upstream = isPolish
-          ? await collectUpstreamInputsForFocusAsync({
-              focusNodeId: graphSnapshot.selectedNodeId || null,
-              nodes: graphSnapshot.nodes,
-              edges: graphSnapshot.edges
-            })
-          : { text: [], images: [] }
-
-        const promptTemplate = isPolish
-          ? await selectBestPromptTemplate({
-              mode: polishMode || 'image',
-              userText: text,
-              contextText: canvasContext
-            })
-          : null
-
-        // 使用 NEXUS_SYSTEM_PROMPT 或润色模式的专用提示词
-        const systemPrompt = isPolish
-          ? buildPolishSystemPrompt(polishMode || 'image')
-          : NEXUS_SYSTEM_PROMPT
-
-        const userText = isPolish
-          ? buildPolishUserText({
-              mode: polishMode || 'image',
-              userText: text,
-              promptTemplate,
-              upstreamInputs: upstream
-            })
-          : text
 
         const finalMsgList = await buildChatMessages({
-          userText,
-          systemPrompt,
+          userText: text,
+          systemPrompt: NEXUS_SYSTEM_PROMPT,
           conversation,
           memorySummary: mem.summary || '',
           memoryItems: hits,
@@ -717,7 +724,6 @@ export default function CanvasAssistantPanel({ onClose, onOpenSettings, variant 
           config: { maxChars: 12000, maxHistory: 16, maxMemoryItems: 6, maxCanvasChars: 1200 }
         })
 
-        // 使用双阶段调用（如果启用了思考/联网）
         const inputMessages = finalMsgList.map((m: any) => ({
           role: m.role as 'system' | 'user' | 'assistant',
           content: m.content
@@ -733,7 +739,6 @@ export default function CanvasAssistantPanel({ onClose, onOpenSettings, variant 
           scheduleFlush()
         }
 
-        // 取消待处理的更新（可能是 RAF 或 setTimeout）
         if (rafUpdateRef.current) {
           cancelAnimationFrame(rafUpdateRef.current)
           clearTimeout(rafUpdateRef.current)

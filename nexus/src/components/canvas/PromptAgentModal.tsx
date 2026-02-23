@@ -30,9 +30,9 @@ interface ModelOption {
 }
 
 const AGENT_MODELS: ModelOption[] = [
+  { key: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', provider: 'Google' },
   { key: 'claude-opus-4-6', label: 'Claude Opus 4.6', provider: 'Anthropic' },
   { key: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', provider: 'Anthropic' },
-  { key: 'doubao-seed-1-8-251228', label: 'Doubao Seed 1.8', provider: 'Doubao' },
   { key: 'gemini-3-pro-preview-thinking', label: 'Gemini 3 Pro Thinking', provider: 'Google' },
 ]
 

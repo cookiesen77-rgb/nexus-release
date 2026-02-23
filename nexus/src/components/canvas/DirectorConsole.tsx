@@ -1102,7 +1102,7 @@ Output STRICT JSON only (no markdown, no code fences):
       let response = ''
 
       for await (const chunk of streamChatCompletions({
-        model: DEFAULT_CHAT_MODEL,
+        model: useSettingsStore.getState().aiAssistantModel || 'gemini-3-pro-preview-thinking',
         messages: [
           { role: 'system', content: '你是专业的电影分镜师，擅长将故事拆解为详细的分镜提示词。' },
           { role: 'user', content: prompt }
