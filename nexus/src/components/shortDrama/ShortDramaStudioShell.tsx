@@ -83,6 +83,9 @@ export default function ShortDramaStudioShell({
   const hasWarnedPersistFailRef = useRef(false)
   // 标记是否完成初始加载，防止在加载完成前保存空数据
   const initialLoadDoneRef = useRef(true)
+  const unmountedRef = useRef(false)
+  const pidRef = useRef(pid)
+  pidRef.current = pid
 
   /**
    * setState 的更新可能在路由切换/卸载前还未 commit，
@@ -95,10 +98,13 @@ export default function ShortDramaStudioShell({
       const computed = updater(draftRef.current)
       draftRef.current = computed
       setDraft(computed)
-      return
+    } else {
+      draftRef.current = next
+      setDraft(next)
     }
-    draftRef.current = next
-    setDraft(next)
+    if (unmountedRef.current) {
+      saveShortDramaDraftV2(pidRef.current, draftRef.current)
+    }
   }, [])
 
   const setPrefsSafe = useCallback((next: React.SetStateAction<ShortDramaStudioPrefsV1>) => {
@@ -171,6 +177,7 @@ export default function ShortDramaStudioShell({
   // Flush on unmount
   useEffect(() => {
     return () => {
+      unmountedRef.current = true
       flushNow()
     }
   }, [flushNow])

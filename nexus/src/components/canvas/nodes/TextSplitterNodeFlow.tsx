@@ -80,8 +80,6 @@ export const TextSplitterNodeComponent = memo(function TextSplitterNode({ id, da
     })
   }, [id])
 
-  useEffect(() => () => { abortRef.current?.abort() }, [])
-
   const syncToStore = useCallback((patch: Record<string, unknown>) => {
     useGraphStore.getState().updateNode(id, { data: patch })
   }, [id])

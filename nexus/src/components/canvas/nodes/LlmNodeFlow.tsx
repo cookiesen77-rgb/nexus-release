@@ -120,8 +120,6 @@ export const LlmNodeComponent = memo(function LlmNode({ id, data, selected }: No
     })
   }, [id])
 
-  useEffect(() => () => { abortRef.current?.abort() }, [])
-
   const sync = useCallback((patch: Record<string, unknown>) => {
     useGraphStore.getState().updateNode(id, { data: patch })
   }, [id])

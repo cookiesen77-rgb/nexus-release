@@ -837,6 +837,20 @@ function ReactFlowCanvasInner({ onContextMenu, onConnectEnd, onFileDrop }: React
     return () => window.removeEventListener('nexus:node-updated', handleNodeUpdated as EventListener)
   }, [setNodes])
 
+  // 监听整体重排事件（autoArrangeNodes），批量同步所有节点坐标到 ReactFlow
+  useEffect(() => {
+    const handle = () => {
+      const storeNodes = useGraphStore.getState().nodes
+      const posById = new Map(storeNodes.map(n => [n.id, { x: n.x, y: n.y }]))
+      setNodes(prev => prev.map(n => {
+        const pos = posById.get(n.id)
+        return pos ? { ...n, position: { x: pos.x, y: pos.y } } : n
+      }))
+    }
+    window.addEventListener('nexus:nodes-repositioned', handle)
+    return () => window.removeEventListener('nexus:nodes-repositioned', handle)
+  }, [setNodes])
+
   // 监听边数据变化（imageRole / order / handles 等），同步到 ReactFlow edge state，确保自定义边 UI 更新
   useEffect(() => {
     const pick = (data: any) => ({

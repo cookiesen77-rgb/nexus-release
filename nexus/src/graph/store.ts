@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { EdgeType, GraphEdge, GraphNode, NodeType, Viewport } from '@/graph/types'
 import { useProjectsStore } from '@/store/projects'
 import { getNodeSize } from '@/graph/nodeSizing'
+import { computeAutoLayout } from '@/graph/autoLayout'
 import { deleteMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
 import {
   createSpatialIndex,
@@ -414,6 +415,7 @@ export type GraphState = {
 
   getSpatialIndex: () => SpatialIndex
   rebuildSpatialIndex: () => void
+  autoArrangeNodes: () => void
 }
 
 export const useGraphStore = create<GraphState>((set, get) => ({
@@ -1021,6 +1023,23 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     spatialIdx = createSpatialIndex(400)
     rebuildIndex(spatialIdx, nodes, getNodeSize)
     markDirty()
+  },
+
+  autoArrangeNodes: () => {
+    const s = get()
+    if (s.nodes.length === 0) return
+    const positions = computeAutoLayout(s.nodes, s.edges, getNodeSize)
+    if (positions.size === 0) return
+    const nodes = s.nodes.map(n => {
+      const pos = positions.get(n.id)
+      return pos ? { ...n, x: pos.x, y: pos.y } : n
+    })
+    set({ nodes })
+    rebuildNodeIndex(nodes)
+    spatialIdx = createSpatialIndex(400)
+    rebuildIndex(spatialIdx, nodes, getNodeSize)
+    markDirty()
+    window.dispatchEvent(new CustomEvent('nexus:nodes-repositioned'))
   },
 
   canUndo: () => historyIndex > 0,

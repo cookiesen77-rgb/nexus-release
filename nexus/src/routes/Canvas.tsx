@@ -845,6 +845,11 @@ export default function Canvas() {
           setTool('connect')
           return
         }
+        if (e.key === 'Tab') {
+          e.preventDefault()
+          useGraphStore.getState().autoArrangeNodes()
+          return
+        }
       }
 
       if (meta && !editing && (e.key === 'c' || e.key === 'C')) {
