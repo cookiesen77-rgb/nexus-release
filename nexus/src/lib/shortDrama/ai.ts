@@ -88,15 +88,18 @@ const callChatModel = async (modelKey: string, messages: ChatMessage[]): Promise
       .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
     const payload: any = {
       model: modelCfg.key,
-      max_tokens: 16384,
+      max_tokens: 65536,
       messages: nonSystemMessages,
     }
     if (system) payload.system = system
     const rsp = await postJson<any>(modelCfg.endpoint, payload, {
       authMode: modelCfg.authMode,
-      timeoutMs: 240000,
+      timeoutMs: 300000,
       extraHeaders: { 'anthropic-version': '2023-06-01' },
     })
+    if (rsp?.stop_reason === 'max_tokens') {
+      console.warn('[callChatModel] Anthropic 输出被截断 (stop_reason: max_tokens)')
+    }
     const content = rsp?.content
     if (Array.isArray(content)) {
       return normalizeText(content.map((b: any) => b?.text || '').filter(Boolean).join(''))
@@ -112,7 +115,7 @@ const callChatModel = async (modelKey: string, messages: ChatMessage[]): Promise
   }
 
   // Default: OpenAI Chat Completions-like
-  const payload: any = { model: modelCfg.key, messages, temperature: 0.3, max_tokens: 16384 }
+  const payload: any = { model: modelCfg.key, messages, temperature: 0.3, max_tokens: 65536 }
   const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: 240000 })
   const content = rsp?.choices?.[0]?.message?.content
   if (typeof content === 'string') return normalizeText(content)
@@ -483,14 +486,16 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
 
   let parsed = parseJsonLoose(rawText) as ShortDramaScriptAnalysis | null
   if (!parsed) {
-    // Retry once with stronger constraints to avoid truncated/invalid JSON.
     const retrySystem = [
       system,
       '',
-      '你上一次输出未能被 JSON.parse 解析。',
-      '请只输出完整、严格的 JSON（不要输出解释/Markdown/多余文字），确保所有括号与引号闭合。',
-      '如果剧本很长：最多输出 60 个 shots；宁可减少镜头数，也不要输出不完整 JSON。',
-      'shots/characters/scenes 必须存在；没有就输出空数组 []（不要省略字段）。',
+      '【紧急修正】你上一次输出未能被 JSON.parse 解析（极可能是输出过长被截断）。',
+      '请严格遵守以下约束重新输出：',
+      '1. 只输出完整、严格的 JSON，确保所有括号与引号闭合。',
+      '2. 最多输出 20 个 shots，宁可减少镜头数也不要输出不完整 JSON。',
+      '3. 每个 startPrompt/endPrompt 控制在 80-100 字中文，每个 videoPrompt 控制在 60-80 字。',
+      '4. characters/scenes/assets 描述精简到核心特征，每项不超过 150 字。',
+      '5. shots/characters/scenes 必须存在；没有就输出空数组 []。',
     ].join('\n')
     const retryUser = [
       '请重新输出 JSON（只输出 JSON）。',
