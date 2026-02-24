@@ -2,7 +2,7 @@
   "name": "nexus",
   "description": "Nexus - AI workflow canvas",
   "private": true,
-  "version": "1.79.2",
+  "version": "1.79.3",
   "author": "Nexus",
   "type": "module",
   "main": "electron/main.js",

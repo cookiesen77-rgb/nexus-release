@@ -300,15 +300,14 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
         try {
           return (await res.json()) as T
         } catch (e: any) {
-          // JSON 解析失败：在 Tauri 环境下可能是响应被截断或格式问题，应该重试
           const errMsg = String(e?.message || e || '')
           const isRetryableJsonError = /did not match|expected pattern|Unexpected/i.test(errMsg)
-          if (isTauri && attempt < maxRetries && isRetryableJsonError) {
+          if (attempt < maxRetries && isRetryableJsonError) {
             const wait = get502BackoffMs(attempt)
-            console.warn('[postJson] Tauri JSON 解析失败，准备重试:', { 
-              attempt: attempt + 1, 
-              waitMs: wait, 
-              error: errMsg.slice(0, 100) 
+            console.warn('[postJson] JSON 解析失败，准备重试:', {
+              attempt: attempt + 1,
+              waitMs: wait,
+              error: errMsg.slice(0, 100)
             })
             await sleep(wait)
             continue
@@ -318,7 +317,6 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
       }
 
       const text = await res.text().catch(() => '')
-      // 尝试解析 JSON 错误响应
       let errorMsg = `HTTP ${res.status}`
       try {
         const errJson = JSON.parse(text)
@@ -428,15 +426,14 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
         try {
           return (await res.json()) as T
         } catch (e: any) {
-          // JSON 解析失败：在 Tauri 环境下可能是响应被截断或格式问题，应该重试
           const errMsg = String(e?.message || e || '')
           const isRetryableJsonError = /did not match|expected pattern|Unexpected/i.test(errMsg)
-          if (isTauri && attempt < maxRetries && isRetryableJsonError) {
+          if (attempt < maxRetries && isRetryableJsonError) {
             const wait = get502BackoffMs(attempt)
-            console.warn('[postFormData] Tauri JSON 解析失败，准备重试:', { 
-              attempt: attempt + 1, 
-              waitMs: wait, 
-              error: errMsg.slice(0, 100) 
+            console.warn('[postFormData] JSON 解析失败，准备重试:', {
+              attempt: attempt + 1,
+              waitMs: wait,
+              error: errMsg.slice(0, 100)
             })
             await sleep(wait)
             continue
@@ -544,15 +541,14 @@ export const getJson = async <T,>(endpoint: string, query?: Record<string, any>,
         try {
           return (await res.json()) as T
         } catch (e: any) {
-          // JSON 解析失败：在 Tauri 环境下可能是响应被截断或格式问题，应该重试
           const errMsg = String(e?.message || e || '')
           const isRetryableJsonError = /did not match|expected pattern|Unexpected/i.test(errMsg)
-          if (isTauri && attempt < maxRetries && isRetryableJsonError) {
+          if (attempt < maxRetries && isRetryableJsonError) {
             const wait = get502BackoffMs(attempt)
-            console.warn('[getJson] Tauri JSON 解析失败，准备重试:', { 
-              attempt: attempt + 1, 
-              waitMs: wait, 
-              error: errMsg.slice(0, 100) 
+            console.warn('[getJson] JSON 解析失败，准备重试:', {
+              attempt: attempt + 1,
+              waitMs: wait,
+              error: errMsg.slice(0, 100)
             })
             await sleep(wait)
             continue
