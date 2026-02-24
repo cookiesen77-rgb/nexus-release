@@ -220,7 +220,7 @@ export const resolveEndpointUrl = (endpoint: string) => {
     // 开发环境（非 Tauri）：返回相对路径，走 Vite 代理
     // 如果路径已经以特定前缀开头（如 /tencent-vod, /kling, /v1beta, /v1/），不再添加 /v1
     // 注意：/video/ 需要 /v1 前缀（如 /v1/video/create），不要加入此列表
-    const noV1Prefixes = ['/tencent-vod', '/kling', '/v1beta', '/v1/', '/ent', '/suno']
+    const noV1Prefixes = ['/tencent-vod', '/kling', '/v1beta', '/v1/', '/ent', '/suno', '/mj']
     const path = ep.startsWith('/') ? ep : `/${ep}`
     if (noV1Prefixes.some(p => path.startsWith(p))) {
       return path
@@ -234,7 +234,7 @@ export const resolveEndpointUrl = (endpoint: string) => {
   // 不需要添加 /v1 的路径前缀（与 Web 环境保持一致）
   // 这些路径直接使用 origin，不使用包含 /v1 的 base URL
   // 注意：/video/ 需要 /v1 前缀（如 /v1/video/create），不要加入此列表
-  const noV1Prefixes = ['/tencent-vod', '/kling', '/v1beta', '/v1/', '/ent', '/suno']
+  const noV1Prefixes = ['/tencent-vod', '/kling', '/v1beta', '/v1/', '/ent', '/suno', '/mj']
   if (noV1Prefixes.some(p => path.startsWith(p))) {
     try {
       const origin = new URL(DEFAULT_API_BASE_URL).origin

@@ -656,6 +656,65 @@ export const generateImageFromConfigNode = async (
       const list = resp?.data ?? resp
       const first = Array.isArray(list) ? list[0] : list
       imageUrl = String(first?.url || first?.image_url || first || '').trim()
+    } else if (modelCfg.format === 'midjourney') {
+      // Midjourney: 支持文生图 + 图生图（垫图）
+      // 图生图流程：上传参考图到 Discord CDN → 将 URL 前缀到 prompt → 提交 Imagine
+      let mjPrompt = prompt || ''
+
+      // 处理参考图：上传到 MJ CDN 获取公网 URL，然后前缀到 prompt
+      if (limitedRefImages.length > 0) {
+        const uploadEndpoint = (modelCfg as any).uploadEndpoint || '/mj/submit/upload-discord-images'
+        const base64Images: string[] = []
+        for (const ref of limitedRefImages) {
+          const raw = String(ref || '').trim()
+          if (!raw) continue
+          if (raw.startsWith('data:')) {
+            base64Images.push(raw)
+          } else if (isHttpUrl(raw)) {
+            // 已经是公网 URL，直接前缀到 prompt
+            mjPrompt = `${raw} ${mjPrompt}`
+          } else {
+            base64Images.push(raw)
+          }
+        }
+        if (base64Images.length > 0) {
+          const uploadResp = await postJson<any>(uploadEndpoint, { base64Array: base64Images }, { authMode: modelCfg.authMode, timeoutMs: 60000 })
+          const uploadedUrls: string[] = uploadResp?.result || []
+          for (const url of uploadedUrls) {
+            mjPrompt = `${url} ${mjPrompt}`
+          }
+        }
+      }
+
+      if (!mjPrompt.trim()) throw new Error('Midjourney 需要提示词或参考图')
+      if (size && !mjPrompt.includes('--ar')) {
+        mjPrompt = `${mjPrompt} --ar ${size}`
+      }
+      const payload: any = {
+        prompt: mjPrompt,
+        botType: modelCfg.defaultParams?.botType || 'MID_JOURNEY'
+      }
+      const submitResp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: 30000 })
+      const taskId = submitResp?.result
+      if (!taskId) throw new Error(`Midjourney 提交失败：${submitResp?.description || JSON.stringify(submitResp)}`)
+
+      const statusUrl = typeof modelCfg.statusEndpoint === 'function'
+        ? modelCfg.statusEndpoint(String(taskId))
+        : `/mj/task/${taskId}/fetch`
+
+      const maxAttempts = 120
+      for (let i = 0; i < maxAttempts; i++) {
+        const polled = await getJson<any>(statusUrl, undefined, { authMode: modelCfg.authMode })
+        const status = String(polled?.status || '').toUpperCase()
+        if (status === 'SUCCESS') {
+          imageUrl = polled?.imageUrl || ''
+          break
+        }
+        if (status === 'FAILURE' || status === 'FAILED') {
+          throw new Error(polled?.failReason || 'Midjourney 生图失败')
+        }
+        await new Promise((r) => setTimeout(r, 3000))
+      }
     } else {
       throw new Error(`暂未支持该生图模型格式：${String(modelCfg.format || '')}`)
     }

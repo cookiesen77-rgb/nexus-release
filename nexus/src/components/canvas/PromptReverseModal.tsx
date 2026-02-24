@@ -5,10 +5,11 @@
 
 import React, { useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Upload, Loader2, Copy, Check, Image as ImageIcon } from 'lucide-react'
+import { X, Upload, Loader2, Copy, Check, Image as ImageIcon, ArrowUpToLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { streamChatCompletions } from '@/api'
 import { useSettingsStore } from '@/store/settings'
+import { useGraphStore } from '@/graph/store'
 
 interface Props {
   open: boolean
@@ -226,11 +227,19 @@ export default function PromptReverseModal({ open, onClose }: Props) {
     }
   }, [jsonPrompt])
 
+  const handleAddToCanvas = useCallback((content: string, label: string) => {
+    if (!content) return
+    const { addNode, viewport, withBatchUpdates } = useGraphStore.getState()
+    const cx = (-viewport.x + window.innerWidth / 2) / viewport.zoom
+    const cy = (-viewport.y + window.innerHeight / 2) / viewport.zoom
+    withBatchUpdates(() => {
+      addNode('text', { x: cx - 150, y: cy - 50 }, { content, label })
+    })
+    onClose()
+    window.$message?.success?.(`"${label}" 已添加到画布`)
+  }, [onClose])
+
   const handleClose = useCallback(() => {
-    setImage(null)
-    setTextPrompt('')
-    setJsonPrompt('')
-    setError(null)
     onClose()
   }, [onClose])
 
@@ -312,14 +321,25 @@ export default function PromptReverseModal({ open, onClose }: Props) {
             <div className="flex flex-1 flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-[var(--text-secondary)]">文本提示词</span>
-                <button
-                  onClick={handleCopyText}
-                  disabled={!textPrompt}
-                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50"
-                >
-                  {copiedText ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  {copiedText ? '已复制' : '复制'}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleAddToCanvas(textPrompt, '逆推提示词')}
+                    disabled={!textPrompt}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50"
+                    title="添加到画布"
+                  >
+                    <ArrowUpToLine className="h-3 w-3" />
+                    上板
+                  </button>
+                  <button
+                    onClick={handleCopyText}
+                    disabled={!textPrompt}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50"
+                  >
+                    {copiedText ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    {copiedText ? '已复制' : '复制'}
+                  </button>
+                </div>
               </div>
               <div className="flex-1 overflow-auto rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
                 {textPrompt ? (
@@ -336,14 +356,25 @@ export default function PromptReverseModal({ open, onClose }: Props) {
             <div className="flex flex-1 flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-[var(--text-secondary)]">结构化 JSON</span>
-                <button
-                  onClick={handleCopyJson}
-                  disabled={!jsonPrompt}
-                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50"
-                >
-                  {copiedJson ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  {copiedJson ? '已复制' : '复制'}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleAddToCanvas(jsonPrompt, '逆推 JSON')}
+                    disabled={!jsonPrompt}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50"
+                    title="添加到画布"
+                  >
+                    <ArrowUpToLine className="h-3 w-3" />
+                    上板
+                  </button>
+                  <button
+                    onClick={handleCopyJson}
+                    disabled={!jsonPrompt}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50"
+                  >
+                    {copiedJson ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    {copiedJson ? '已复制' : '复制'}
+                  </button>
+                </div>
               </div>
               <div className="flex-1 overflow-auto rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
                 {jsonPrompt ? (

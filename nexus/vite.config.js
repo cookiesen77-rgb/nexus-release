@@ -239,6 +239,23 @@ export default defineConfig(({ mode }) => {
             })
           }
         },
+        // Midjourney 绘图接口
+        '/mj': {
+          target: 'https://nexusapi.cn',
+          changeOrigin: true,
+          secure: true,
+          timeout: 300000,
+          proxyTimeout: 300000,
+          agent: httpsAgent,
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.log('[Proxy Error]', err.message)
+            })
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.setHeader('Connection', 'keep-alive')
+            })
+          }
+        },
         // Suno 音乐生成接口
         '/suno': {
           target: 'https://nexusapi.cn',

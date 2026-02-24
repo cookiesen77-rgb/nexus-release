@@ -326,6 +326,42 @@ export const IMAGE_MODELS = [
             version: '0925',
             clarity: '2k'
         }
+    },
+    {
+        label: 'Midjourney',
+        key: 'midjourney',
+        endpoint: '/mj/submit/imagine',
+        uploadEndpoint: '/mj/submit/upload-discord-images',
+        statusEndpoint: (id) => `/mj/task/${id}/fetch`,
+        authMode: 'bearer',
+        format: 'midjourney',
+        timeout: 300000,
+        tips: '支持文生图 + 图生图（垫图）；参考图会自动上传并作为垫图前缀。比例通过 --ar 嵌入提示词；支持 MJ 原生参数（--v, --style, --chaos 等）',
+        requiresPrompt: false,
+        supportsReferenceImages: true,
+        maxRefImages: 5,
+        sizes: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'],
+        defaultParams: {
+            botType: 'MID_JOURNEY'
+        }
+    },
+    {
+        label: 'Niji Journey',
+        key: 'niji-journey',
+        endpoint: '/mj/submit/imagine',
+        uploadEndpoint: '/mj/submit/upload-discord-images',
+        statusEndpoint: (id) => `/mj/task/${id}/fetch`,
+        authMode: 'bearer',
+        format: 'midjourney',
+        timeout: 300000,
+        tips: '二次元/动漫风格；支持文生图 + 图生图（垫图）；参考图会自动上传并作为垫图前缀',
+        requiresPrompt: false,
+        supportsReferenceImages: true,
+        maxRefImages: 5,
+        sizes: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'],
+        defaultParams: {
+            botType: 'NIJI_JOURNEY'
+        }
     }
 ]
 
