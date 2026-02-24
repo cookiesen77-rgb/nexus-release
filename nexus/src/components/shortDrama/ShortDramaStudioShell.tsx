@@ -430,65 +430,63 @@ export default function ShortDramaStudioShell({
       </div>
 
       {/* Episode tabs */}
-      {episodes.length > 0 && (
-        <div className="flex items-center gap-1 border-b border-[var(--border-color)] px-5 py-1.5 overflow-x-auto shrink-0">
-          {episodes.map((ep) => (
-            <div key={ep.id} className="flex items-center shrink-0">
-              {renamingEpisodeId === ep.id ? (
-                <input
-                  autoFocus
-                  className="h-7 w-24 rounded border border-[var(--accent-color)] bg-[var(--bg-primary)] px-2 text-xs text-[var(--text-primary)] outline-none"
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={() => {
+      <div className="flex items-center gap-1 border-b border-[var(--border-color)] px-5 py-1.5 overflow-x-auto shrink-0">
+        {episodes.map((ep) => (
+          <div key={ep.id} className="flex items-center shrink-0">
+            {renamingEpisodeId === ep.id ? (
+              <input
+                autoFocus
+                className="h-7 w-24 rounded border border-[var(--accent-color)] bg-[var(--bg-primary)] px-2 text-xs text-[var(--text-primary)] outline-none"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={() => {
+                  if (renameValue.trim()) handleRenameEpisode(ep.id, renameValue.trim())
+                  setRenamingEpisodeId(null)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
                     if (renameValue.trim()) handleRenameEpisode(ep.id, renameValue.trim())
                     setRenamingEpisodeId(null)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      if (renameValue.trim()) handleRenameEpisode(ep.id, renameValue.trim())
-                      setRenamingEpisodeId(null)
-                    } else if (e.key === 'Escape') {
-                      setRenamingEpisodeId(null)
-                    }
-                  }}
-                />
-              ) : (
-                <button
-                  type="button"
-                  className={cn(
-                    'group relative flex items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors',
-                    currentEpisodeId === ep.id
-                      ? 'bg-[var(--accent-color)]/10 text-[var(--accent-color)] font-medium'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-primary)]',
-                  )}
-                  onClick={() => handleSelectEpisode(ep.id)}
-                  onDoubleClick={() => {
-                    setRenamingEpisodeId(ep.id)
-                    setRenameValue(ep.title)
-                  }}
+                  } else if (e.key === 'Escape') {
+                    setRenamingEpisodeId(null)
+                  }
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                className={cn(
+                  'group relative flex items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors',
+                  currentEpisodeId === ep.id
+                    ? 'bg-[var(--accent-color)]/10 text-[var(--accent-color)] font-medium'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-primary)]',
+                )}
+                onClick={() => handleSelectEpisode(ep.id)}
+                onDoubleClick={() => {
+                  setRenamingEpisodeId(ep.id)
+                  setRenameValue(ep.title)
+                }}
+              >
+                <span className="max-w-[120px] truncate">{ep.title}</span>
+                <span
+                  className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
+                  onClick={(e) => { e.stopPropagation(); handleDeleteEpisode(ep.id) }}
                 >
-                  <span className="max-w-[120px] truncate">{ep.title}</span>
-                  <span
-                    className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
-                    onClick={(e) => { e.stopPropagation(); handleDeleteEpisode(ep.id) }}
-                  >
-                    <X className="h-3 w-3" />
-                  </span>
-                </button>
-              )}
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={handleAddEpisode}
-            className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-[var(--accent-color)] transition-colors"
-          >
-            <Plus className="h-3 w-3" />
-            新增集
-          </button>
-        </div>
-      )}
+                  <X className="h-3 w-3" />
+                </span>
+              </button>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={handleAddEpisode}
+          className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-[var(--accent-color)] transition-colors"
+        >
+          <Plus className="h-3 w-3" />
+          新增集
+        </button>
+      </div>
 
       {/* Body */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
