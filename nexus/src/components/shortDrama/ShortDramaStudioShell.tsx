@@ -6,11 +6,12 @@
  * - 同时支持：全屏页面（/short-drama/:projectId）与旧 Modal 形态
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Film, X, Plus, Trash2, ChevronDown, Copy } from 'lucide-react'
+import { Film, X, Plus, Trash2, ChevronDown, Copy, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import ShortDramaStudioAutoView from '@/components/shortDrama/ShortDramaStudioAutoView'
 import ShortDramaStudioManualView from '@/components/shortDrama/ShortDramaStudioManualView'
+import ShortDramaAssetSidebar from '@/components/shortDrama/ShortDramaAssetSidebar'
 import {
   loadShortDramaDraftV2,
   saveShortDramaDraftV2,
@@ -18,9 +19,18 @@ import {
   createShortDramaProject,
   deleteShortDramaProject,
   duplicateShortDramaProject,
+  createDefaultDraftV2,
+  createEmptyEpisode,
+  loadDraftAsync,
+  saveDraftAsync,
+  listProjectsAsync,
+  createProjectAsync,
+  deleteDraftAsync,
+  duplicateProjectAsync,
   type ShortDramaProjectMeta,
 } from '@/lib/shortDrama/draftStorage'
 import { loadShortDramaPrefs, saveShortDramaPrefs } from '@/lib/shortDrama/uiPrefs'
+import { addEpisode, removeEpisode, updateEpisode } from '@/lib/shortDrama/draftOps'
 import { syncAssetHistoryFromCanvasNodes } from '@/lib/assets/syncFromCanvas'
 import { useGraphStore } from '@/graph/store'
 import type { ShortDramaDraftV2 } from '@/lib/shortDrama/types'
@@ -53,26 +63,23 @@ export default function ShortDramaStudioShell({
     return String(projectId || '').trim() || 'default'
   })()
 
-  // 当前活动的项目 ID（可以切换）
   const [currentProjectId, setCurrentProjectIdRaw] = useState(initialPid)
   const pid = currentProjectId
 
-  // 切换项目时同步到 localStorage
   const setCurrentProjectId = useCallback((nextId: string) => {
     setCurrentProjectIdRaw(nextId)
     try { localStorage.setItem(LAST_PID_KEY, nextId) } catch { /* ignore */ }
   }, [])
 
-  // 项目列表
   const [projects, setProjects] = useState<ShortDramaProjectMeta[]>(() => listShortDramaProjects())
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  // 刷新项目列表
-  const refreshProjects = useCallback(() => {
-    setProjects(listShortDramaProjects())
+  const refreshProjects = useCallback(async () => {
+    const list = await listProjectsAsync()
+    setProjects(list)
   }, [])
 
-  // 直接从 localStorage 加载作为初始值，避免先渲染空草稿再覆盖
   const [draft, setDraft] = useState<ShortDramaDraftV2>(() => loadShortDramaDraftV2(pid))
   const [prefs, setPrefs] = useState<ShortDramaStudioPrefsV1>(() => loadShortDramaPrefs(pid))
 
@@ -81,17 +88,11 @@ export default function ShortDramaStudioShell({
   draftRef.current = draft
   prefsRef.current = prefs
   const hasWarnedPersistFailRef = useRef(false)
-  // 标记是否完成初始加载，防止在加载完成前保存空数据
   const initialLoadDoneRef = useRef(true)
   const unmountedRef = useRef(false)
   const pidRef = useRef(pid)
   pidRef.current = pid
 
-  /**
-   * setState 的更新可能在路由切换/卸载前还未 commit，
-   * 此时 unmount flush 会读到旧 draftRef，导致“返回画布后再进工作台内容回滚”。
-   * 这里提供一个“同步更新 ref + state”的 setter，保证 flushNow 总能拿到最新草稿。
-   */
   const setDraftSafe = useCallback((next: React.SetStateAction<ShortDramaDraftV2>) => {
     if (typeof next === 'function') {
       const updater = next as (prev: ShortDramaDraftV2) => ShortDramaDraftV2
@@ -120,52 +121,43 @@ export default function ShortDramaStudioShell({
   }, [])
 
   const flushNow = useCallback(() => {
-    try {
-      const ok = saveShortDramaDraftV2(pid, draftRef.current)
-      if (!ok && !hasWarnedPersistFailRef.current) {
-        hasWarnedPersistFailRef.current = true
-        console.error('[ShortDramaStudioShell] 草稿保存失败（可能是 localStorage 空间不足）')
-        try {
-          window.$message?.error?.('短剧草稿保存失败：可能是本地存储空间不足（请减少大图/清理缓存/更换浏览器环境后重试）')
-        } catch {
-          // ignore
-        }
-      }
-    } catch {
-      // ignore
-    }
-    try {
-      const ok = saveShortDramaPrefs(pid, prefsRef.current)
-      if (!ok && !hasWarnedPersistFailRef.current) {
-        hasWarnedPersistFailRef.current = true
-        console.error('[ShortDramaStudioShell] 偏好保存失败（可能是 localStorage 空间不足）')
-      }
-    } catch {
-      // ignore
-    }
+    // Sync fallback for unmount safety
+    saveShortDramaDraftV2(pid, draftRef.current)
+    saveShortDramaPrefs(pid, prefsRef.current)
+    // Also fire async save to IDB
+    saveDraftAsync(pid, draftRef.current).catch(() => {})
   }, [pid])
 
-  // Load draft & prefs on project change (initial load is handled by useState initializer)
+  // Load draft & prefs on project change
   const prevPidRef = useRef(pid)
   useEffect(() => {
-    // 仅在 projectId 变化时重新加载（首次挂载已通过 useState 初始化）
     if (prevPidRef.current !== pid) {
       prevPidRef.current = pid
       initialLoadDoneRef.current = false
-      const loadedDraft = loadShortDramaDraftV2(pid)
-      const loadedPrefs = loadShortDramaPrefs(pid)
-      setDraftSafe(loadedDraft)
-      setPrefsSafe(loadedPrefs)
-      // 确保 ref 也同步更新
-      draftRef.current = loadedDraft
-      prefsRef.current = loadedPrefs
-      initialLoadDoneRef.current = true
+      setLoading(true)
+      loadDraftAsync(pid).then((loadedDraft) => {
+        const loadedPrefs = loadShortDramaPrefs(pid)
+        setDraftSafe(loadedDraft)
+        setPrefsSafe(loadedPrefs)
+        draftRef.current = loadedDraft
+        prefsRef.current = loadedPrefs
+        initialLoadDoneRef.current = true
+        setLoading(false)
+      })
     }
-    // 把画布中已有素材补进历史（单向补齐，不会破坏历史）
     syncAssetHistoryFromCanvasNodes({ includeDataUrl: true, includeAssetUrl: true })
   }, [pid, setDraftSafe, setPrefsSafe])
 
-  // Persist draft (debounced) - 只在初始加载完成后才保存
+  // Initial async migration: fire once on mount to migrate localStorage → IDB
+  useEffect(() => {
+    loadDraftAsync(pid).then((idbDraft) => {
+      if (idbDraft.updatedAt > draftRef.current.updatedAt) {
+        setDraftSafe(idbDraft)
+      }
+    }).catch(() => {})
+  }, [])
+
+  // Persist draft (debounced)
   useEffect(() => {
     if (!initialLoadDoneRef.current) return
     const t = window.setTimeout(() => {
@@ -184,61 +176,100 @@ export default function ShortDramaStudioShell({
 
   const handleClose = useCallback(() => {
     flushNow()
-    // 同步保存画布，避免"从短剧回到画布时新增节点丢失"（画布可能在路由切换时触发 hydrate 覆盖未落盘的变更）
     ;(async () => {
       try {
         await useGraphStore.getState().saveNow()
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
       onRequestClose?.()
     })()
   }, [flushNow, onRequestClose])
 
-  // 项目管理操作
-  const handleCreateProject = useCallback(() => {
-    flushNow() // 先保存当前项目
-    const newId = createShortDramaProject()
-    refreshProjects()
+  // 项目管理
+  const handleCreateProject = useCallback(async () => {
+    flushNow()
+    const newId = await createProjectAsync()
+    await refreshProjects()
     setCurrentProjectId(newId)
     window.$message?.success?.('已创建新短剧项目')
   }, [flushNow, refreshProjects])
 
   const handleSwitchProject = useCallback((targetId: string) => {
     if (targetId === pid) return
-    flushNow() // 先保存当前项目
+    flushNow()
     setCurrentProjectId(targetId)
     setProjectDropdownOpen(false)
   }, [pid, flushNow])
 
-  const handleDeleteProject = useCallback((targetId: string) => {
+  const handleDeleteProject = useCallback(async (targetId: string) => {
     if (targetId === 'default') {
       window.$message?.warning?.('默认项目不能删除')
       return
     }
     if (!window.confirm('确定要删除这个短剧项目吗？此操作不可恢复。')) return
 
-    const ok = deleteShortDramaProject(targetId)
-    if (ok) {
-      refreshProjects()
-      if (targetId === pid) {
-        // 如果删除的是当前项目，切换到其他项目
-        const remaining = listShortDramaProjects()
-        setCurrentProjectId(remaining[0]?.id || 'default')
-      }
-      window.$message?.success?.('已删除短剧项目')
+    await deleteDraftAsync(targetId)
+    deleteShortDramaProject(targetId)
+    await refreshProjects()
+    if (targetId === pid) {
+      const remaining = await listProjectsAsync()
+      setCurrentProjectId(remaining[0]?.id || 'default')
     }
+    window.$message?.success?.('已删除短剧项目')
   }, [pid, refreshProjects])
 
-  const handleDuplicateProject = useCallback((targetId: string) => {
-    flushNow() // 先保存当前项目
-    const newId = duplicateShortDramaProject(targetId)
+  const handleDuplicateProject = useCallback(async (targetId: string) => {
+    flushNow()
+    const newId = await duplicateProjectAsync(targetId)
     if (newId) {
-      refreshProjects()
+      await refreshProjects()
       setCurrentProjectId(newId)
       window.$message?.success?.('已复制短剧项目')
     }
   }, [flushNow, refreshProjects])
+
+  // ---- 集数管理 ----
+  const episodes = useMemo(() =>
+    [...(draft.episodes || [])].sort((a, b) => a.order - b.order),
+    [draft.episodes],
+  )
+  const currentEpisodeId = prefs.currentEpisodeId && episodes.some(e => e.id === prefs.currentEpisodeId)
+    ? prefs.currentEpisodeId
+    : (episodes.length > 0 ? episodes[0].id : undefined)
+
+  const handleSelectEpisode = useCallback((epId: string) => {
+    setPrefsSafe(prev => ({ ...prev, currentEpisodeId: epId }))
+  }, [setPrefsSafe])
+
+  const handleAddEpisode = useCallback(() => {
+    const nextOrder = episodes.length
+    const ep = createEmptyEpisode(`第${nextOrder + 1}集`, nextOrder)
+    setDraftSafe(prev => addEpisode(prev, ep))
+    setPrefsSafe(prev => ({ ...prev, currentEpisodeId: ep.id }))
+  }, [episodes.length, setDraftSafe, setPrefsSafe])
+
+  const handleDeleteEpisode = useCallback((epId: string) => {
+    if (!window.confirm('确定要删除这一集吗？该集的镜头将变为未分配状态。')) return
+    setDraftSafe(prev => removeEpisode(prev, epId))
+    const remaining = episodes.filter(e => e.id !== epId)
+    setPrefsSafe(prev => ({ ...prev, currentEpisodeId: remaining[0]?.id }))
+  }, [episodes, setDraftSafe, setPrefsSafe])
+
+  const handleRenameEpisode = useCallback((epId: string, title: string) => {
+    setDraftSafe(prev => updateEpisode(prev, epId, { title }))
+  }, [setDraftSafe])
+
+  const [renamingEpisodeId, setRenamingEpisodeId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+
+  // 资产库侧边栏
+  const [assetSidebarOpen, setAssetSidebarOpen] = useState(!!prefs.assetSidebarOpen)
+  const toggleAssetSidebar = useCallback(() => {
+    setAssetSidebarOpen(prev => {
+      const next = !prev
+      setPrefsSafe(p => ({ ...p, assetSidebarOpen: next }))
+      return next
+    })
+  }, [setPrefsSafe])
 
   // 当前项目信息
   const currentProjectTitle = draft.title || '未命名短剧'
@@ -247,9 +278,19 @@ export default function ShortDramaStudioShell({
   const setMode = (next: 'auto' | 'manual') => setPrefs((p) => ({ ...p, mode: next }))
 
   const body = useMemo(() => {
-    const viewProps = { projectId: pid, draft, setDraft: setDraftSafe, prefs, setPrefs: setPrefsSafe }
+    if (loading) {
+      return (
+        <div className="flex h-full items-center justify-center text-[var(--text-secondary)]">
+          <div className="flex flex-col items-center gap-2">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--accent-color)] border-t-transparent" />
+            <span className="text-sm">加载中...</span>
+          </div>
+        </div>
+      )
+    }
+    const viewProps = { projectId: pid, draft, setDraft: setDraftSafe, prefs, setPrefs: setPrefsSafe, currentEpisodeId: currentEpisodeId || null }
     return mode === 'manual' ? <ShortDramaStudioManualView {...viewProps} /> : <ShortDramaStudioAutoView {...viewProps} />
-  }, [pid, draft, prefs, mode])
+  }, [pid, draft, prefs, mode, loading, currentEpisodeId])
 
   return (
     <div className={cn('flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--bg-secondary)]', className)}>
@@ -274,7 +315,6 @@ export default function ShortDramaStudioShell({
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setProjectDropdownOpen(false)} />
                 <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg">
-                  {/* 新建项目按钮 */}
                   <div className="border-b border-[var(--border-color)] p-2">
                     <button
                       type="button"
@@ -286,7 +326,6 @@ export default function ShortDramaStudioShell({
                     </button>
                   </div>
 
-                  {/* 项目列表 */}
                   <div className="max-h-64 overflow-y-auto p-2">
                     {projects.length === 0 ? (
                       <div className="px-3 py-4 text-center text-sm text-[var(--text-secondary)]">暂无项目</div>
@@ -340,6 +379,15 @@ export default function ShortDramaStudioShell({
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className={cn('h-8 gap-1.5 px-3', assetSidebarOpen ? 'text-[var(--accent-color)]' : 'text-[var(--text-secondary)]')}
+            onClick={toggleAssetSidebar}
+          >
+            <Layers className="h-4 w-4" />
+            素材库
+          </Button>
           <div className="flex items-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-1">
             <Button
               size="sm"
@@ -381,11 +429,82 @@ export default function ShortDramaStudioShell({
         </div>
       </div>
 
+      {/* Episode tabs */}
+      {episodes.length > 0 && (
+        <div className="flex items-center gap-1 border-b border-[var(--border-color)] px-5 py-1.5 overflow-x-auto shrink-0">
+          {episodes.map((ep) => (
+            <div key={ep.id} className="flex items-center shrink-0">
+              {renamingEpisodeId === ep.id ? (
+                <input
+                  autoFocus
+                  className="h-7 w-24 rounded border border-[var(--accent-color)] bg-[var(--bg-primary)] px-2 text-xs text-[var(--text-primary)] outline-none"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={() => {
+                    if (renameValue.trim()) handleRenameEpisode(ep.id, renameValue.trim())
+                    setRenamingEpisodeId(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (renameValue.trim()) handleRenameEpisode(ep.id, renameValue.trim())
+                      setRenamingEpisodeId(null)
+                    } else if (e.key === 'Escape') {
+                      setRenamingEpisodeId(null)
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className={cn(
+                    'group relative flex items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors',
+                    currentEpisodeId === ep.id
+                      ? 'bg-[var(--accent-color)]/10 text-[var(--accent-color)] font-medium'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-primary)]',
+                  )}
+                  onClick={() => handleSelectEpisode(ep.id)}
+                  onDoubleClick={() => {
+                    setRenamingEpisodeId(ep.id)
+                    setRenameValue(ep.title)
+                  }}
+                >
+                  <span className="max-w-[120px] truncate">{ep.title}</span>
+                  <span
+                    className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteEpisode(ep.id) }}
+                  >
+                    <X className="h-3 w-3" />
+                  </span>
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={handleAddEpisode}
+            className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-[var(--accent-color)] transition-colors"
+          >
+            <Plus className="h-3 w-3" />
+            新增集
+          </button>
+        </div>
+      )}
+
       {/* Body */}
-      <div className="flex-1 min-h-0 overflow-hidden p-4">
-        <div className="h-full min-h-0">{body}</div>
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden p-4">
+          <div className="h-full min-h-0">{body}</div>
+        </div>
+        {assetSidebarOpen && (
+          <ShortDramaAssetSidebar
+            open={assetSidebarOpen}
+            onClose={() => { setAssetSidebarOpen(false); setPrefsSafe(p => ({ ...p, assetSidebarOpen: false })) }}
+            draft={draft}
+            setDraft={setDraftSafe}
+            currentEpisodeId={currentEpisodeId}
+          />
+        )}
       </div>
     </div>
   )
 }
-

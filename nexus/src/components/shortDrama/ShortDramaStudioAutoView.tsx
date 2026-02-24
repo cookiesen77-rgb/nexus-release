@@ -5,7 +5,7 @@ import { CHAT_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MOD
 import * as modelsConfig from '@/config/models'
 import { cn } from '@/lib/utils'
 import { importShortDramaScriptFile } from '@/lib/shortDrama/scriptImport'
-import { analyzeShortDramaScriptToDraftV2 } from '@/lib/shortDrama/ai'
+import { analyzeShortDramaScriptToDraftV2, analyzeEpisodeScript } from '@/lib/shortDrama/ai'
 import { getShortDramaTaskQueue } from '@/lib/shortDrama/taskQueue'
 import { buildEffectiveStyle, getShortDramaStylePresetById, SHORT_DRAMA_STYLE_PRESETS } from '@/lib/shortDrama/stylePresets'
 import { generateShortDramaImage, generateShortDramaVideo } from '@/lib/shortDrama/generateMedia'
@@ -31,6 +31,7 @@ interface Props {
   setDraft: React.Dispatch<React.SetStateAction<ShortDramaDraftV2>>
   prefs: ShortDramaStudioPrefsV1
   setPrefs: React.Dispatch<React.SetStateAction<ShortDramaStudioPrefsV1>>
+  currentEpisodeId?: string | null
 }
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Math.random().toString(16).slice(2)}`
@@ -97,7 +98,7 @@ const buildVideoImages = (startInput: string, endInput: string, refs: string[]) 
   return out
 }
 
-export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, prefs, setPrefs }: Props) {
+export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, prefs, setPrefs, currentEpisodeId }: Props) {
   const navigate = useNavigate()
   const queue = useMemo(() => getShortDramaTaskQueue(projectId), [projectId])
   useEffect(() => {
@@ -217,6 +218,36 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
 
   const draftRef = useRef(draft)
   draftRef.current = draft
+
+  // Episode-aware shot filtering and script binding
+  const visibleShots = useMemo(() => {
+    if (!currentEpisodeId) return draft.shots
+    return draft.shots.filter(s => s.episodeId === currentEpisodeId)
+  }, [draft.shots, currentEpisodeId])
+
+  const currentEpisode = useMemo(() =>
+    currentEpisodeId ? (draft.episodes || []).find(e => e.id === currentEpisodeId) : undefined,
+    [draft.episodes, currentEpisodeId],
+  )
+
+  const currentScript = useMemo(() =>
+    currentEpisode?.script || draft.script,
+    [currentEpisode, draft.script],
+  )
+
+  const setCurrentScriptText = useCallback((text: string) => {
+    if (currentEpisodeId && currentEpisode) {
+      setDraft(prev => ({
+        ...prev,
+        episodes: (prev.episodes || []).map(ep =>
+          ep.id === currentEpisodeId ? { ...ep, script: { ...ep.script, text }, updatedAt: Date.now() } : ep,
+        ),
+        updatedAt: Date.now(),
+      }))
+    } else {
+      setDraft(prev => ({ ...prev, script: { ...prev.script, text }, updatedAt: Date.now() }))
+    }
+  }, [currentEpisodeId, currentEpisode, setDraft])
 
   const setSlotBusy = useCallback((slotId: string, busy: boolean) => {
     setBusySlotIds((prev) => ({ ...prev, [slotId]: busy }))
@@ -1006,7 +1037,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   )
 
   const runAnalysis = useCallback(async () => {
-    const script = String(draft.script.text || '').trim()
+    const script = String(currentScript.text || '').trim()
     if (!script) {
       window.$message?.error?.('请先导入/粘贴剧本')
       return
@@ -1015,11 +1046,20 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     setAnalysisError('')
     setAnalysisRaw('')
     try {
-      const res = await analyzeShortDramaScriptToDraftV2({ draft, scriptText: script, modelKey: draft.models.analysisModelKey })
-      setAnalysisRaw(res.rawText)
-      setDraft(res.draft)
-      // 立即落盘，防止用户快速切走导致 debounce 丢失分析结果
-      saveShortDramaDraftV2(projectId, res.draft)
+      let resDraft: ShortDramaDraftV2
+      let rawText: string
+      if (currentEpisodeId) {
+        const res = await analyzeEpisodeScript({ draft, episodeId: currentEpisodeId, scriptText: script, modelKey: draft.models.analysisModelKey })
+        resDraft = res.draft
+        rawText = res.rawText
+      } else {
+        const res = await analyzeShortDramaScriptToDraftV2({ draft, scriptText: script, modelKey: draft.models.analysisModelKey })
+        resDraft = res.draft
+        rawText = res.rawText
+      }
+      setAnalysisRaw(rawText)
+      setDraft(resDraft)
+      saveShortDramaDraftV2(projectId, resDraft)
       window.$message?.success?.('剧本分析完成')
       // 解析后：先自动生成“角色设定图 + 场景参考图”（一致性素材）。
       // 关键帧（首/尾）与视频必须由用户手动点击按钮触发（避免未确认一致性就开跑）。
@@ -1034,7 +1074,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     } finally {
       setAnalysisBusy(false)
     }
-  }, [draft, setDraft])
+  }, [draft, setDraft, currentScript, currentEpisodeId, projectId])
 
   const runBatchGenerateCoreRefs = useCallback(async () => {
     const d = draftRef.current
@@ -1290,16 +1330,16 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   }, [setDraft])
 
   const selectedPreset = useMemo(() => getShortDramaStylePresetById(draft.style.presetId), [draft.style.presetId])
-  const shotsTotal = draft.shots.length
+  const shotsTotal = visibleShots.length
   const adoptedKeyframes = useMemo(() => {
     let ok = 0
-    for (const sh of draft.shots) {
+    for (const sh of visibleShots) {
       const start = getSelectedVariant(sh.frames.start.slot)
       const end = getSelectedVariant(sh.frames.end.slot)
       if (start?.status === 'success' && end?.status === 'success') ok += 1
     }
     return ok
-  }, [draft.shots, getSelectedVariant])
+  }, [visibleShots, getSelectedVariant])
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 lg:flex-row">
@@ -1613,8 +1653,8 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
           <div className="flex flex-col gap-2">
             <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">剧本文本</label>
             <textarea
-              value={draft.script.text}
-              onChange={(e) => setDraft((prev) => ({ ...prev, script: { ...prev.script, text: e.target.value }, updatedAt: Date.now() }))}
+              value={currentScript.text}
+              onChange={(e) => setCurrentScriptText(e.target.value)}
               className="min-h-[220px] w-full resize-y rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
               placeholder="粘贴剧本文本；或使用右上角导入。"
             />
@@ -2053,10 +2093,10 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       {/* Right column (70%): shots */}
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
-          <div className="text-sm font-semibold text-[var(--text-primary)]">镜头（{draft.shots.length}）</div>
+          <div className="text-sm font-semibold text-[var(--text-primary)]">镜头（{visibleShots.length}）</div>
           <div className="mt-3 space-y-3">
-            {draft.shots.length === 0 ? <div className="text-sm text-[var(--text-secondary)]">尚未分析出镜头。</div> : null}
-            {draft.shots.map((sh, idx) => {
+            {visibleShots.length === 0 ? <div className="text-sm text-[var(--text-secondary)]">尚未分析出镜头。</div> : null}
+            {visibleShots.map((sh, idx) => {
               const startSlot = sh.frames.start.slot
               const endSlot = sh.frames.end.slot
               const videoSlot = sh.video

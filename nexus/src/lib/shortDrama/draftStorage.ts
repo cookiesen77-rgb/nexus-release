@@ -2,9 +2,11 @@ import { DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL } from '@/
 import { useSettingsStore } from '@/store/settings'
 import type {
   ShortDramaDraftV2,
+  ShortDramaEpisode,
   ShortDramaMediaKind,
   ShortDramaMediaSlot,
   ShortDramaMediaVariant,
+  ShortDramaScript,
   ShortDramaShot,
   ShortDramaShotFrame,
   ShortDramaStyle,
@@ -65,7 +67,20 @@ export const createDefaultStyle = (): ShortDramaStyle => ({
   locked: false,
 })
 
-export const createEmptyShot = (title?: string): ShortDramaShot => {
+export const createEmptyEpisode = (title: string, order: number): ShortDramaEpisode => ({
+  id: makeId(),
+  title,
+  order,
+  synopsis: '',
+  script: { text: '' },
+  activeCharacterIds: [],
+  activeSceneIds: [],
+  activeAssetIds: [],
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+})
+
+export const createEmptyShot = (title?: string, episodeId?: string): ShortDramaShot => {
   const startSlot = createEmptyImageSlot('首帧')
   const endSlot = createEmptyImageSlot('尾帧')
 
@@ -78,6 +93,7 @@ export const createEmptyShot = (title?: string): ShortDramaShot => {
   return {
     id: makeId(),
     title: title || '镜头',
+    episodeId,
     sceneId: undefined,
     characterIds: [],
     frameMode: 'first_last',
@@ -111,6 +127,7 @@ export const createDefaultDraftV2 = (projectId: string): ShortDramaDraftV2 => {
     characters: [],
     scenes: [],
     assets: [],
+    episodes: [],
     shots: [],
     plan: undefined,
   }
@@ -405,5 +422,29 @@ export const duplicateShortDramaProject = (projectId: string): string | null => 
   }
   saveShortDramaDraftV2(newId, newDraft)
   return newId
+}
+
+// ---- Async wrappers (delegate to IndexedDB) ----
+
+import {
+  loadDraftIdb,
+  saveDraftIdb,
+  deleteDraftIdb,
+  listProjectsIdb,
+  duplicateProjectIdb,
+} from '@/lib/shortDrama/draftStorageIdb'
+
+export const loadDraftAsync = (pid: string): Promise<ShortDramaDraftV2> => loadDraftIdb(pid)
+export const saveDraftAsync = (pid: string, draft: ShortDramaDraftV2): Promise<boolean> => saveDraftIdb(pid, draft)
+export const deleteDraftAsync = (pid: string): Promise<boolean> => deleteDraftIdb(pid)
+export const listProjectsAsync = (): Promise<ShortDramaProjectMeta[]> => listProjectsIdb()
+export const duplicateProjectAsync = (pid: string): Promise<string | null> => duplicateProjectIdb(pid)
+
+export const createProjectAsync = async (title?: string): Promise<string> => {
+  const id = `sd_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+  const draft = createDefaultDraftV2(id)
+  draft.title = String(title || '').trim() || '新短剧'
+  await saveDraftIdb(id, draft)
+  return id
 }
 

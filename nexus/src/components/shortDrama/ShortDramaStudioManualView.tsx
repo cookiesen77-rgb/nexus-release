@@ -36,6 +36,7 @@ interface Props {
   setDraft: React.Dispatch<React.SetStateAction<ShortDramaDraftV2>>
   prefs: ShortDramaStudioPrefsV1
   setPrefs: React.Dispatch<React.SetStateAction<ShortDramaStudioPrefsV1>>
+  currentEpisodeId?: string | null
 }
 
 const SUPPORTED_VIDEO_FORMATS = new Set<string>([
@@ -228,7 +229,7 @@ function SlotVersions({
   )
 }
 
-export default function ShortDramaStudioManualView({ projectId, draft, setDraft, prefs, setPrefs }: Props) {
+export default function ShortDramaStudioManualView({ projectId, draft, setDraft, prefs, setPrefs, currentEpisodeId }: Props) {
   const navigate = useNavigate()
   const [previewOpen, setPreviewOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -244,6 +245,36 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
 
   const draftRef = useRef(draft)
   draftRef.current = draft
+
+  // Episode-aware shot filtering and script binding
+  const visibleShots = useMemo(() => {
+    if (!currentEpisodeId) return draft.shots
+    return draft.shots.filter(s => s.episodeId === currentEpisodeId)
+  }, [draft.shots, currentEpisodeId])
+
+  const currentEpisode = useMemo(() =>
+    currentEpisodeId ? (draft.episodes || []).find(e => e.id === currentEpisodeId) : undefined,
+    [draft.episodes, currentEpisodeId],
+  )
+
+  const currentScript = useMemo(() =>
+    currentEpisode?.script || draft.script,
+    [currentEpisode, draft.script],
+  )
+
+  const setCurrentScriptText = useCallback((text: string) => {
+    if (currentEpisodeId && currentEpisode) {
+      setDraft(prev => ({
+        ...prev,
+        episodes: (prev.episodes || []).map(ep =>
+          ep.id === currentEpisodeId ? { ...ep, script: { ...ep.script, text }, updatedAt: Date.now() } : ep,
+        ),
+        updatedAt: Date.now(),
+      }))
+    } else {
+      setDraft(prev => ({ ...prev, script: { ...prev.script, text }, updatedAt: Date.now() }))
+    }
+  }, [currentEpisodeId, currentEpisode, setDraft])
 
   const queue = useMemo(() => getShortDramaTaskQueue(projectId), [projectId])
 
@@ -584,10 +615,10 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
   const addShot = useCallback(() => {
     setDraft((prev) => ({
       ...prev,
-      shots: [...prev.shots, createEmptyShot(`镜头 ${prev.shots.length + 1}`)],
+      shots: [...prev.shots, createEmptyShot(`镜头 ${prev.shots.length + 1}`, currentEpisodeId || undefined)],
       updatedAt: Date.now(),
     }))
-  }, [setDraft])
+  }, [setDraft, currentEpisodeId])
 
   const removeShot = useCallback(
     (shotId: string) => {
@@ -1373,8 +1404,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             <div className="flex flex-col gap-2">
               <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">剧本（可选）</label>
               <textarea
-                value={draft.script.text}
-                onChange={(e) => patchDraft({ script: { ...draft.script, text: e.target.value } })}
+              value={currentScript.text}
+                onChange={(e) => setCurrentScriptText(e.target.value)}
                 className="min-h-[110px] w-full resize-y rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
                 placeholder="粘贴/导入剧本文本（自动模式会基于此拆分镜头）"
               />
@@ -2218,14 +2249,14 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
           </div>
         </div>
 
-        {draft.shots.length === 0 ? (
+        {visibleShots.length === 0 ? (
           <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-6 text-sm text-[var(--text-secondary)]">
-            还没有镜头。点击右上角“添加镜头”开始。
+            还没有镜头。点击右上角"添加镜头"开始。
           </div>
         ) : null}
 
         <div className="space-y-4">
-          {draft.shots.map((shot, idx) => {
+          {visibleShots.map((shot, idx) => {
             const startSlot = shot.frames.start.slot
             const endSlot = shot.frames.end.slot
             const videoSlot = shot.video

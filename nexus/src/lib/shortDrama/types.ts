@@ -99,6 +99,19 @@ export interface ShortDramaScript {
   source?: ShortDramaScriptSource
 }
 
+export interface ShortDramaEpisode {
+  id: string
+  title: string
+  order: number
+  synopsis?: string
+  script: ShortDramaScript
+  activeCharacterIds: string[]
+  activeSceneIds: string[]
+  activeAssetIds: string[]
+  createdAt: number
+  updatedAt: number
+}
+
 export interface ShortDramaCharacter {
   id: string
   name: string
@@ -118,6 +131,9 @@ export interface ShortDramaCharacter {
    * Preferred reference slot id (optional).
    */
   primaryRefSlotId?: string
+
+  tags?: string[]
+  favorite?: boolean
 }
 
 export interface ShortDramaScene {
@@ -134,6 +150,9 @@ export interface ShortDramaScene {
    * Additional reference images (optional).
    */
   refs?: ShortDramaMediaSlot[]
+
+  tags?: string[]
+  favorite?: boolean
 }
 
 /**
@@ -164,6 +183,9 @@ export interface ShortDramaAsset {
    * 附加参考图
    */
   refs?: ShortDramaMediaSlot[]
+
+  tags?: string[]
+  favorite?: boolean
 }
 
 export interface ShortDramaShotFrame {
@@ -175,6 +197,7 @@ export interface ShortDramaShotFrame {
 export interface ShortDramaShot {
   id: string
   title: string
+  episodeId?: string
 
   sceneId?: string
   characterIds: string[]
@@ -245,6 +268,7 @@ export interface ShortDramaDraftV2 {
   characters: ShortDramaCharacter[]
   scenes: ShortDramaScene[]
   assets: ShortDramaAsset[]
+  episodes?: ShortDramaEpisode[]
   shots: ShortDramaShot[]
 
   plan?: ShortDramaGenerationPlan

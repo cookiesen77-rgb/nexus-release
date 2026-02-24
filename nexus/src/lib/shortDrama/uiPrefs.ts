@@ -6,6 +6,8 @@ export interface ShortDramaStudioPrefsV1 {
   autoStrategy: ShortDramaAutoStrategy
   imageConcurrency: number
   videoConcurrency: number
+  currentEpisodeId?: string
+  assetSidebarOpen?: boolean
 }
 
 const PREFS_KEY_PREFIX_V1 = 'nexus-short-drama-studio:prefs:v1'
@@ -36,7 +38,15 @@ export const loadShortDramaPrefs = (projectId: string): ShortDramaStudioPrefsV1 
     const autoStrategy: ShortDramaAutoStrategy = parsed.autoStrategy === 'full_auto' ? 'full_auto' : 'fill_only'
     const imageConcurrency = Math.max(1, Math.min(12, Number(parsed.imageConcurrency || 4)))
     const videoConcurrency = Math.max(1, Math.min(6, Number(parsed.videoConcurrency || 2)))
-    return { version: 1, mode, autoStrategy, imageConcurrency, videoConcurrency }
+    return {
+      version: 1,
+      mode,
+      autoStrategy,
+      imageConcurrency,
+      videoConcurrency,
+      currentEpisodeId: typeof parsed.currentEpisodeId === 'string' ? parsed.currentEpisodeId : undefined,
+      assetSidebarOpen: typeof parsed.assetSidebarOpen === 'boolean' ? parsed.assetSidebarOpen : undefined,
+    }
   }
   return createDefaultShortDramaPrefs()
 }

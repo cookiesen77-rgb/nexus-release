@@ -2,7 +2,7 @@ import { CHAT_MODELS, DEFAULT_CHAT_MODEL } from '@/config/models'
 import { postJson } from '@/lib/workflow/request'
 import { SHORT_DRAMA_STYLE_PRESETS, getShortDramaStylePresetById } from '@/lib/shortDrama/stylePresets'
 import { createEmptyImageSlot, createEmptyShot, createEmptyAsset } from '@/lib/shortDrama/draftStorage'
-import type { ShortDramaDraftV2, ShortDramaAssetCategory, ShotFrameMode } from '@/lib/shortDrama/types'
+import type { ShortDramaDraftV2, ShortDramaAssetCategory, ShortDramaEpisode, ShotFrameMode } from '@/lib/shortDrama/types'
 import { SHOT_FRAME_MODES } from '@/lib/shortDrama/types'
 
 const DEFAULT_ANALYSIS_MODEL = 'gemini-3.1-pro-preview'
@@ -196,6 +196,227 @@ const normalizePresetId = (id: unknown) => {
   const v = String(id || '').trim()
   const allowed = new Set(SHORT_DRAMA_STYLE_PRESETS.map((p) => p.id))
   return allowed.has(v) ? v : ''
+}
+
+// ---- Internal merge helper ----
+
+type MergeOpts = {
+  episodeId?: string
+  defaultFrameMode: ShotFrameMode
+  applyStyle?: boolean
+}
+
+function mergeAnalysisIntoDraft(
+  draft: ShortDramaDraftV2,
+  analysis: ShortDramaScriptAnalysis,
+  scriptText: string,
+  mergeOpts: MergeOpts,
+): { draft: ShortDramaDraftV2; activatedCharacterIds: string[]; activatedSceneIds: string[]; activatedAssetIds: string[]; newCharacterIds: string[]; newSceneIds: string[]; newAssetIds: string[] } {
+  const { episodeId, defaultFrameMode, applyStyle = true } = mergeOpts
+  const next: ShortDramaDraftV2 = { ...draft }
+
+  if (episodeId) {
+    next.episodes = (next.episodes || []).map(ep =>
+      ep.id === episodeId ? { ...ep, script: { ...ep.script, text: scriptText, importedAt: Date.now(), source: { type: 'paste' } as any }, updatedAt: Date.now() } : ep,
+    )
+  } else {
+    next.script = { ...next.script, text: scriptText, importedAt: Date.now(), source: { type: 'paste' } as any }
+  }
+
+  next.title = analysis.title || next.title
+  next.logline = analysis.logline || next.logline
+
+  if (applyStyle && !next.style.locked) {
+    const presetId = normalizePresetId(analysis.styleSuggestion?.presetId)
+    const canApplyPreset = presetId && (!next.style.presetId || next.style.presetId === SHORT_DRAMA_STYLE_PRESETS[0].id)
+    if (canApplyPreset) next.style.presetId = presetId
+    if (!next.style.customText && analysis.styleSuggestion?.customText) next.style.customText = normalizeText(analysis.styleSuggestion.customText)
+    if (!next.style.negativeText && analysis.styleSuggestion?.negativeText) next.style.negativeText = normalizeText(analysis.styleSuggestion.negativeText)
+  }
+
+  const newCharacterIds: string[] = []
+  const activatedCharacterIds: string[] = []
+  const existingCharsByName = new Map<string, (typeof next.characters)[number]>()
+  for (const c of next.characters || []) existingCharsByName.set(String(c.name || '').trim(), c)
+  const mergedChars: typeof next.characters = []
+  for (const c of analysis.characters || []) {
+    const name = normalizeText((c as any)?.name)
+    if (!name) continue
+    const desc = normalizeText((c as any)?.description)
+    const existing = existingCharsByName.get(name)
+    if (existing) {
+      mergedChars.push({ ...existing, description: existing.description ? existing.description : desc })
+      activatedCharacterIds.push(existing.id)
+    } else {
+      const id = globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Math.random().toString(16).slice(2)}`
+      mergedChars.push({ id, name, description: desc, sheet: createEmptyImageSlot('角色设定图'), refs: [createEmptyImageSlot('参考图 1')], primaryRefSlotId: undefined })
+      newCharacterIds.push(id)
+      activatedCharacterIds.push(id)
+    }
+  }
+  for (const c of next.characters || []) {
+    const name = String(c.name || '').trim()
+    if (!name) continue
+    if (!mergedChars.some((x) => x.name === name)) mergedChars.push(c)
+  }
+  next.characters = mergedChars
+
+  const newSceneIds: string[] = []
+  const activatedSceneIds: string[] = []
+  const existingScenesByName = new Map<string, (typeof next.scenes)[number]>()
+  for (const s of next.scenes || []) existingScenesByName.set(String(s.name || '').trim(), s)
+  const mergedScenes: typeof next.scenes = []
+  for (const s of analysis.scenes || []) {
+    const name = normalizeText((s as any)?.name)
+    if (!name) continue
+    const desc = normalizeText((s as any)?.description)
+    const existing = existingScenesByName.get(name)
+    if (existing) {
+      mergedScenes.push({ ...existing, description: existing.description ? existing.description : desc })
+      activatedSceneIds.push(existing.id)
+    } else {
+      const id = globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Math.random().toString(16).slice(2)}`
+      mergedScenes.push({ id, name, description: desc, ref: createEmptyImageSlot('场景主参考'), refs: [] })
+      newSceneIds.push(id)
+      activatedSceneIds.push(id)
+    }
+  }
+  for (const s of next.scenes || []) {
+    const name = String(s.name || '').trim()
+    if (!name) continue
+    if (!mergedScenes.some((x) => x.name === name)) mergedScenes.push(s)
+  }
+  next.scenes = mergedScenes
+
+  const charIdByName = new Map(next.characters.map((c) => [String(c.name || '').trim(), c.id]))
+  const sceneIdByName = new Map(next.scenes.map((s) => [String(s.name || '').trim(), s.id]))
+
+  const newAssetIds: string[] = []
+  const activatedAssetIds: string[] = []
+  const validCategories = new Set<ShortDramaAssetCategory>(['weapon', 'prop', 'vehicle', 'accessory', 'item', 'other'])
+  const existingAssetsByName = new Map<string, (typeof next.assets)[number]>()
+  for (const a of next.assets || []) existingAssetsByName.set(String(a.name || '').trim(), a)
+  const mergedAssets: typeof next.assets = []
+  for (const a of analysis.assets || []) {
+    const name = normalizeText((a as any)?.name)
+    if (!name) continue
+    const desc = normalizeText((a as any)?.description)
+    const rawCategory = String((a as any)?.category || 'item').trim().toLowerCase()
+    const category: ShortDramaAssetCategory = validCategories.has(rawCategory as ShortDramaAssetCategory) ? (rawCategory as ShortDramaAssetCategory) : 'item'
+    const owners = Array.isArray((a as any)?.owners) ? (a as any).owners.map((x: any) => normalizeText(x)).filter(Boolean) : []
+    const existing = existingAssetsByName.get(name)
+    if (existing) {
+      mergedAssets.push({
+        ...existing,
+        description: existing.description ? existing.description : desc,
+        category: existing.category || category,
+        ownerCharacterIds: existing.ownerCharacterIds?.length ? existing.ownerCharacterIds : owners.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[],
+      })
+      activatedAssetIds.push(existing.id)
+    } else {
+      const asset = createEmptyAsset(name, desc, category)
+      asset.ownerCharacterIds = owners.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[]
+      mergedAssets.push(asset)
+      newAssetIds.push(asset.id)
+      activatedAssetIds.push(asset.id)
+    }
+  }
+  for (const a of next.assets || []) {
+    const name = String(a.name || '').trim()
+    if (!name) continue
+    if (!mergedAssets.some((x) => x.name === name)) mergedAssets.push(a)
+  }
+  next.assets = mergedAssets
+
+  const assetIdByName = new Map(next.assets.map((a) => [String(a.name || '').trim(), a.id]))
+
+  const existingShots = Array.isArray(next.shots) ? next.shots.slice() : []
+  const aiShots = Array.isArray(analysis.shots) ? analysis.shots : []
+  const mergedShots = existingShots.slice()
+
+  for (let i = 0; i < aiShots.length; i++) {
+    const ai = aiShots[i] as any
+    const title = normalizeText(ai?.title) || `镜头 ${i + 1}`
+    const beat = normalizeText(ai?.beat)
+    const sceneName = normalizeText(ai?.scene)
+    const charNames = Array.isArray(ai?.characters) ? ai.characters.map((x: any) => normalizeText(x)).filter(Boolean) : []
+    const assetNames = Array.isArray(ai?.assets) ? ai.assets.map((x: any) => normalizeText(x)).filter(Boolean) : []
+    const startPrompt = normalizeText(ai?.startPrompt)
+    const endPrompt = normalizeText(ai?.endPrompt)
+    const videoPrompt = normalizeText(ai?.videoPrompt)
+    const scriptExcerpt = normalizeText(ai?.scriptExcerpt)
+    const gridPrompts = Array.isArray(ai?.gridPrompts) ? ai.gridPrompts.map((x: any) => normalizeText(x)).filter(Boolean) : []
+
+    if (episodeId) {
+      // Episode mode: always append new shots, never merge by index with existing
+      const shot = createEmptyShot(title, episodeId)
+      shot.frameMode = defaultFrameMode
+      shot.beat = beat
+      shot.scriptExcerpt = scriptExcerpt
+      shot.videoPrompt = videoPrompt
+      shot.sceneId = sceneName && sceneIdByName.get(sceneName) ? sceneIdByName.get(sceneName) : undefined
+      shot.characterIds = charNames.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[]
+      shot.assetIds = assetNames.map((n: string) => assetIdByName.get(n)).filter(Boolean) as string[]
+      shot.frames.start.prompt = startPrompt
+      shot.frames.end.prompt = endPrompt
+      if (gridPrompts.length > 0) shot.gridPrompts = gridPrompts
+      mergedShots.push(shot)
+    } else {
+      const existing = mergedShots[i]
+      if (existing) {
+        const nextShot = { ...existing }
+        if (!nextShot.title || /^镜头\s+\d+$/.test(nextShot.title)) nextShot.title = title
+        if (!nextShot.beat && beat) nextShot.beat = beat
+        if (!nextShot.scriptExcerpt && scriptExcerpt) nextShot.scriptExcerpt = scriptExcerpt
+        if (!nextShot.videoPrompt && videoPrompt) nextShot.videoPrompt = videoPrompt
+        if (!nextShot.sceneId && sceneName && sceneIdByName.get(sceneName)) nextShot.sceneId = sceneIdByName.get(sceneName)
+        if ((!nextShot.characterIds || nextShot.characterIds.length === 0) && charNames.length > 0) {
+          nextShot.characterIds = charNames.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[]
+        }
+        if ((!nextShot.assetIds || nextShot.assetIds.length === 0) && assetNames.length > 0) {
+          nextShot.assetIds = assetNames.map((n: string) => assetIdByName.get(n)).filter(Boolean) as string[]
+        }
+        if (!nextShot.frames.start.prompt && startPrompt) nextShot.frames.start.prompt = startPrompt
+        if (!nextShot.frames.end.prompt && endPrompt) nextShot.frames.end.prompt = endPrompt
+        if ((!nextShot.gridPrompts || nextShot.gridPrompts.length === 0) && gridPrompts.length > 0) nextShot.gridPrompts = gridPrompts
+        if (nextShot.frameMode === 'first_last' && defaultFrameMode !== 'first_last') nextShot.frameMode = defaultFrameMode
+        mergedShots[i] = nextShot
+      } else {
+        const shot = createEmptyShot(title)
+        shot.frameMode = defaultFrameMode
+        shot.beat = beat
+        shot.scriptExcerpt = scriptExcerpt
+        shot.videoPrompt = videoPrompt
+        shot.sceneId = sceneName && sceneIdByName.get(sceneName) ? sceneIdByName.get(sceneName) : undefined
+        shot.characterIds = charNames.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[]
+        shot.assetIds = assetNames.map((n: string) => assetIdByName.get(n)).filter(Boolean) as string[]
+        shot.frames.start.prompt = startPrompt
+        shot.frames.end.prompt = endPrompt
+        if (gridPrompts.length > 0) shot.gridPrompts = gridPrompts
+        mergedShots.push(shot)
+      }
+    }
+  }
+
+  next.shots = mergedShots
+
+  // Update episode active lists if episodeId is set
+  if (episodeId) {
+    next.episodes = (next.episodes || []).map(ep => {
+      if (ep.id !== episodeId) return ep
+      return {
+        ...ep,
+        activeCharacterIds: [...new Set([...ep.activeCharacterIds, ...activatedCharacterIds])],
+        activeSceneIds: [...new Set([...ep.activeSceneIds, ...activatedSceneIds])],
+        activeAssetIds: [...new Set([...ep.activeAssetIds, ...activatedAssetIds])],
+        updatedAt: Date.now(),
+      }
+    })
+  }
+
+  next.updatedAt = Date.now()
+
+  return { draft: next, activatedCharacterIds, activatedSceneIds, activatedAssetIds, newCharacterIds, newSceneIds, newAssetIds }
 }
 
 export type ShortDramaScriptAnalysis = {
@@ -523,175 +744,62 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     shots: Array.isArray((parsed as any).shots) ? (parsed as any).shots : [],
   }
 
-  const next: ShortDramaDraftV2 = { ...opts.draft }
-  next.script = { ...next.script, text: script, importedAt: Date.now(), source: { type: 'paste' } as any }
-  next.title = analysis.title || next.title
-  next.logline = analysis.logline || next.logline
+  const { draft: mergedDraft } = mergeAnalysisIntoDraft(opts.draft, analysis, script, { defaultFrameMode })
 
-  // Apply style suggestion (only if not locked and user hasn't set custom fields)
-  if (!next.style.locked) {
-    const presetId = normalizePresetId(analysis.styleSuggestion?.presetId)
-    const canApplyPreset = presetId && (!next.style.presetId || next.style.presetId === SHORT_DRAMA_STYLE_PRESETS[0].id)
-    if (canApplyPreset) next.style.presetId = presetId
-    if (!next.style.customText && analysis.styleSuggestion?.customText) next.style.customText = normalizeText(analysis.styleSuggestion.customText)
-    if (!next.style.negativeText && analysis.styleSuggestion?.negativeText) next.style.negativeText = normalizeText(analysis.styleSuggestion.negativeText)
+  return { draft: mergedDraft, analysis, rawText }
+}
+
+export type EpisodeAnalysisResult = {
+  draft: ShortDramaDraftV2
+  analysis: ShortDramaScriptAnalysis
+  rawText: string
+  activatedCharacterIds: string[]
+  activatedSceneIds: string[]
+  activatedAssetIds: string[]
+  newCharacterIds: string[]
+  newSceneIds: string[]
+  newAssetIds: string[]
+}
+
+export async function analyzeEpisodeScript(opts: {
+  draft: ShortDramaDraftV2
+  episodeId: string
+  modelKey?: string
+  scriptText: string
+  videoModelInfo?: {
+    modelName?: string
+    duration?: number
+    supportsFirstLastFrame?: boolean
+    ratio?: string
   }
+}): Promise<EpisodeAnalysisResult> {
+  // Use the same AI call as analyzeShortDramaScriptToDraftV2 but pass it through
+  // a single merge with episodeId to avoid double work.
+  const result = await analyzeShortDramaScriptToDraftV2({
+    draft: opts.draft,
+    modelKey: opts.modelKey,
+    scriptText: opts.scriptText,
+    videoModelInfo: opts.videoModelInfo,
+  })
 
-  // Merge characters by name
-  const existingCharsByName = new Map<string, (typeof next.characters)[number]>()
-  for (const c of next.characters || []) existingCharsByName.set(String(c.name || '').trim(), c)
-  const mergedChars: typeof next.characters = []
-  for (const c of analysis.characters || []) {
-    const name = normalizeText((c as any)?.name)
-    if (!name) continue
-    const desc = normalizeText((c as any)?.description)
-    const existing = existingCharsByName.get(name)
-    if (existing) {
-      mergedChars.push({ ...existing, description: existing.description ? existing.description : desc })
-    } else {
-      mergedChars.push({
-        id: globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        name,
-        description: desc,
-        sheet: createEmptyImageSlot('角色设定图'),
-        refs: [createEmptyImageSlot('参考图 1')],
-        primaryRefSlotId: undefined,
-      })
-    }
+  // The base call already merged without episodeId. Re-merge from original draft
+  // with episodeId to get properly stamped shots and episode active lists.
+  const defaultFrameMode = opts.draft.models.defaultFrameMode || 'first_last'
+  const mergeResult = mergeAnalysisIntoDraft(opts.draft, result.analysis, opts.scriptText, {
+    episodeId: opts.episodeId,
+    defaultFrameMode,
+  })
+
+  return {
+    draft: mergeResult.draft,
+    analysis: result.analysis,
+    rawText: result.rawText,
+    activatedCharacterIds: mergeResult.activatedCharacterIds,
+    activatedSceneIds: mergeResult.activatedSceneIds,
+    activatedAssetIds: mergeResult.activatedAssetIds,
+    newCharacterIds: mergeResult.newCharacterIds,
+    newSceneIds: mergeResult.newSceneIds,
+    newAssetIds: mergeResult.newAssetIds,
   }
-  // Keep any pre-existing characters not mentioned (non-destructive)
-  for (const c of next.characters || []) {
-    const name = String(c.name || '').trim()
-    if (!name) continue
-    if (!mergedChars.some((x) => x.name === name)) mergedChars.push(c)
-  }
-  next.characters = mergedChars
-
-  // Merge scenes by name
-  const existingScenesByName = new Map<string, (typeof next.scenes)[number]>()
-  for (const s of next.scenes || []) existingScenesByName.set(String(s.name || '').trim(), s)
-  const mergedScenes: typeof next.scenes = []
-  for (const s of analysis.scenes || []) {
-    const name = normalizeText((s as any)?.name)
-    if (!name) continue
-    const desc = normalizeText((s as any)?.description)
-    const existing = existingScenesByName.get(name)
-    if (existing) {
-      mergedScenes.push({ ...existing, description: existing.description ? existing.description : desc })
-    } else {
-      mergedScenes.push({
-        id: globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        name,
-        description: desc,
-        ref: createEmptyImageSlot('场景主参考'),
-        refs: [],
-      })
-    }
-  }
-  for (const s of next.scenes || []) {
-    const name = String(s.name || '').trim()
-    if (!name) continue
-    if (!mergedScenes.some((x) => x.name === name)) mergedScenes.push(s)
-  }
-  next.scenes = mergedScenes
-
-  // Build lookup maps BEFORE using them
-  const charIdByName = new Map(next.characters.map((c) => [String(c.name || '').trim(), c.id]))
-  const sceneIdByName = new Map(next.scenes.map((s) => [String(s.name || '').trim(), s.id]))
-
-  // Merge assets by name
-  const validCategories = new Set<ShortDramaAssetCategory>(['weapon', 'prop', 'vehicle', 'accessory', 'item', 'other'])
-  const existingAssetsByName = new Map<string, (typeof next.assets)[number]>()
-  for (const a of next.assets || []) existingAssetsByName.set(String(a.name || '').trim(), a)
-  const mergedAssets: typeof next.assets = []
-  for (const a of analysis.assets || []) {
-    const name = normalizeText((a as any)?.name)
-    if (!name) continue
-    const desc = normalizeText((a as any)?.description)
-    const rawCategory = String((a as any)?.category || 'item').trim().toLowerCase()
-    const category: ShortDramaAssetCategory = validCategories.has(rawCategory as ShortDramaAssetCategory)
-      ? (rawCategory as ShortDramaAssetCategory)
-      : 'item'
-    const owners = Array.isArray((a as any)?.owners) ? (a as any).owners.map((x: any) => normalizeText(x)).filter(Boolean) : []
-    const existing = existingAssetsByName.get(name)
-    if (existing) {
-      mergedAssets.push({
-        ...existing,
-        description: existing.description ? existing.description : desc,
-        category: existing.category || category,
-        ownerCharacterIds: existing.ownerCharacterIds?.length ? existing.ownerCharacterIds : owners.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[]
-      })
-    } else {
-      const asset = createEmptyAsset(name, desc, category)
-      asset.ownerCharacterIds = owners.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[]
-      mergedAssets.push(asset)
-    }
-  }
-  for (const a of next.assets || []) {
-    const name = String(a.name || '').trim()
-    if (!name) continue
-    if (!mergedAssets.some((x) => x.name === name)) mergedAssets.push(a)
-  }
-  next.assets = mergedAssets
-
-  const assetIdByName = new Map(next.assets.map((a) => [String(a.name || '').trim(), a.id]))
-
-  // Merge shots by index (non-destructive for existing media slots)
-  const existingShots = Array.isArray(next.shots) ? next.shots.slice() : []
-  const aiShots = Array.isArray(analysis.shots) ? analysis.shots : []
-  const mergedShots = existingShots.slice()
-
-  for (let i = 0; i < aiShots.length; i++) {
-    const ai = aiShots[i] as any
-    const title = normalizeText(ai?.title) || `镜头 ${i + 1}`
-    const beat = normalizeText(ai?.beat)
-    const sceneName = normalizeText(ai?.scene)
-    const charNames = Array.isArray(ai?.characters) ? ai.characters.map((x: any) => normalizeText(x)).filter(Boolean) : []
-    const assetNames = Array.isArray(ai?.assets) ? ai.assets.map((x: any) => normalizeText(x)).filter(Boolean) : []
-    const startPrompt = normalizeText(ai?.startPrompt)
-    const endPrompt = normalizeText(ai?.endPrompt)
-    const videoPrompt = normalizeText(ai?.videoPrompt)
-    const scriptExcerpt = normalizeText(ai?.scriptExcerpt)
-    const gridPrompts = Array.isArray(ai?.gridPrompts) ? ai.gridPrompts.map((x: any) => normalizeText(x)).filter(Boolean) : []
-
-    const existing = mergedShots[i]
-    if (existing) {
-      const nextShot = { ...existing }
-      if (!nextShot.title || /^镜头\s+\d+$/.test(nextShot.title)) nextShot.title = title
-      if (!nextShot.beat && beat) nextShot.beat = beat
-      if (!nextShot.scriptExcerpt && scriptExcerpt) nextShot.scriptExcerpt = scriptExcerpt
-      if (!nextShot.videoPrompt && videoPrompt) nextShot.videoPrompt = videoPrompt
-      if (!nextShot.sceneId && sceneName && sceneIdByName.get(sceneName)) nextShot.sceneId = sceneIdByName.get(sceneName)
-      if ((!nextShot.characterIds || nextShot.characterIds.length === 0) && charNames.length > 0) {
-        nextShot.characterIds = charNames.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[]
-      }
-      if ((!nextShot.assetIds || nextShot.assetIds.length === 0) && assetNames.length > 0) {
-        nextShot.assetIds = assetNames.map((n: string) => assetIdByName.get(n)).filter(Boolean) as string[]
-      }
-      if (!nextShot.frames.start.prompt && startPrompt) nextShot.frames.start.prompt = startPrompt
-      if (!nextShot.frames.end.prompt && endPrompt) nextShot.frames.end.prompt = endPrompt
-      if ((!nextShot.gridPrompts || nextShot.gridPrompts.length === 0) && gridPrompts.length > 0) nextShot.gridPrompts = gridPrompts
-      if (nextShot.frameMode === 'first_last' && defaultFrameMode !== 'first_last') nextShot.frameMode = defaultFrameMode
-      mergedShots[i] = nextShot
-    } else {
-      const shot = createEmptyShot(title)
-      shot.frameMode = defaultFrameMode
-      shot.beat = beat
-      shot.scriptExcerpt = scriptExcerpt
-      shot.videoPrompt = videoPrompt
-      shot.sceneId = sceneName && sceneIdByName.get(sceneName) ? sceneIdByName.get(sceneName) : undefined
-      shot.characterIds = charNames.map((n: string) => charIdByName.get(n)).filter(Boolean) as string[]
-      shot.assetIds = assetNames.map((n: string) => assetIdByName.get(n)).filter(Boolean) as string[]
-      shot.frames.start.prompt = startPrompt
-      shot.frames.end.prompt = endPrompt
-      if (gridPrompts.length > 0) shot.gridPrompts = gridPrompts
-      mergedShots.push(shot)
-    }
-  }
-
-  next.shots = mergedShots
-  next.updatedAt = Date.now()
-
-  return { draft: next, analysis, rawText }
 }
 

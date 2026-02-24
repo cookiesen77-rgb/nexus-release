@@ -1,4 +1,4 @@
-import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, ShortDramaCreatedBy } from '@/lib/shortDrama/types'
+import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, ShortDramaCreatedBy, ShortDramaEpisode } from '@/lib/shortDrama/types'
 
 const patchSlot = (slot: ShortDramaMediaSlot, slotId: string, updater: (s: ShortDramaMediaSlot) => ShortDramaMediaSlot): ShortDramaMediaSlot => {
   if (!slot || slot.id !== slotId) return slot
@@ -99,3 +99,41 @@ export const removeVariantFromSlot = (draft: ShortDramaDraftV2, slotId: string, 
     return { ...slot, variants, selectedVariantId }
   })
 }
+
+// ---- Episode CRUD ----
+
+export const addEpisode = (draft: ShortDramaDraftV2, episode: ShortDramaEpisode): ShortDramaDraftV2 => ({
+  ...draft,
+  episodes: [...(draft.episodes || []), episode],
+  updatedAt: Date.now(),
+})
+
+export const updateEpisode = (
+  draft: ShortDramaDraftV2,
+  episodeId: string,
+  patch: Partial<ShortDramaEpisode>,
+): ShortDramaDraftV2 => ({
+  ...draft,
+  episodes: (draft.episodes || []).map((ep) =>
+    ep.id === episodeId ? { ...ep, ...patch, updatedAt: Date.now() } : ep,
+  ),
+  updatedAt: Date.now(),
+})
+
+export const removeEpisode = (draft: ShortDramaDraftV2, episodeId: string): ShortDramaDraftV2 => ({
+  ...draft,
+  episodes: (draft.episodes || []).filter((ep) => ep.id !== episodeId),
+  shots: draft.shots.map((s) => (s.episodeId === episodeId ? { ...s, episodeId: undefined } : s)),
+  updatedAt: Date.now(),
+})
+
+export const reorderEpisodes = (draft: ShortDramaDraftV2, orderedIds: string[]): ShortDramaDraftV2 => ({
+  ...draft,
+  episodes: orderedIds
+    .map((id, i) => {
+      const ep = (draft.episodes || []).find((e) => e.id === id)
+      return ep ? { ...ep, order: i } : null
+    })
+    .filter(Boolean) as ShortDramaEpisode[],
+  updatedAt: Date.now(),
+})
