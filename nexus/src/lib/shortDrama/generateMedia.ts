@@ -1289,6 +1289,12 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
     const sizeValue = String(modelCfg.defaultParams?.size || '768P')
     const durValue = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg.defaultParams?.duration || 10)
 
+    // 海螺全系列仅支持 6/10 秒；安全兜底到 durs 范围
+    const allowedDurs = (modelCfg.durs || []).map((d: any) => Number(d?.key ?? d))
+    const safeDurValue = allowedDurs.length > 0 && !allowedDurs.includes(durValue)
+      ? (allowedDurs.includes(6) ? 6 : allowedDurs[0] || durValue)
+      : durValue
+
     const firstRaw = String(images[0] || '').trim()
     const tailRaw = String(lastFrame || '').trim()
     let firstUrl = firstRaw ? await ensureHttpImage(firstRaw, '首帧') : ''
@@ -1311,7 +1317,7 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
     payload = {
       model: effectiveModel,
       prompt: prompt || '',
-      duration: durValue,
+      duration: safeDurValue,
     }
     // 图生视频 / 首尾帧视频：添加图片和额外参数
     if (firstUrl) {
@@ -1511,6 +1517,12 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
     }
   }
   if (!task) throw lastCreateErr || new Error('视频创建失败')
+
+  // 检测业务层错误（HTTP 200 但 base_resp.status_code !== 0）
+  if (task?.status === 'error' || (task?.base_resp && task.base_resp.status_code !== 0)) {
+    const errMsg = task?.base_resp?.status_msg || task?.message || task?.error || '未知错误'
+    throw new Error(`${modelCfg.label || modelCfg.key} 生成失败: ${errMsg}`)
+  }
 
   // alibailian-wan-video（DashScope 风格）：task_id 位于 output.task_id
   if (modelCfg.format === 'alibailian-wan-video') {
