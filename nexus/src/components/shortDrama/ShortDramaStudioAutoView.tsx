@@ -1042,6 +1042,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       window.$message?.error?.('请先导入/粘贴剧本')
       return
     }
+    const apiKey = String(localStorage.getItem('apiKey') || '').trim()
+    if (!apiKey) {
+      window.$message?.error?.('请先在设置中填写 API Key')
+      return
+    }
     setAnalysisBusy(true)
     setAnalysisError('')
     setAnalysisRaw('')
