@@ -2,7 +2,8 @@ import { CHAT_MODELS, DEFAULT_CHAT_MODEL } from '@/config/models'
 import { postJson } from '@/lib/workflow/request'
 import { SHORT_DRAMA_STYLE_PRESETS, getShortDramaStylePresetById } from '@/lib/shortDrama/stylePresets'
 import { createEmptyImageSlot, createEmptyShot, createEmptyAsset } from '@/lib/shortDrama/draftStorage'
-import type { ShortDramaDraftV2, ShortDramaAssetCategory, ShortDramaEpisode, ShotFrameMode } from '@/lib/shortDrama/types'
+import { extractViewpointsFromKeywords, convertToSceneViewpoints } from '@/lib/shortDrama/sceneViewpoints'
+import type { ShortDramaDraftV2, ShortDramaAssetCategory, ShortDramaEpisode, ShortDramaCharacterAnchors, ShortDramaCinematography, ShortDramaNarrativeFunction, ShotFrameMode } from '@/lib/shortDrama/types'
 import { SHOT_FRAME_MODES } from '@/lib/shortDrama/types'
 
 const DEFAULT_ANALYSIS_MODEL = 'gemini-3.1-pro-preview'
@@ -62,6 +63,7 @@ const extractTextFromResponses = (resp: any) => {
 const callChatModel = async (modelKey: string, messages: ChatMessage[]): Promise<string> => {
   const modelCfg = pickModel(modelKey)
   const format = String(modelCfg.format || '').trim()
+  console.log('[callChatModel]', { modelKey, resolvedKey: modelCfg.key, format, endpoint: String(modelCfg.endpoint || '').slice(0, 80) })
 
   // Gemini native chat
   if (format === 'gemini-chat') {
@@ -72,9 +74,16 @@ const callChatModel = async (modelKey: string, messages: ChatMessage[]): Promise
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
       }))
-    const payload: any = { contents }
+    const payload: any = {
+      contents,
+      generationConfig: { maxOutputTokens: 65536 },
+    }
     if (system) payload.systemInstruction = { parts: [{ text: system }] }
-    const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: 240000 })
+    const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: 480000 })
+    const finishReason = rsp?.candidates?.[0]?.finishReason
+    if (finishReason === 'MAX_TOKENS') {
+      console.warn('[callChatModel] Gemini 输出被截断 (finishReason: MAX_TOKENS)')
+    }
     const parts = rsp?.candidates?.[0]?.content?.parts || []
     const text = Array.isArray(parts) ? parts.map((p: any) => p?.text).filter(Boolean).join('') : ''
     return normalizeText(text)
@@ -94,7 +103,7 @@ const callChatModel = async (modelKey: string, messages: ChatMessage[]): Promise
     if (system) payload.system = system
     const rsp = await postJson<any>(modelCfg.endpoint, payload, {
       authMode: modelCfg.authMode,
-      timeoutMs: 300000,
+      timeoutMs: 480000,
       extraHeaders: { 'anthropic-version': '2023-06-01' },
     })
     if (rsp?.stop_reason === 'max_tokens') {
@@ -109,14 +118,14 @@ const callChatModel = async (modelKey: string, messages: ChatMessage[]): Promise
 
   // OpenAI Responses API
   if (format === 'openai-responses') {
-    const payload: any = { model: modelCfg.key, input: messages }
-    const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: 240000 })
+    const payload: any = { model: modelCfg.key, input: messages, max_output_tokens: 65536 }
+    const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: 480000 })
     return normalizeText(extractTextFromResponses(rsp))
   }
 
   // Default: OpenAI Chat Completions-like
   const payload: any = { model: modelCfg.key, messages, temperature: 0.3, max_tokens: 65536 }
-  const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: 240000 })
+  const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: 480000 })
   const content = rsp?.choices?.[0]?.message?.content
   if (typeof content === 'string') return normalizeText(content)
   if (Array.isArray(content)) return normalizeText(content.map((c: any) => c?.text || c).filter(Boolean).join(''))
@@ -245,11 +254,11 @@ function mergeAnalysisIntoDraft(
     const desc = normalizeText((c as any)?.description)
     const existing = existingCharsByName.get(name)
     if (existing) {
-      mergedChars.push({ ...existing, description: existing.description ? existing.description : desc })
+      mergedChars.push({ ...existing, description: existing.description ? existing.description : desc, anchors: existing.anchors || (c as any)?.anchors || undefined })
       activatedCharacterIds.push(existing.id)
     } else {
       const id = globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Math.random().toString(16).slice(2)}`
-      mergedChars.push({ id, name, description: desc, sheet: createEmptyImageSlot('角色设定图'), refs: [createEmptyImageSlot('参考图 1')], primaryRefSlotId: undefined })
+      mergedChars.push({ id, name, description: desc, sheet: createEmptyImageSlot('角色设定图'), refs: [createEmptyImageSlot('参考图 1')], primaryRefSlotId: undefined, anchors: (c as any)?.anchors || undefined })
       newCharacterIds.push(id)
       activatedCharacterIds.push(id)
     }
@@ -276,7 +285,8 @@ function mergeAnalysisIntoDraft(
       activatedSceneIds.push(existing.id)
     } else {
       const id = globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Math.random().toString(16).slice(2)}`
-      mergedScenes.push({ id, name, description: desc, ref: createEmptyImageSlot('场景主参考'), refs: [] })
+      const viewpoints = convertToSceneViewpoints(extractViewpointsFromKeywords(desc))
+      mergedScenes.push({ id, name, description: desc, ref: createEmptyImageSlot('场景主参考'), refs: [], viewpoints })
       newSceneIds.push(id)
       activatedSceneIds.push(id)
     }
@@ -346,9 +356,43 @@ function mergeAnalysisIntoDraft(
     const videoPrompt = normalizeText(ai?.videoPrompt)
     const scriptExcerpt = normalizeText(ai?.scriptExcerpt)
     const gridPrompts = Array.isArray(ai?.gridPrompts) ? ai.gridPrompts.map((x: any) => normalizeText(x)).filter(Boolean) : []
+    const dialogue = normalizeText(ai?.dialogue)
+    const dialogueCharacter = normalizeText(ai?.dialogueCharacter)
+    const narration = normalizeText(ai?.narration)
+    const aiCinematography = ai?.cinematography as ShortDramaCinematography | undefined
+
+    const buildAudioBlock = () => {
+      if (!dialogue && !narration) return undefined
+      return {
+        dialogue: dialogue || '',
+        dialogueCharacterId: dialogueCharacter ? charIdByName.get(dialogueCharacter) : undefined,
+        narration: narration || '',
+      }
+    }
+
+    const sanitizeCin = (raw: any): ShortDramaCinematography | undefined => {
+      if (!raw || typeof raw !== 'object') return undefined
+      const VALID_LIGHTING = new Set(['high_key', 'low_key', 'chiaroscuro', 'natural', 'neon', 'golden_hour', 'candlelight'])
+      const VALID_RIG = new Set(['tripod', 'steadicam', 'handheld', 'crane', 'drone', 'dolly', 'slider'])
+      const VALID_DOF = new Set(['ultra_shallow', 'shallow', 'moderate', 'deep'])
+      const VALID_SPEED = new Set(['normal', 'slow_mo', 'speed_up'])
+      const VALID_FUNC = new Set(['setup', 'escalation', 'climax', 'turn', 'transition', 'resolution'])
+      const VALID_SHOT_SIZE = new Set(['extreme_wide', 'wide', 'full', 'medium', 'close_up', 'extreme_close_up', 'insert'])
+      const VALID_CAM_MOVE = new Set(['static', 'pan_left', 'pan_right', 'tilt_up', 'tilt_down', 'dolly_in', 'dolly_out', 'tracking', 'orbit', 'push_in', 'pull_out'])
+      return {
+        lighting: VALID_LIGHTING.has(raw.lighting) ? raw.lighting : undefined,
+        cameraRig: VALID_RIG.has(raw.cameraRig) ? raw.cameraRig : undefined,
+        depthOfField: VALID_DOF.has(raw.depthOfField) ? raw.depthOfField : undefined,
+        atmosphere: Array.isArray(raw.atmosphere) ? raw.atmosphere.map((x: any) => String(x || '').trim()).filter(Boolean) : undefined,
+        speedRamp: VALID_SPEED.has(raw.speedRamp) ? raw.speedRamp : undefined,
+        narrativeFunction: VALID_FUNC.has(raw.narrativeFunction) ? raw.narrativeFunction as ShortDramaNarrativeFunction : undefined,
+        presetId: typeof raw.presetId === 'string' && raw.presetId ? raw.presetId : undefined,
+        shotSize: VALID_SHOT_SIZE.has(raw.shotSize) ? raw.shotSize : undefined,
+        cameraMovement: VALID_CAM_MOVE.has(raw.cameraMovement) ? raw.cameraMovement : undefined,
+      }
+    }
 
     if (episodeId) {
-      // Episode mode: always append new shots, never merge by index with existing
       const shot = createEmptyShot(title, episodeId)
       shot.frameMode = defaultFrameMode
       shot.beat = beat
@@ -360,6 +404,8 @@ function mergeAnalysisIntoDraft(
       shot.frames.start.prompt = startPrompt
       shot.frames.end.prompt = endPrompt
       if (gridPrompts.length > 0) shot.gridPrompts = gridPrompts
+      shot.audio = buildAudioBlock()
+      shot.cinematography = sanitizeCin(aiCinematography)
       mergedShots.push(shot)
     } else {
       const existing = mergedShots[i]
@@ -380,6 +426,8 @@ function mergeAnalysisIntoDraft(
         if (!nextShot.frames.end.prompt && endPrompt) nextShot.frames.end.prompt = endPrompt
         if ((!nextShot.gridPrompts || nextShot.gridPrompts.length === 0) && gridPrompts.length > 0) nextShot.gridPrompts = gridPrompts
         if (nextShot.frameMode === 'first_last' && defaultFrameMode !== 'first_last') nextShot.frameMode = defaultFrameMode
+        if (!nextShot.audio && (dialogue || narration)) nextShot.audio = buildAudioBlock()
+        if (!nextShot.cinematography) nextShot.cinematography = sanitizeCin(aiCinematography)
         mergedShots[i] = nextShot
       } else {
         const shot = createEmptyShot(title)
@@ -393,6 +441,8 @@ function mergeAnalysisIntoDraft(
         shot.frames.start.prompt = startPrompt
         shot.frames.end.prompt = endPrompt
         if (gridPrompts.length > 0) shot.gridPrompts = gridPrompts
+        shot.audio = buildAudioBlock()
+        shot.cinematography = sanitizeCin(aiCinematography)
         mergedShots.push(shot)
       }
     }
@@ -423,7 +473,11 @@ export type ShortDramaScriptAnalysis = {
   title?: string
   logline?: string
   styleSuggestion?: { presetId?: string; customText?: string; negativeText?: string }
-  characters?: { name: string; description: string }[]
+  characters?: {
+    name: string
+    description: string
+    anchors?: ShortDramaCharacterAnchors
+  }[]
   scenes?: { name: string; description: string }[]
   assets?: {
     name: string
@@ -442,6 +496,17 @@ export type ShortDramaScriptAnalysis = {
     endPrompt: string
     gridPrompts?: string[]
     videoPrompt?: string
+    dialogue?: string
+    dialogueCharacter?: string
+    narration?: string
+    cinematography?: {
+      lighting?: string
+      cameraRig?: string
+      depthOfField?: string
+      atmosphere?: string[]
+      speedRamp?: string
+      narrativeFunction?: string
+    }
   }[]
 }
 
@@ -507,7 +572,7 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     '  "title": "string",',
     '  "logline": "string",',
     '  "styleSuggestion": { "presetId": "string", "customText": "string", "negativeText": "string" },',
-    '  "characters": [{ "name": "string", "description": "string" }],',
+    '  "characters": [{ "name": "string", "description": "string", "anchors": { "facialStructure": "string", "facialFeatures": "string", "uniqueMarks": "string", "colorAnchors": "string", "skinTexture": "string", "hairStyle": "string" } }],',
     '  "scenes": [{ "name": "string", "description": "string" }],',
     '  "assets": [{',
     '    "name": "string",',
@@ -525,7 +590,18 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     '    "startPrompt": "string",',
     '    "endPrompt": "string",',
     '    "gridPrompts": ["string"],  // 宫格模式下每格的提示词（与frameMode对应的数量）',
-    '    "videoPrompt": "string"',
+    '    "videoPrompt": "string",',
+    '    "dialogue": "string  // 该镜头中角色台词（如有，从原文提取）",',
+    '    "dialogueCharacter": "string  // 说话角色的名称",',
+    '    "narration": "string  // 旁白文本（如需要旁白解说的镜头）",',
+    '    "cinematography": {',
+    '      "lighting": "high_key|low_key|chiaroscuro|natural|neon|golden_hour|candlelight",',
+    '      "cameraRig": "tripod|steadicam|handheld|crane|drone|dolly|slider",',
+    '      "depthOfField": "ultra_shallow|shallow|moderate|deep",',
+    '      "atmosphere": ["rain","fog","dust","sparks","snow","smoke"],',
+    '      "speedRamp": "normal|slow_mo|speed_up",',
+    '      "narrativeFunction": "setup|escalation|climax|turn|transition|resolution"',
+    '    }',
     '  }]',
     '}',
     '',
@@ -542,6 +618,31 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     '4. 服装造型：从上到下完整描述每件衣物（材质+颜色+款式），如"白色真丝衬衫+墨绿色高腰阔腿裤+黑色尖头高跟鞋"',
     '5. 固定配饰：眼镜、耳饰、项链、手表、戒指等，精确到材质和样式',
     '6. 气质标签：整体气质（冷艳/温柔/干练/忧郁/邪魅）、标志性微表情',
+    '',
+    '=== 角色身份锚点 (characters.anchors) — 保证跨镜头一致性的核心 ===',
+    '每个角色必须输出 anchors 对象，包含6个维度的精确描述，这些锚点在所有镜头中保持不变：',
+    '1. facialStructure: 脸型与骨骼结构（如"鹅蛋脸、高颧骨、尖下巴、窄额头"）',
+    '2. facialFeatures: 五官精确描述（如"大杏眼深棕瞳、柳叶眉、高挺鼻梁、薄唇微翘"）',
+    '3. uniqueMarks: 辨识度最高的标记（如"左眼角下方一颗小痣、右眉尾有浅疤"）— 这是一致性最强锚点',
+    '4. colorAnchors: 关键颜色（如"黑色瞳孔、栗棕色长发、象牙白肤色"）',
+    '5. skinTexture: 皮肤纹理（如"瓷感白皙肌肤、鼻翼两侧有轻微毛孔、浅浅的法令纹"）',
+    '6. hairStyle: 发型精确描述（如"齐腰黑色大波浪卷发、中分刘海、发尾微翘"）',
+    '',
+    '=== 台词与旁白提取 ===',
+    '从剧本中提取每个镜头的台词和旁白：',
+    '- dialogue: 角色说的台词原文（从剧本中逐字提取）',
+    '- dialogueCharacter: 说话角色的名称',
+    '- narration: 需要旁白解说的内容（仅在非对白叙事段落使用）',
+    '如果镜头没有台词则留空字符串。',
+    '',
+    '=== 电影参数 (cinematography) ===',
+    '为每个镜头标注专业电影参数，帮助后续精确控制画面风格：',
+    '- lighting: 灯光风格（从枚举中选择最合适的）',
+    '- cameraRig: 运镜设备（从枚举中选择）',
+    '- depthOfField: 景深风格',
+    '- atmosphere: 大气效果数组（可选多个，如 ["rain", "fog"]，没有则空数组 []）',
+    '- speedRamp: 速度变化',
+    '- narrativeFunction: 该镜头在叙事结构中的功能（setup=铺垫 / escalation=递进 / climax=高潮 / turn=转折 / transition=过渡 / resolution=收束）',
     '',
     '=== 场景描述规范 (scenes.description) ===',
     '必须包含全部维度，确保跨镜头场景一致性：',
@@ -575,19 +676,27 @@ export async function analyzeShortDramaScriptToDraftV2(opts: {
     '- grid_9: 生成 9 格提示词（3×3叙事网格，按从左到右、从上到下的阅读顺序）',
     '- grid_25: 生成 25 格提示词（5×5细粒度分镜）',
     '',
-    `【当前帧模式 — 必须严格遵守】：${defaultFrameMode}（${frameModeInfo?.label || ''}，每镜头 ${frameModeInfo?.count || 2} 张提示词）`,
+    `【当前帧模式 — 必须严格遵守】：${defaultFrameMode}（${frameModeInfo?.label || ''}，每镜头 ${frameModeInfo?.count || 2} 格提示词）`,
     defaultFrameMode === 'first_only'
       ? '所有镜头只需生成 startPrompt，endPrompt 留空字符串，gridPrompts 留空数组。'
       : defaultFrameMode === 'first_last'
         ? '所有镜头必须同时生成 startPrompt 和 endPrompt，gridPrompts 留空数组。'
-        : `所有镜头必须生成 gridPrompts 数组，长度严格等于 ${frameModeInfo?.count || 4}。startPrompt/endPrompt 可留空。每格提示词必须是完整的画面描述（至少120字中文）。`,
+        : [
+          `所有镜头必须生成 gridPrompts 数组，长度严格等于 ${frameModeInfo?.count || 4}。startPrompt/endPrompt 留空字符串。`,
+          `重要：这 ${frameModeInfo?.count || 4} 条提示词最终会被合并为一张 ${frameModeInfo?.cols || 2}×${frameModeInfo?.rows || 2} 宫格分镜图（单张图上排列多个画面格），不是独立的图片。`,
+          '每格提示词 60-80 字中文，描述该格的核心画面（景别、人物动作/表情、关键道具、光影氛围）。',
+          '不需要在每格重复画质关键词（masterpiece 等），整体合并时会统一添加。',
+        ].join('\n'),
     '',
     '宫格模式规则：',
-    '1. 每格提示词必须重复角色核心外貌特征（视觉锚点），确保一致性',
+    '1. 每格提示词必须包含角色核心外貌特征（视觉锚点），确保一致性',
     '2. 每格标注景别变化（从全景到特写的递进，或根据叙事需要调整）',
     '3. 同组宫格内光影方向、色温保持统一',
     '4. 格间动势衔接：前格结束状态与后格起始状态逻辑连续',
     '5. 四宫格结构：Panel 1(起) → Panel 2(承) → Panel 3(转) → Panel 4(合)',
+    defaultFrameMode.startsWith('grid_')
+      ? `6. videoPrompt 应描述镜头扫过/推拉这张 ${frameModeInfo?.cols || 2}×${frameModeInfo?.rows || 2} 宫格分镜图的运动方式（如：镜头从第一格缓缓平移到最后一格，或从全景推近到某一格的特写）`
+      : '',
     '',
     '### 帧提示词固定结构（每条必须严格按此顺序）：',
     '',

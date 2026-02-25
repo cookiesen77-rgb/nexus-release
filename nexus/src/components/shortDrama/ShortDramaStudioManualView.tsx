@@ -23,9 +23,9 @@ import { getShortDramaTaskQueue } from '@/lib/shortDrama/taskQueue'
 import ShortDramaMediaPickerModal, { type ShortDramaPickKind, type ShortDramaPickedMedia, type ShortDramaPickedImage } from '@/components/shortDrama/ShortDramaMediaPickerModal'
 import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, ShotFrameMode } from '@/lib/shortDrama/types'
 import { SHOT_FRAME_MODES } from '@/lib/shortDrama/types'
-import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1 } from '@/lib/shortDrama/uiPrefs'
+import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1, type ShortDramaPanelId, type ShortDramaScriptSubTab } from '@/lib/shortDrama/uiPrefs'
 import { cn } from '@/lib/utils'
-import { Check, Eye, Image as ImageIcon, Layers, Loader2, Plus, Sword, Trash2, Upload, Video as VideoIcon, X } from 'lucide-react'
+import { Check, CheckSquare, Eye, Image as ImageIcon, Layers, Loader2, Plus, Square, Sword, Trash2, Upload, Video as VideoIcon, Wand2, X } from 'lucide-react'
 import ShortDramaBlendPanel from '@/components/shortDrama/ShortDramaBlendPanel'
 import ShortDramaExportModal from '@/components/shortDrama/ShortDramaExportModal'
 import { createEmptyAsset } from '@/lib/shortDrama/draftStorage'
@@ -37,6 +37,7 @@ interface Props {
   prefs: ShortDramaStudioPrefsV1
   setPrefs: React.Dispatch<React.SetStateAction<ShortDramaStudioPrefsV1>>
   currentEpisodeId?: string | null
+  activePanel: ShortDramaPanelId
 }
 
 const SUPPORTED_VIDEO_FORMATS = new Set<string>([
@@ -229,7 +230,7 @@ function SlotVersions({
   )
 }
 
-export default function ShortDramaStudioManualView({ projectId, draft, setDraft, prefs, setPrefs, currentEpisodeId }: Props) {
+export default function ShortDramaStudioManualView({ projectId, draft, setDraft, prefs, setPrefs, currentEpisodeId, activePanel }: Props) {
   const navigate = useNavigate()
   const [previewOpen, setPreviewOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -242,6 +243,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
   const [busySlotIds, setBusySlotIds] = useState<Record<string, boolean>>({})
   const busySlotsRef = useRef(busySlotIds)
   busySlotsRef.current = busySlotIds
+
+  const [selectedShotIds, setSelectedShotIds] = useState<Set<string>>(new Set())
 
   const draftRef = useRef(draft)
   draftRef.current = draft
@@ -642,6 +645,23 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
     setBusySlotIds((prev) => ({ ...prev, [slotId]: busy }))
   }, [])
 
+  const toggleShotSelected = useCallback((shotId: string) => {
+    setSelectedShotIds(prev => {
+      const next = new Set(prev)
+      if (next.has(shotId)) next.delete(shotId)
+      else next.add(shotId)
+      return next
+    })
+  }, [])
+
+  const selectAllShots = useCallback(() => {
+    setSelectedShotIds(new Set(visibleShots.map(s => s.id)))
+  }, [visibleShots])
+
+  const deselectAllShots = useCallback(() => {
+    setSelectedShotIds(new Set())
+  }, [])
+
   const getSelectedVariant = useCallback((slot: ShortDramaMediaSlot) => {
     const id = slot.selectedVariantId
     return (slot.variants || []).find((v) => v.id === id) || null
@@ -828,6 +848,63 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
   )
 
 
+
+  const buildGridCombinedPrompt = useCallback(
+    (shotId: string) => {
+      const shot = draft.shots.find((s) => s.id === shotId)
+      if (!shot) return ''
+      const prompts = (shot.gridPrompts || []).map((p) => String(p || '').trim()).filter(Boolean)
+      if (prompts.length === 0) return ''
+
+      const style = buildEffectiveStyle(draft.style)
+      const preset = getShortDramaStylePresetById(draft.style.presetId)
+      const modeInfo = SHOT_FRAME_MODES.find((m) => m.value === shot.frameMode)
+      const cols = modeInfo?.cols || 2
+      const rows = modeInfo?.rows || 2
+      const count = modeInfo?.count || 4
+
+      const parts: string[] = []
+      if (draft.title) parts.push(`短剧标题：${draft.title}`)
+      const logline = String(draft.logline || '').trim()
+      if (logline) parts.push(`短剧梗概：\n${logline}`)
+      parts.push(`风格预设：${preset.name}\n${preset.description}`)
+      if (style.styleText) parts.push(`统一画风/镜头语言（必须严格遵守）：\n${style.styleText}`)
+      if (style.negativeText) parts.push(`全局负面约束（严格避免）：\n${style.negativeText}`)
+
+      if (shot.sceneId) {
+        const scene = draft.scenes.find((s) => s.id === shot.sceneId)
+        const sceneText = String(scene?.description || '').trim()
+        if (scene?.name || sceneText) parts.push(`场景：${String(scene?.name || '').trim()}\n${sceneText}`)
+      }
+
+      const chars = (shot.characterIds || [])
+        .map((id) => draft.characters.find((c) => c.id === id))
+        .filter(Boolean) as any[]
+      if (chars.length > 0) {
+        const charBlock = chars
+          .map((c) => `- ${String(c.name || '').trim()}\n${String(c.description || '').trim()}`.trim())
+          .join('\n\n')
+        parts.push(`出镜角色设定（保持同一张脸/发型/服装/体型的一致性）：\n${charBlock}`)
+      }
+
+      parts.push([
+        `构图硬性要求（必须严格遵守）：`,
+        `1. 在单张图上绘制 ${cols}×${rows} 宫格分镜（共 ${count} 格），用细黑色分隔线清晰划分每格，保持等大。`,
+        `2. 阅读顺序：从左到右、从上到下，第一行 ${cols} 格，第二行 ${cols} 格，依此类推。`,
+        '3. 每格是一个独立的叙事画面，角色外貌/服装/场景在各格之间保持一致。',
+        '4. 不要添加数字编号、文字标注、水印或任何 UI 元素。',
+        '5. 一致性：严格参考已上传的角色设定图、场景参考图，保持人物/场景外观一致。',
+      ].join('\n'))
+
+      const panelBlock = prompts.map((p, i) => `第${i + 1}格：${p}`).join('\n\n')
+      parts.push(`各格画面描述：\n${panelBlock}`)
+
+      parts.push('masterpiece, best quality, ultra-detailed, 8K resolution, cinematic lighting, professional manga/comic panel layout')
+
+      return parts.join('\n\n').trim()
+    },
+    [draft]
+  )
 
   const buildCharacterSheetPrompt = useCallback(
     (characterId: string) => {
@@ -1063,6 +1140,107 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
     ]
   )
 
+  const runGenerateGridImage = useCallback(
+    async (shotId: string) => {
+      const d = draftRef.current
+      const shot = d.shots.find((s) => s.id === shotId)
+      if (!shot) return
+      const slotId = shot.frames.start.slot.id
+      if (busySlotsRef.current[slotId]) return
+
+      const prompt = buildGridCombinedPrompt(shotId)
+      if (!prompt) {
+        window.$message?.error?.('请先填写宫格提示词')
+        return
+      }
+
+      const running: ShortDramaMediaVariant = {
+        id: makeId(),
+        kind: 'image',
+        status: 'running',
+        createdAt: Date.now(),
+        createdBy: 'manual',
+        modelKey: d.models.imageModelKey,
+        promptSnapshot: prompt,
+        styleSnapshot: { ...d.style },
+      }
+
+      setSlotBusy(slotId, true)
+      setDraft((prev) => appendVariantToSlot(prev, slotId, running))
+      try {
+        const refImages = await collectRefImagesForShot(shotId, 'start')
+        const task = queue.enqueue('image', slotId, async () => {
+          return await generateShortDramaImage({
+            modelKey: d.models.imageModelKey,
+            prompt,
+            size: d.models.imageSize,
+            quality: d.models.imageQuality,
+            refImages,
+          })
+        })
+        const result = await task.promise
+
+        const displayUrl = String(result.displayUrl || '').trim()
+        const sourceUrl = String(result.imageUrl || '').trim()
+        const safeSourceUrl = /^https?:\/\//i.test(sourceUrl) ? sourceUrl : ''
+        let mediaId: string | undefined
+        const isDisplayDataUrl = displayUrl.startsWith('data:')
+        const isSourceDataUrl = sourceUrl.startsWith('data:')
+        if (isDisplayDataUrl) {
+          mediaId = await saveMedia({
+            nodeId: `short_drama:${projectId}:slot:${slotId}:variant:${running.id}`,
+            projectId,
+            type: 'image',
+            data: displayUrl,
+            sourceUrl: safeSourceUrl && safeSourceUrl !== displayUrl ? safeSourceUrl : undefined,
+            model: draft.models.imageModelKey,
+          })
+        } else if (isSourceDataUrl) {
+          mediaId = await saveMedia({
+            nodeId: `short_drama:${projectId}:slot:${slotId}:variant:${running.id}`,
+            projectId,
+            type: 'image',
+            data: sourceUrl,
+            model: draft.models.imageModelKey,
+          })
+        }
+
+        setDraft((prev) =>
+          updateVariantInSlot(prev, slotId, running.id, {
+            status: 'success',
+            sourceUrl: safeSourceUrl || undefined,
+            displayUrl: isDisplayDataUrl && mediaId ? '' : displayUrl || undefined,
+            localPath: result.localPath || '',
+            mediaId,
+          })
+        )
+
+        useAssetsStore.getState().addAsset({
+          type: 'image',
+          src: safeSourceUrl || displayUrl,
+          title: `${shot.title || '镜头'} · 宫格图`.slice(0, 80),
+          model: draft.models.imageModelKey,
+        })
+
+        window.$message?.success?.('宫格图已生成（新增版本）')
+      } catch (err: any) {
+        const msg = err instanceof Error ? err.message : String(err || '生成失败')
+        setDraft((prev) => updateVariantInSlot(prev, slotId, running.id, { status: 'error', error: msg }))
+        window.$message?.error?.(msg)
+      } finally {
+        setSlotBusy(slotId, false)
+      }
+    },
+    [
+      projectId,
+      buildGridCombinedPrompt,
+      collectRefImagesForShot,
+      queue,
+      setDraft,
+      setSlotBusy,
+    ]
+  )
+
   const runGenerateShotVideo = useCallback(
     async (shotId: string) => {
       const d = draftRef.current
@@ -1139,6 +1317,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             sourceUrl: result.videoUrl,
             displayUrl: result.displayUrl,
             localPath: result.localPath || '',
+            durationMs: result.durationMs,
           })
         )
 
@@ -1160,6 +1339,50 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
     },
     [buildFramePrompt, getPreferredVariant, resolveVariantInput, queue, setDraft, setSlotBusy]
   )
+
+  const runBatchGenerateSelectedImages = useCallback(async () => {
+    const ids = [...selectedShotIds]
+    if (ids.length === 0) return
+    let count = 0
+    for (const shotId of ids) {
+      const shot = draftRef.current.shots.find(s => s.id === shotId)
+      if (!shot) continue
+      const slot = shot.frames.start.slot
+      const existing = getPreferredVariant(slot)
+      if (existing?.status === 'success') continue
+      if (busySlotsRef.current[slot.id]) continue
+      runGenerateFrameImage(shotId, 'start').catch(() => {})
+      count++
+    }
+    if (count > 0) window.$message?.info?.(`已将 ${count} 个图片任务加入队列`)
+  }, [selectedShotIds, getPreferredVariant, runGenerateFrameImage])
+
+  const runBatchGenerateSelectedVideos = useCallback(async () => {
+    const ids = [...selectedShotIds]
+    if (ids.length === 0) return
+    let count = 0
+    for (const shotId of ids) {
+      const shot = draftRef.current.shots.find(s => s.id === shotId)
+      if (!shot) continue
+      const startV = getPreferredVariant(shot.frames.start.slot)
+      if (!startV || startV.status !== 'success') continue
+      if (busySlotsRef.current[shot.video.id]) continue
+      runGenerateShotVideo(shotId).catch(() => {})
+      count++
+    }
+    if (count > 0) window.$message?.info?.(`已将 ${count} 个视频任务加入队列`)
+  }, [selectedShotIds, getPreferredVariant, runGenerateShotVideo])
+
+  const removeSelectedShots = useCallback(() => {
+    if (selectedShotIds.size === 0) return
+    if (!window.confirm(`确定要删除选中的 ${selectedShotIds.size} 个镜头吗？`)) return
+    setDraft(prev => ({
+      ...prev,
+      shots: prev.shots.filter(s => !selectedShotIds.has(s.id)),
+      updatedAt: Date.now(),
+    }))
+    setSelectedShotIds(new Set())
+  }, [selectedShotIds, setDraft])
 
   const uploadToImageSlot = useCallback(
     async (slotId: string, file: File) => {
@@ -1368,18 +1591,26 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
   const imageConcurrency = prefs.imageConcurrency
   const videoConcurrency = prefs.videoConcurrency
 
+  const scriptSubTab: ShortDramaScriptSubTab = prefs.scriptSubTab || 'import'
+  const setScriptSubTab = useCallback((tab: ShortDramaScriptSubTab) => {
+    setPrefs(p => ({ ...p, scriptSubTab: tab }))
+  }, [setPrefs])
+
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col gap-4 lg:flex-row">
-        {/* Left column (30%): top settings + bottom character/scene */}
-        <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-[0_0_30%] lg:min-w-[360px] lg:max-w-[520px]">
-          <div className="flex min-h-0 flex-[0_0_42%] flex-col">
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">项目 / 风格 / 模型</div>
+      <div className="h-full min-h-0 flex flex-col">
+        {activePanel === 'script' && (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex items-center gap-1 px-1 pb-3 shrink-0">
+              <button type="button" className={cn('rounded-md px-3 py-1.5 text-xs transition-colors', scriptSubTab === 'import' ? 'bg-blue-500/10 text-blue-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]')} onClick={() => setScriptSubTab('import')}>
+                项目信息 + 剧本
+              </button>
+              <button type="button" className={cn('rounded-md px-3 py-1.5 text-xs transition-colors', scriptSubTab === 'ai' ? 'bg-blue-500/10 text-blue-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]')} onClick={() => setScriptSubTab('ai')}>
+                画风 + 模型
+              </button>
             </div>
-            <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
-              {/* Left: meta + style + models */}
-              <div className="space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+              {scriptSubTab === 'import' && (
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
           <div className="text-sm font-semibold text-[var(--text-primary)]">项目信息</div>
           <div className="mt-3 space-y-3">
@@ -1412,7 +1643,8 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             </div>
           </div>
         </div>
-
+              )}
+              {scriptSubTab === 'ai' && (<>
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold text-[var(--text-primary)]">画风与统一要求</div>
@@ -1654,20 +1886,21 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             <div className="text-xs text-[var(--text-secondary)]">并发已生效（自动/手动通用，队列会自动升降并发以抵御限流）。</div>
           </div>
         </div>
-              </div>
+              </>)}
             </div>
           </div>
+        )}
 
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center justify-between">
+        {activePanel === 'assets' && (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex items-center justify-between px-1 pb-3 shrink-0">
               <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">角色 / 场景 / 资产</div>
               <Button size="sm" variant="ghost" className="gap-1" onClick={() => setBlendPanelOpen(true)}>
                 <Layers className="h-4 w-4" />
                 融图
               </Button>
             </div>
-            <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
-              <div className="space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold text-[var(--text-primary)]">角色库</div>
@@ -2226,13 +2459,12 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             })}
           </div>
         </div>
-              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Right column (70%): shots */}
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1 space-y-4">
+        {activePanel === 'shots' && (
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-[var(--text-primary)]">镜头列表</div>
@@ -2246,8 +2478,39 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
           <Button size="sm" variant="secondary" onClick={() => setExportOpen(true)} className="gap-1">
             批量导出
           </Button>
+          <button
+            type="button"
+            onClick={selectedShotIds.size === visibleShots.length ? deselectAllShots : selectAllShots}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            {selectedShotIds.size === visibleShots.length && visibleShots.length > 0
+              ? <><CheckSquare className="h-3.5 w-3.5" />取消全选</>
+              : <><Square className="h-3.5 w-3.5" />全选</>
+            }
+          </button>
           </div>
         </div>
+
+        {/* Batch actions toolbar */}
+        {selectedShotIds.size > 0 && (
+          <div className="flex items-center gap-2 rounded-xl border border-[var(--accent-color)]/20 bg-[var(--accent-color)]/5 px-4 py-2">
+            <span className="text-xs font-medium text-[var(--accent-color)]">已选 {selectedShotIds.size} 个镜头</span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={runBatchGenerateSelectedImages} className="gap-1 text-xs">
+                <Wand2 className="h-3.5 w-3.5" />
+                批量生成图片
+              </Button>
+              <Button size="sm" variant="secondary" onClick={runBatchGenerateSelectedVideos} className="gap-1 text-xs">
+                <VideoIcon className="h-3.5 w-3.5" />
+                批量生成视频
+              </Button>
+              <Button size="sm" variant="ghost" onClick={removeSelectedShots} className="gap-1 text-xs text-red-500">
+                <Trash2 className="h-3.5 w-3.5" />
+                删除选中
+              </Button>
+            </div>
+          </div>
+        )}
 
         {visibleShots.length === 0 ? (
           <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-6 text-sm text-[var(--text-secondary)]">
@@ -2270,8 +2533,21 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
             const videoBusy = !!busySlotIds[videoSlot.id]
 
             return (
-              <div key={shot.id} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
+              <div key={shot.id} className={cn(
+                'rounded-xl border bg-[var(--bg-primary)] p-4',
+                selectedShotIds.has(shot.id) ? 'border-[var(--accent-color)]/40' : 'border-[var(--border-color)]',
+              )}>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleShotSelected(shot.id)}
+                    className="shrink-0 text-[var(--text-secondary)] hover:text-[var(--accent-color)] transition-colors"
+                  >
+                    {selectedShotIds.has(shot.id)
+                      ? <CheckSquare className="h-4 w-4 text-[var(--accent-color)]" />
+                      : <Square className="h-4 w-4" />
+                    }
+                  </button>
                   <input
                     value={shot.title}
                     onChange={(e) => updateShot(shot.id, { title: e.target.value })}
@@ -2425,7 +2701,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                 )}
 
                 {(shot.frameMode === 'grid_4' || shot.frameMode === 'grid_6' || shot.frameMode === 'grid_9' || shot.frameMode === 'grid_25') && (
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 space-y-3">
                     <div className="text-xs font-medium text-[var(--text-secondary)]">宫格提示词</div>
                     <div className={cn('grid gap-2',
                       shot.frameMode === 'grid_4' ? 'grid-cols-2' :
@@ -2446,6 +2722,48 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
                           className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-2 py-1 text-[10px] resize-none focus:border-[var(--accent-color)] focus:outline-none"
                         />
                       ))}
+                    </div>
+
+                    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-semibold text-[var(--text-primary)]">宫格图版本</div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1"
+                            disabled={!!busySlotIds[shot.frames.start.slot.id]}
+                            onClick={() => void runGenerateGridImage(shot.id)}
+                          >
+                            {busySlotIds[shot.frames.start.slot.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
+                            生成宫格图
+                          </Button>
+                        </div>
+                      </div>
+                      {(() => {
+                        const gridSlot = shot.frames.start.slot
+                        const gridSelected = gridSlot.variants.find((v) => v.id === gridSlot.selectedVariantId) || gridSlot.variants.filter((v) => v.status === 'success').slice(-1)[0]
+                        return <>
+                          {gridSelected ? (
+                            <div className="mt-2">
+                              <button type="button" className="w-full" onClick={() => void openPreview(gridSelected)} title="预览">
+                                <VariantThumb variant={gridSelected} className="h-28 w-full" />
+                              </button>
+                            </div>
+                          ) : null}
+                          <div className="mt-2">
+                            <SlotVersions
+                              slot={gridSlot}
+                              onAdopt={(vid) => adoptVariant(gridSlot.id, vid)}
+                              onClearAdopt={() => clearAdoptVariant(gridSlot.id)}
+                              onRemove={(vid) => removeVariant(gridSlot.id, vid)}
+                              onPreview={(v) => void openPreview(v)}
+                              onSendToCanvas={(slot, v) => void sendVariantToCanvas(slot, v)}
+                              disabled={!!busySlotIds[gridSlot.id]}
+                            />
+                          </div>
+                        </>
+                      })()}
                     </div>
                   </div>
                 )}
@@ -2701,6 +3019,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
           })}
         </div>
       </div>
+        )}
       </div>
 
       <ShortDramaMediaPickerModal

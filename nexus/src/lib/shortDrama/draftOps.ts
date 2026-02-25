@@ -23,11 +23,13 @@ export const updateSlotById = (
       ...c,
       sheet: upd(c.sheet),
       refs: c.refs.map(upd),
+      ...(c.costumes ? { costumes: c.costumes.map((cv) => (cv.ref ? { ...cv, ref: upd(cv.ref) } : cv)) } : {}),
     })),
     scenes: draft.scenes.map((s) => ({
       ...s,
       ref: upd(s.ref),
       refs: Array.isArray(s.refs) ? s.refs.map(upd) : s.refs,
+      ...(s.viewpoints ? { viewpoints: s.viewpoints.map((vp) => ({ ...vp, ref: upd(vp.ref) })) } : {}),
     })),
     assets: (draft.assets || []).map((a) => ({
       ...a,
@@ -41,6 +43,9 @@ export const updateSlotById = (
         end: { ...sh.frames.end, slot: upd(sh.frames.end.slot) },
       },
       video: upd(sh.video),
+      ...(sh.gridSlot ? { gridSlot: upd(sh.gridSlot) } : {}),
+      ...(sh.dialogueSlot ? { dialogueSlot: upd(sh.dialogueSlot) } : {}),
+      ...(sh.narrationSlot ? { narrationSlot: upd(sh.narrationSlot) } : {}),
     })),
     updatedAt: Date.now(),
   }
@@ -63,6 +68,7 @@ const shouldAutoSelect = (slot: ShortDramaMediaSlot, createdBy: ShortDramaCreate
 
   // Auto mode: do not auto-adopt keyframes or videos. User should decide.
   if (slot.kind === 'video') return false
+  if (slot.kind === 'audio') return true
   const label = String(slot.label || '')
   if (/首帧|尾帧/.test(label)) return false
   return true
@@ -97,6 +103,21 @@ export const removeVariantFromSlot = (draft: ShortDramaDraftV2, slotId: string, 
     const variants = (slot.variants || []).filter((v) => v.id !== variantId)
     const selectedVariantId = slot.selectedVariantId === variantId ? variants[variants.length - 1]?.id : slot.selectedVariantId
     return { ...slot, variants, selectedVariantId }
+  })
+}
+
+export const resetVariantForRetry = (
+  draft: ShortDramaDraftV2,
+  slotId: string,
+  variantId: string,
+): ShortDramaDraftV2 => {
+  return updateSlotById(draft, slotId, (slot) => {
+    const variants = (slot.variants || []).map((v) =>
+      v.id === variantId
+        ? { ...v, status: 'running' as const, error: undefined, createdAt: Date.now() }
+        : v,
+    )
+    return { ...slot, variants }
   })
 }
 

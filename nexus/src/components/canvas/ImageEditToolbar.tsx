@@ -96,7 +96,8 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
     cropArea?: CropAreaPx,
     maskBase64?: string,
     model?: string,
-    resolution?: string
+    resolution?: string,
+    aspectRatio?: string
   ) => {
     setLoading(true)
     setProgress('准备中...')
@@ -132,7 +133,7 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
           break
         case 'erase':
           if (maskBase64) {
-            await eraseWithMask({ ...options, maskBase64, model, resolution })
+            await eraseWithMask({ ...options, maskBase64, model, resolution, aspectRatio })
           } else {
             throw new Error('请绘制要擦除的区域')
           }
@@ -140,7 +141,7 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
           break
         case 'inpaint':
           if (!maskBase64) throw new Error('请绘制蒙版区域')
-          await inpaintImage({ ...options, maskBase64, userInput, model, resolution })
+          await inpaintImage({ ...options, maskBase64, userInput, model, resolution, aspectRatio })
           window.$message?.success?.('重绘完成')
           break
         case 'grid4':
@@ -185,9 +186,9 @@ export default memo(function ImageEditToolbar({ nodeId, imageUrl, visible, onBus
     setCurrentAction(null)
   }, [])
 
-  const handleMaskEditorConfirm = useCallback((maskBase64: string, prompt?: string, model?: string, resolution?: string) => {
+  const handleMaskEditorConfirm = useCallback((maskBase64: string, prompt?: string, model?: string, resolution?: string, aspectRatio?: string) => {
     if (!currentAction) return
-    executeAction(currentAction, prompt || '', undefined, maskBase64, model, resolution)
+    executeAction(currentAction, prompt || '', undefined, maskBase64, model, resolution, aspectRatio)
   }, [currentAction, executeAction])
 
   const handleMaskEditorClose = useCallback(() => {

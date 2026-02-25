@@ -9,7 +9,7 @@ import { analyzeShortDramaScriptToDraftV2, analyzeEpisodeScript } from '@/lib/sh
 import { getShortDramaTaskQueue } from '@/lib/shortDrama/taskQueue'
 import { buildEffectiveStyle, getShortDramaStylePresetById, SHORT_DRAMA_STYLE_PRESETS } from '@/lib/shortDrama/stylePresets'
 import { generateShortDramaImage, generateShortDramaVideo } from '@/lib/shortDrama/generateMedia'
-import { appendVariantToSlot, clearSlotSelectedVariant, removeVariantFromSlot, setSlotSelectionLocked, setSlotSelectedVariant, updateSlotById, updateVariantInSlot } from '@/lib/shortDrama/draftOps'
+import { appendVariantToSlot, clearSlotSelectedVariant, removeVariantFromSlot, resetVariantForRetry, setSlotSelectionLocked, setSlotSelectedVariant, updateSlotById, updateVariantInSlot } from '@/lib/shortDrama/draftOps'
 import { saveShortDramaDraftV2, createEmptyAsset } from '@/lib/shortDrama/draftStorage'
 import { getMedia, saveMedia } from '@/lib/mediaStorage'
 import { resolveCachedMediaUrl } from '@/lib/workflow/cache'
@@ -20,10 +20,11 @@ import ShortDramaMediaPickerModal, { type ShortDramaPickKind, type ShortDramaPic
 import { ShortDramaSlotVersions, ShortDramaVariantThumb } from '@/components/shortDrama/ShortDramaSlotVersions'
 import ShortDramaBlendPanel from '@/components/shortDrama/ShortDramaBlendPanel'
 import ShortDramaExportModal from '@/components/shortDrama/ShortDramaExportModal'
-import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, ShotFrameMode } from '@/lib/shortDrama/types'
+import ShortDramaProgressDashboard from '@/components/shortDrama/ShortDramaProgressDashboard'
+import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, ShortDramaNarrativeFunction, ShotFrameMode } from '@/lib/shortDrama/types'
 import { SHOT_FRAME_MODES } from '@/lib/shortDrama/types'
-import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1 } from '@/lib/shortDrama/uiPrefs'
-import { Download, FileText, Loader2, Upload, Video as VideoIcon, Wand2, Sword, Layers } from 'lucide-react'
+import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1, type ShortDramaPanelId, type ShortDramaScriptSubTab } from '@/lib/shortDrama/uiPrefs'
+import { Download, FileText, Loader2, Upload, Video as VideoIcon, Wand2, Sword, Layers, Mic, Camera, ChevronDown, ChevronRight } from 'lucide-react'
 
 interface Props {
   projectId: string
@@ -32,6 +33,7 @@ interface Props {
   prefs: ShortDramaStudioPrefsV1
   setPrefs: React.Dispatch<React.SetStateAction<ShortDramaStudioPrefsV1>>
   currentEpisodeId?: string | null
+  activePanel: ShortDramaPanelId
 }
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `sd_${Date.now()}_${Math.random().toString(16).slice(2)}`
@@ -64,6 +66,24 @@ const SUPPORTED_VIDEO_FORMATS = new Set<string>([
 ])
 
 const getModelLabel = (m: any) => String(m?.label || m?.key || '')
+
+const NARRATIVE_FUNCTION_COLORS: Record<ShortDramaNarrativeFunction, string> = {
+  setup: 'bg-blue-500',
+  escalation: 'bg-amber-500',
+  climax: 'bg-red-500',
+  turn: 'bg-purple-500',
+  transition: 'bg-gray-400',
+  resolution: 'bg-green-500',
+}
+
+const NARRATIVE_FUNCTION_LABELS: Record<ShortDramaNarrativeFunction, string> = {
+  setup: '铺垫',
+  escalation: '升级',
+  climax: '高潮',
+  turn: '转折',
+  transition: '过渡',
+  resolution: '收束',
+}
 
 const getImageModels = () =>
   (IMAGE_MODELS as any[]).map((m) => ({ key: String(m?.key || ''), label: getModelLabel(m) })).filter((m) => m.key)
@@ -98,7 +118,7 @@ const buildVideoImages = (startInput: string, endInput: string, refs: string[]) 
   return out
 }
 
-export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, prefs, setPrefs, currentEpisodeId }: Props) {
+export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, prefs, setPrefs, currentEpisodeId, activePanel }: Props) {
   const navigate = useNavigate()
   const queue = useMemo(() => getShortDramaTaskQueue(projectId), [projectId])
   useEffect(() => {
@@ -203,6 +223,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   const [blendPanelOpen, setBlendPanelOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
 
+  const scriptSubTab: ShortDramaScriptSubTab = prefs.scriptSubTab || 'import'
+  const setScriptSubTab = useCallback((tab: ShortDramaScriptSubTab) => {
+    setPrefs(p => ({ ...p, scriptSubTab: tab }))
+  }, [setPrefs])
+
   type PickerTarget = { slotId: string; label?: string }
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerInitialTab, setPickerInitialTab] = useState<'history' | 'canvas'>('history')
@@ -216,6 +241,9 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   const busySlotsRef = useRef(busySlotIds)
   busySlotsRef.current = busySlotIds
 
+  const [expandedAudio, setExpandedAudio] = useState<Record<string, boolean>>({})
+  const [expandedCinema, setExpandedCinema] = useState<Record<string, boolean>>({})
+
   const draftRef = useRef(draft)
   draftRef.current = draft
 
@@ -224,6 +252,11 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     if (!currentEpisodeId) return draft.shots
     return draft.shots.filter(s => s.episodeId === currentEpisodeId)
   }, [draft.shots, currentEpisodeId])
+
+  const resolveCharacterName = useCallback((charId: string | undefined) => {
+    if (!charId) return undefined
+    return draft.characters.find(c => c.id === charId)?.name
+  }, [draft.characters])
 
   const currentEpisode = useMemo(() =>
     currentEpisodeId ? (draft.episodes || []).find(e => e.id === currentEpisodeId) : undefined,
@@ -1006,6 +1039,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
             sourceUrl: result.videoUrl,
             displayUrl: result.displayUrl,
             localPath: result.localPath || '',
+            durationMs: result.durationMs,
           })
           if (createdBy === 'manual') {
             next = updateSlotById(next, slotId, (slot) => ({ ...slot, selectedVariantId: running.id }))
@@ -1047,30 +1081,33 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       window.$message?.error?.('请先在设置中填写 API Key')
       return
     }
+    const modelKey = draft.models.analysisModelKey
+    console.log('[runAnalysis] 开始拆解', { scriptLen: script.length, modelKey, episodeId: currentEpisodeId || '(全局)', isTauri })
     setAnalysisBusy(true)
     setAnalysisError('')
     setAnalysisRaw('')
+    const t0 = Date.now()
     try {
       let resDraft: ShortDramaDraftV2
       let rawText: string
       if (currentEpisodeId) {
-        const res = await analyzeEpisodeScript({ draft, episodeId: currentEpisodeId, scriptText: script, modelKey: draft.models.analysisModelKey })
+        const res = await analyzeEpisodeScript({ draft, episodeId: currentEpisodeId, scriptText: script, modelKey })
         resDraft = res.draft
         rawText = res.rawText
       } else {
-        const res = await analyzeShortDramaScriptToDraftV2({ draft, scriptText: script, modelKey: draft.models.analysisModelKey })
+        const res = await analyzeShortDramaScriptToDraftV2({ draft, scriptText: script, modelKey })
         resDraft = res.draft
         rawText = res.rawText
       }
+      console.log('[runAnalysis] 拆解完成', { elapsed: ((Date.now() - t0) / 1000).toFixed(1) + 's', rawLen: rawText.length })
       setAnalysisRaw(rawText)
       setDraft(resDraft)
       saveShortDramaDraftV2(projectId, resDraft)
       window.$message?.success?.('剧本分析完成')
-      // 解析后：先自动生成“角色设定图 + 场景参考图”（一致性素材）。
-      // 关键帧（首/尾）与视频必须由用户手动点击按钮触发（避免未确认一致性就开跑）。
       autoPipelineRef.current = true
       setAutoPipelineToken((x) => x + 1)
     } catch (err: any) {
+      console.error('[runAnalysis] 拆解失败', { elapsed: ((Date.now() - t0) / 1000).toFixed(1) + 's', error: err?.message || err })
       const raw = typeof err?.rawText === 'string' ? String(err.rawText) : ''
       if (raw) setAnalysisRaw(raw)
       const msg = err instanceof Error ? err.message : String(err || '分析失败')
@@ -1145,16 +1182,19 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     })()
   }, [autoPipelineToken, runBatchGenerateCoreRefs])
 
-  const buildGridPanelPrompt = useCallback(
-    (shotId: string, panelIndex: number) => {
+  const buildGridCombinedPrompt = useCallback(
+    (shotId: string) => {
       const shot = draft.shots.find((s) => s.id === shotId)
       if (!shot) return ''
-      const panelPrompt = (shot.gridPrompts || [])[panelIndex] || ''
-      if (!panelPrompt) return ''
+      const prompts = (shot.gridPrompts || []).map((p) => String(p || '').trim()).filter(Boolean)
+      if (prompts.length === 0) return ''
 
       const style = buildEffectiveStyle(draft.style)
       const preset = getShortDramaStylePresetById(draft.style.presetId)
       const modeInfo = SHOT_FRAME_MODES.find((m) => m.value === shot.frameMode)
+      const cols = modeInfo?.cols || 2
+      const rows = modeInfo?.rows || 2
+      const count = modeInfo?.count || 4
 
       const parts: string[] = []
       if (draft.title) parts.push(`短剧标题：${draft.title}`)
@@ -1180,14 +1220,19 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
       }
 
       parts.push([
-        '构图硬性要求（必须严格遵守）：',
-        '1. 整张图只能包含「一个连续的单一场景」，严禁分屏、拼图、多格漫画、上下/左右分割、画中画等多场景构图。',
-        '2. 画面必须像电影截图/剧照一样，只有一个统一的视角和景深。',
-        '3. 不要出现黑色分隔线、边框、文字标签、水印或任何 UI 元素。',
-        '4. 一致性：严格参考已上传的角色设定图、场景参考图、资产参考图，保持人物/场景/资产外观一致，不要随意更换。',
+        `构图硬性要求（必须严格遵守）：`,
+        `1. 在单张图上绘制 ${cols}×${rows} 宫格分镜（共 ${count} 格），用细黑色分隔线清晰划分每格，保持等大。`,
+        `2. 阅读顺序：从左到右、从上到下，第一行 ${cols} 格，第二行 ${cols} 格，依此类推。`,
+        '3. 每格是一个独立的叙事画面，角色外貌/服装/场景在各格之间保持一致。',
+        '4. 不要添加数字编号、文字标注、水印或任何 UI 元素。',
+        '5. 一致性：严格参考已上传的角色设定图、场景参考图，保持人物/场景外观一致。',
       ].join('\n'))
 
-      parts.push(`${modeInfo?.label || '宫格'}第 ${panelIndex + 1} 格画面：\n${panelPrompt}`)
+      const panelBlock = prompts.map((p, i) => `第${i + 1}格：${p}`).join('\n\n')
+      parts.push(`各格画面描述：\n${panelBlock}`)
+
+      parts.push('masterpiece, best quality, ultra-detailed, 8K resolution, cinematic lighting, professional manga/comic panel layout')
+
       return parts.join('\n\n').trim()
     },
     [draft]
@@ -1204,34 +1249,18 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         const isGrid = mode.startsWith('grid_')
 
         if (isGrid) {
-          // 宫格模式：用第一格 prompt 生成到 start slot（作为视频首帧），其余格各自独立生成
-          const gridCount = SHOT_FRAME_MODES.find((m) => m.value === mode)?.count || 4
+          // 宫格模式：合并所有格生成一张宫格分镜图 → start slot
           const prompts = sh.gridPrompts || []
-
-          // 第一格 → start slot
-          if (prompts[0]) {
+          if (prompts.some((p) => String(p || '').trim())) {
             allTasks.push((async () => {
               const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
               const slotId = freshShot.frames.start.slot.id
               markSlotStaleRunning(slotId)
               const selected = getPreferredVariant(freshShot.frames.start.slot)
               if (selected?.status === 'success') return
-              const prompt = buildGridPanelPrompt(sh.id, 0)
+              const prompt = buildGridCombinedPrompt(sh.id)
+              if (!prompt) return
               const refs = await collectRefImagesForShot(sh.id, 'start')
-              await runGenerateSlotImage(slotId, prompt, refs, 'auto')
-            })())
-          }
-
-          // 最后一格 → end slot（用于视频尾帧）
-          if (gridCount > 1 && prompts[gridCount - 1]) {
-            allTasks.push((async () => {
-              const freshShot = draftRef.current.shots.find((s) => s.id === sh.id) || sh
-              const slotId = freshShot.frames.end.slot.id
-              markSlotStaleRunning(slotId)
-              const selected = getPreferredVariant(freshShot.frames.end.slot)
-              if (selected?.status === 'success') return
-              const prompt = buildGridPanelPrompt(sh.id, gridCount - 1)
-              const refs = await collectRefImagesForShot(sh.id, 'end')
               await runGenerateSlotImage(slotId, prompt, refs, 'auto')
             })())
           }
@@ -1270,7 +1299,7 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     }
   }, [
     buildFramePrompt,
-    buildGridPanelPrompt,
+    buildGridCombinedPrompt,
     collectRefImagesForShot,
     getPreferredVariant,
     markSlotStaleRunning,
@@ -1313,6 +1342,55 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
     }
   }, [runBatchGenerateKeyframes, runBatchGenerateVideos])
 
+  const handleRetryAllFailed = useCallback(async () => {
+    const d = draftRef.current
+    const shots = currentEpisodeId ? d.shots.filter(s => s.episodeId === currentEpisodeId) : d.shots
+
+    const failedImages: { slotId: string; variant: ShortDramaMediaVariant; shotId: string; role: 'start' | 'end' }[] = []
+    const failedVideos: { slotId: string; variant: ShortDramaMediaVariant; shotId: string }[] = []
+
+    for (const sh of shots) {
+      for (const v of sh.frames.start.slot.variants) {
+        if (v.status === 'error') failedImages.push({ slotId: sh.frames.start.slot.id, variant: v, shotId: sh.id, role: 'start' })
+      }
+      for (const v of sh.frames.end.slot.variants) {
+        if (v.status === 'error') failedImages.push({ slotId: sh.frames.end.slot.id, variant: v, shotId: sh.id, role: 'end' })
+      }
+      for (const v of sh.video.variants) {
+        if (v.status === 'error') failedVideos.push({ slotId: sh.video.id, variant: v, shotId: sh.id })
+      }
+    }
+
+    const total = failedImages.length + failedVideos.length
+    if (total === 0) {
+      window.$message?.info?.('没有失败的任务需要重试')
+      return
+    }
+    if (!window.confirm(`发现 ${failedImages.length} 个失败图片、${failedVideos.length} 个失败视频，重试？`)) return
+
+    for (const item of failedImages) {
+      setDraft(prev => resetVariantForRetry(prev, item.slotId, item.variant.id))
+      const prompt = item.variant.promptSnapshot || buildFramePrompt(item.shotId, item.role)
+      const refs = await collectRefImagesForShot(item.shotId, item.role)
+      runGenerateSlotImage(item.slotId, prompt, refs, 'auto').catch(() => {})
+    }
+    for (const item of failedVideos) {
+      setDraft(prev => resetVariantForRetry(prev, item.slotId, item.variant.id))
+      const freshShot = draftRef.current.shots.find(s => s.id === item.shotId)
+      if (!freshShot) continue
+      const startV = getPreferredVariant(freshShot.frames.start.slot)
+      const endV = getPreferredVariant(freshShot.frames.end.slot)
+      const startInput = await resolveVariantInput(startV || undefined)
+      const endInput = await resolveVariantInput(endV || undefined)
+      if (!startInput) continue
+      const refs = await collectRefImagesForShot(item.shotId, 'start')
+      const images = buildVideoImages(startInput, endInput, refs)
+      const prompt = item.variant.promptSnapshot || buildVideoPrompt(item.shotId)
+      runGenerateSlotVideo(item.slotId, prompt, images, endInput || '', 'auto').catch(() => {})
+    }
+    window.$message?.success?.(`已将 ${total} 个失败任务重新加入队列`)
+  }, [currentEpisodeId, buildFramePrompt, buildVideoPrompt, collectRefImagesForShot, getPreferredVariant, resolveVariantInput, runGenerateSlotImage, runGenerateSlotVideo, setDraft])
+
   const onImportFile = useCallback(async (file: File) => {
     try {
       const imported = await importShortDramaScriptFile(file)
@@ -1347,14 +1425,54 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
   }, [visibleShots, getSelectedVariant])
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 lg:flex-row">
-      {/* Left column (30%): top script/AI + bottom character/scene */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-[0_0_30%] lg:min-w-[360px] lg:max-w-[520px]">
-        <div className="flex min-h-0 flex-[0_0_42%] flex-col">
-          <div className="flex items-center justify-between">
-            <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">剧本 / AI</div>
+    <div className="h-full min-h-0 flex flex-col">
+      {activePanel === 'script' && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex items-center gap-1 px-1 pb-3 shrink-0">
+            <button type="button" className={cn('rounded-md px-3 py-1.5 text-xs transition-colors', scriptSubTab === 'import' ? 'bg-blue-500/10 text-blue-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]')} onClick={() => setScriptSubTab('import')}>
+              剧本导入
+            </button>
+            <button type="button" className={cn('rounded-md px-3 py-1.5 text-xs transition-colors', scriptSubTab === 'ai' ? 'bg-blue-500/10 text-blue-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]')} onClick={() => setScriptSubTab('ai')}>
+              AI + 画风 + 批量
+            </button>
           </div>
-          <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+            {scriptSubTab === 'import' && (
+              <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-[var(--text-primary)]">剧本导入</div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (!f) return
+                        void onImportFile(f)
+                      }}
+                    />
+                    <Button variant="secondary" size="sm" className="gap-1" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="h-4 w-4" />
+                      导入 txt/md/docx
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">剧本文本</label>
+                    <textarea
+                      value={currentScript.text}
+                      onChange={(e) => setCurrentScriptText(e.target.value)}
+                      className="min-h-[220px] w-full resize-y rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
+                      placeholder="粘贴剧本文本；或使用右上角导入。"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            {scriptSubTab === 'ai' && (<>
             <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1632,39 +1750,6 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
               </div>
             </div>
 
-            <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-[var(--text-primary)]">剧本导入</div>
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (!f) return
-                void onImportFile(f)
-              }}
-            />
-            <Button variant="secondary" size="sm" className="gap-1" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="h-4 w-4" />
-              导入 txt/md/docx
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-3 grid gap-3">
-          <div className="flex flex-col gap-2">
-            <label className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">剧本文本</label>
-            <textarea
-              value={currentScript.text}
-              onChange={(e) => setCurrentScriptText(e.target.value)}
-              className="min-h-[220px] w-full resize-y rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-color)] focus:outline-none"
-              placeholder="粘贴剧本文本；或使用右上角导入。"
-            />
-          </div>
-          <div className="space-y-3">
             <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-[var(--text-primary)]">画风与统一要求</div>
@@ -1860,21 +1945,21 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                 </div>
               </div>
             </div>
+            </>)}
           </div>
         </div>
-      </div>
-          </div>
-        </div>
+      )}
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between">
+      {activePanel === 'assets' && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex items-center justify-between px-1 pb-3 shrink-0">
             <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">角色 / 场景 / 资产</div>
             <Button size="sm" variant="ghost" className="gap-1" onClick={() => setBlendPanelOpen(true)}>
               <Layers className="h-4 w-4" />
               融图
             </Button>
           </div>
-          <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
             <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
           <div className="text-sm font-semibold text-[var(--text-primary)]">角色（{draft.characters.length}）</div>
           <div className="mt-3 space-y-3">
@@ -2093,12 +2178,30 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
         </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Right column (70%): shots */}
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      {activePanel === 'shots' && (
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-4">
           <div className="text-sm font-semibold text-[var(--text-primary)]">镜头（{visibleShots.length}）</div>
+
+          {/* Narrative Arc Bar */}
+          {visibleShots.some(s => s.cinematography?.narrativeFunction) && (
+            <div className="mt-2 flex h-3 w-full overflow-hidden rounded-full">
+              {visibleShots.map((sh, i) => {
+                const fn = sh.cinematography?.narrativeFunction
+                const color = fn ? NARRATIVE_FUNCTION_COLORS[fn] : 'bg-gray-300'
+                const label = fn ? NARRATIVE_FUNCTION_LABELS[fn] : '未指定'
+                return (
+                  <div
+                    key={sh.id}
+                    className={cn('h-full flex-1', color, i > 0 && 'border-l border-white/30')}
+                    title={`${sh.title || `镜头${i + 1}`} - ${label}`}
+                  />
+                )
+              })}
+            </div>
+          )}
           <div className="mt-3 space-y-3">
             {visibleShots.length === 0 ? <div className="text-sm text-[var(--text-secondary)]">尚未分析出镜头。</div> : null}
             {visibleShots.map((sh, idx) => {
@@ -2393,12 +2496,113 @@ export default function ShortDramaStudioAutoView({ projectId, draft, setDraft, p
                       />
                     </div>
                   </div>
+
+                  {/* Audio section */}
+                  {sh.audio && (sh.audio.dialogue || sh.audio.narration) && (
+                    <div className="mt-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-2">
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-1 text-xs font-medium text-[var(--text-primary)]"
+                        onClick={() => setExpandedAudio(prev => ({ ...prev, [sh.id]: !prev[sh.id] }))}
+                      >
+                        {expandedAudio[sh.id] ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                        <Mic className="h-3 w-3" />
+                        音频
+                      </button>
+                      {expandedAudio[sh.id] && (
+                        <div className="mt-2 space-y-2">
+                          {sh.audio.dialogue && (
+                            <div>
+                              <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">
+                                对白
+                                {sh.audio.dialogueCharacterId && (
+                                  <span className="ml-1 font-normal normal-case">
+                                    ({resolveCharacterName(sh.audio.dialogueCharacterId) || sh.audio.dialogueCharacterId})
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-0.5 rounded bg-[var(--bg-secondary)] px-2 py-1 text-xs text-[var(--text-primary)] italic">
+                                {sh.audio.dialogue}
+                              </div>
+                            </div>
+                          )}
+                          {sh.audio.narration && (
+                            <div>
+                              <div className="text-[11px] font-bold uppercase text-[var(--text-secondary)]">旁白</div>
+                              <div className="mt-0.5 rounded bg-[var(--bg-secondary)] px-2 py-1 text-xs text-[var(--text-primary)] italic">
+                                {sh.audio.narration}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Cinematography section */}
+                  {sh.cinematography && (sh.cinematography.lighting || sh.cinematography.cameraRig || sh.cinematography.depthOfField || sh.cinematography.narrativeFunction || (sh.cinematography.atmosphere && sh.cinematography.atmosphere.length > 0)) && (
+                    <div className="mt-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] p-2">
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-1 text-xs font-medium text-[var(--text-primary)]"
+                        onClick={() => setExpandedCinema(prev => ({ ...prev, [sh.id]: !prev[sh.id] }))}
+                      >
+                        {expandedCinema[sh.id] ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                        <Camera className="h-3 w-3" />
+                        摄影参数
+                      </button>
+                      {expandedCinema[sh.id] && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {sh.cinematography.lighting && (
+                            <span className="rounded bg-yellow-500/15 px-2 py-0.5 text-[11px] text-yellow-700 dark:text-yellow-300">
+                              {sh.cinematography.lighting}
+                            </span>
+                          )}
+                          {sh.cinematography.cameraRig && (
+                            <span className="rounded bg-blue-500/15 px-2 py-0.5 text-[11px] text-blue-700 dark:text-blue-300">
+                              {sh.cinematography.cameraRig}
+                            </span>
+                          )}
+                          {sh.cinematography.depthOfField && (
+                            <span className="rounded bg-cyan-500/15 px-2 py-0.5 text-[11px] text-cyan-700 dark:text-cyan-300">
+                              DoF: {sh.cinematography.depthOfField}
+                            </span>
+                          )}
+                          {sh.cinematography.narrativeFunction && (
+                            <span className={cn(
+                              'rounded px-2 py-0.5 text-[11px] text-white',
+                              NARRATIVE_FUNCTION_COLORS[sh.cinematography.narrativeFunction],
+                            )}>
+                              {NARRATIVE_FUNCTION_LABELS[sh.cinematography.narrativeFunction]}
+                            </span>
+                          )}
+                          {(sh.cinematography.atmosphere || []).map((a, i) => (
+                            <span key={i} className="rounded bg-violet-500/15 px-2 py-0.5 text-[11px] text-violet-700 dark:text-violet-300">
+                              {a}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
         </div>
-      </div>
+        </div>
+      )}
+
+      {activePanel === 'progress' && (
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          <ShortDramaProgressDashboard
+            projectId={projectId}
+            draft={draft}
+            currentEpisodeId={currentEpisodeId}
+            onRetryAllFailed={handleRetryAllFailed}
+          />
+        </div>
+      )}
 
       <ShortDramaMediaPickerModal
         open={pickerOpen}

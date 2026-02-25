@@ -411,10 +411,11 @@ export interface InpaintOptions extends EditOptions {
   maskBase64: string
   model?: string
   resolution?: string
+  aspectRatio?: string
 }
 
 export async function inpaintImage(options: InpaintOptions): Promise<string> {
-  const { sourceNodeId, sourceImageUrl, maskBase64, userInput, model, resolution, onProgress } = options
+  const { sourceNodeId, sourceImageUrl, maskBase64, userInput, model, resolution, aspectRatio, onProgress } = options
   if (!maskBase64) throw new Error('请绘制蒙版区域')
 
   const selectedModel = model || DEFAULT_IMAGE_MODEL
@@ -472,7 +473,7 @@ ABSOLUTE RULES — violating ANY rule is a failure:
   ]
 
   const { size } = getImageParams(sourceNodeId)
-  const resultUrl = await generateWithRetry(selectedModel, prompt, imageParts, selectedResolution, onProgress || (() => {}), size)
+  const resultUrl = await generateWithRetry(selectedModel, prompt, imageParts, selectedResolution, onProgress || (() => {}), aspectRatio || size)
 
   onProgress?.('正在保存结果...')
   const label = userRequirement ? `重绘: ${userRequirement.slice(0, 20)}${userRequirement.length > 20 ? '...' : ''}` : '智能重绘'
@@ -490,10 +491,11 @@ export interface MaskEraseOptions extends EditOptions {
   maskBase64: string
   model?: string
   resolution?: string
+  aspectRatio?: string
 }
 
 export async function eraseWithMask(options: MaskEraseOptions): Promise<string> {
-  const { sourceNodeId, sourceImageUrl, maskBase64, model, resolution, onProgress } = options
+  const { sourceNodeId, sourceImageUrl, maskBase64, model, resolution, aspectRatio, onProgress } = options
   if (!maskBase64) throw new Error('请绘制蒙版区域')
 
   const selectedModel = model || DEFAULT_IMAGE_MODEL
@@ -537,7 +539,7 @@ The goal: the result must look as if the erased object NEVER existed in the phot
   ]
 
   const { size } = getImageParams(sourceNodeId)
-  const resultUrl = await generateWithRetry(selectedModel, prompt, imageParts, selectedResolution, onProgress || (() => {}), size)
+  const resultUrl = await generateWithRetry(selectedModel, prompt, imageParts, selectedResolution, onProgress || (() => {}), aspectRatio || size)
 
   onProgress?.('正在保存结果...')
   return await createResultNode(resultUrl, sourceNodeId, '擦除结果', 350, 0, selectedModel)

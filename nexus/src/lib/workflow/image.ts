@@ -97,12 +97,15 @@ const seedreamSizeByRatioAndResolution = (ratio: string, resolution: string) => 
   return lookup(SEEDREAM_SIZE_OPTIONS as any, r) || '2048x2048'
 }
 
-// Gemini 生图容易在高并发或提示词不明确时返回纯文本（无 inlineData）。
-// 这里统一把提示词包裹成“只输出图片”的指令，提高稳定性。
+// Gemini 使用 responseModalities: ['IMAGE'] 已确保只返回图片。
+// 仅在极简提示词时补充一句引导，避免破坏模板格式。
 const buildGeminiImagePrompt = (raw: string) => {
   const t = normalizeText(raw)
   if (!t) return ''
-  return `请直接生成图片，不要输出任何解释文字。画面描述：\n${t}`
+  if (t.length < 20 && !/[a-zA-Z]/.test(t)) {
+    return `Generate an image: ${t}`
+  }
+  return t
 }
 
 const pickFirstHttpUrlFromText = (text: string) => {
@@ -455,17 +458,9 @@ export const generateImageFromConfigNode = async (
       const requestParts: any[] = []
       if (prompt) requestParts.push({ text: buildGeminiImagePrompt(prompt) })
       
-      // 为多张参考图添加序列号标注
       for (let i = 0; i < limitedRefImages.length; i++) {
-        const input = limitedRefImages[i]
-        const inline = await resolveImageToInlineData(input)
+        const inline = await resolveImageToInlineData(limitedRefImages[i])
         if (!inline) continue
-        
-        // 如果有多张参考图，添加序列号说明
-        if (limitedRefImages.length > 1) {
-          requestParts.push({ text: `[参考图${i + 1}]` })
-        }
-        
         requestParts.push({
           inline_data: {
             mime_type: inline.mimeType,

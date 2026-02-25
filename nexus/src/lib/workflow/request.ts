@@ -269,9 +269,8 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
   // Tauri 环境下增加重试次数（502 错误在 Tauri 中更常见）
   const maxRetries = isTauri ? 4 : 3
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    // Tauri HTTP 插件在某些平台（特别是 Windows）上对 AbortController 支持不完善
-    // 因此只在非 Tauri 环境或明确设置超时时使用 signal
     const timeoutMs = Number(opts?.timeoutMs || 0)
+    // 浏览器用 AbortController; Tauri 用 Promise.race 兜底（避免 Windows AbortController 兼容问题）
     const useSignal = !isTauri && timeoutMs > 0
     const controller = useSignal ? new AbortController() : null
     const t = useSignal ? window.setTimeout(() => {
@@ -290,11 +289,19 @@ export const postJson = async <T,>(endpoint: string, body: any, opts?: { authMod
         },
         body: JSON.stringify(body || {})
       }
-      // 只在非 Tauri 环境下使用 signal（避免 Windows Tauri 兼容性问题）
       if (useSignal) {
         fetchOptions.signal = controller!.signal
       }
-      const res = await safeFetch(url, fetchOptions)
+      // Tauri: 用 Promise.race 实现超时保护，防止 tauriFetch 永远挂起
+      const fetchPromise = safeFetch(url, fetchOptions)
+      const res = isTauri && timeoutMs > 0
+        ? await Promise.race([
+            fetchPromise,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error(`请求超时（${Math.round(timeoutMs / 1000)} 秒）。请检查网络或稍后重试。`)), timeoutMs)
+            ),
+          ])
+        : await fetchPromise
 
       if (res.ok) {
         try {
@@ -420,7 +427,15 @@ export const postFormData = async <T,>(endpoint: string, body: FormData, opts?: 
       if (useSignal) {
         fetchOptions.signal = controller!.signal
       }
-      const res = await safeFetch(url, fetchOptions)
+      const fetchPromise = safeFetch(url, fetchOptions)
+      const res = isTauri && timeoutMs > 0
+        ? await Promise.race([
+            fetchPromise,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error(`请求超时（${Math.round(timeoutMs / 1000)} 秒）。请检查网络或稍后重试。`)), timeoutMs)
+            ),
+          ])
+        : await fetchPromise
 
       if (res.ok) {
         try {
@@ -535,7 +550,15 @@ export const getJson = async <T,>(endpoint: string, query?: Record<string, any>,
       if (useSignal) {
         fetchOptions.signal = controller!.signal
       }
-      const res = await safeFetch(url, fetchOptions)
+      const fetchPromise = safeFetch(url, fetchOptions)
+      const res = isTauri && timeoutMs > 0
+        ? await Promise.race([
+            fetchPromise,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error(`请求超时（${Math.round(timeoutMs / 1000)} 秒）。请检查网络或稍后重试。`)), timeoutMs)
+            ),
+          ])
+        : await fetchPromise
 
       if (res.ok) {
         try {

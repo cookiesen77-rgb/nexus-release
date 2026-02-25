@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getMedia } from '@/lib/mediaStorage'
 import type { ShortDramaMediaSlot, ShortDramaMediaVariant } from '@/lib/shortDrama/types'
-import { Check, Eye, Image as ImageIcon, Trash2, Video as VideoIcon, X } from 'lucide-react'
+import { Check, Eye, Image as ImageIcon, RotateCw, Trash2, Video as VideoIcon, X } from 'lucide-react'
 
 function useMediaPreview(mediaId?: string) {
   const [url, setUrl] = useState<string>('')
@@ -48,6 +48,7 @@ export function ShortDramaSlotVersions({
   onRemove,
   onPreview,
   onClearAdopt,
+  onRetry,
   disabled,
 }: {
   slot: ShortDramaMediaSlot
@@ -55,6 +56,7 @@ export function ShortDramaSlotVersions({
   onRemove: (variantId: string) => void
   onPreview?: (variant: ShortDramaMediaVariant) => void
   onClearAdopt?: () => void
+  onRetry?: (variant: ShortDramaMediaVariant) => void
   disabled?: boolean
 }) {
   if (!slot.variants || slot.variants.length === 0) {
@@ -103,6 +105,12 @@ export function ShortDramaSlotVersions({
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
+                {v.status === 'error' && onRetry && (
+                  <Button size="sm" variant="ghost" disabled={disabled} onClick={() => onRetry(v)} className="text-amber-500">
+                    <RotateCw className="mr-1 h-4 w-4" />
+                    重试
+                  </Button>
+                )}
                 {adopted ? (
                   <Button size="sm" variant="ghost" disabled={disabled || v.status === 'running'} onClick={() => onClearAdopt?.()}>
                     <X className="mr-1 h-4 w-4" />

@@ -13,7 +13,7 @@ interface Props {
   imageUrl: string
   mode: 'inpaint' | 'erase'
   onClose: () => void
-  onConfirm: (maskBase64: string, prompt?: string, model?: string, resolution?: string) => void
+  onConfirm: (maskBase64: string, prompt?: string, model?: string, resolution?: string, aspectRatio?: string) => void
 }
 
 interface HistoryEntry {
@@ -25,7 +25,8 @@ const getImageModels = () => {
     m.key && !String(m.format || '').includes('video')
   ).map((m: any) => ({
     key: m.key,
-    label: m.label || m.key
+    label: m.label || m.key,
+    sizes: Array.isArray(m.sizes) ? m.sizes as string[] : [],
   }))
 }
 
@@ -49,15 +50,19 @@ export default memo(function MaskEditorModal({ open, imageUrl, mode, onClose, on
 
   const [selectedModel, setSelectedModel] = useState('nano-banana-pro')
   const [selectedResolution, setSelectedResolution] = useState('2K')
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
 
   const imageModels = getImageModels()
+
+  const currentModelSizes = imageModels.find(m => m.key === selectedModel)?.sizes || []
 
   useEffect(() => {
     if (!open || !imageUrl) return
 
     setImageLoaded(false)
     setCanvasReady(false)
+    setSelectedAspectRatio('')
 
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -106,6 +111,7 @@ export default memo(function MaskEditorModal({ open, imageUrl, mode, onClose, on
       setPrompt('')
       setTool('brush')
       setIsConfirming(false)
+      setSelectedAspectRatio('')
     }
   }, [open])
 
@@ -292,8 +298,8 @@ export default memo(function MaskEditorModal({ open, imageUrl, mode, onClose, on
       setIsConfirming(false)
       return
     }
-    onConfirm(maskBase64, mode === 'inpaint' ? prompt : undefined, selectedModel, selectedResolution)
-  }, [mode, prompt, selectedModel, selectedResolution, onConfirm, hasMaskContent, convertMaskToWhite])
+    onConfirm(maskBase64, mode === 'inpaint' ? prompt : undefined, selectedModel, selectedResolution, selectedAspectRatio || undefined)
+  }, [mode, prompt, selectedModel, selectedResolution, selectedAspectRatio, onConfirm, hasMaskContent, convertMaskToWhite])
 
   if (!open) return null
 
@@ -459,6 +465,38 @@ export default memo(function MaskEditorModal({ open, imageUrl, mode, onClose, on
               ))}
             </select>
           </div>
+
+          {/* 图片比例 */}
+          {currentModelSizes.length > 0 && (
+            <div>
+              <label className="block text-xs text-white/70 mb-1.5">比例</label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setSelectedAspectRatio('')}
+                  disabled={isConfirming}
+                  className={cn(
+                    'px-2.5 py-1.5 rounded-lg text-xs font-medium transition',
+                    !selectedAspectRatio ? 'bg-blue-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                  )}
+                >
+                  原图
+                </button>
+                {currentModelSizes.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSelectedAspectRatio(s)}
+                    disabled={isConfirming}
+                    className={cn(
+                      'px-2.5 py-1.5 rounded-lg text-xs font-medium transition',
+                      selectedAspectRatio === s ? 'bg-blue-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    )}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 分辨率 */}
           <div>

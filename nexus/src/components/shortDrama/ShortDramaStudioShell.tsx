@@ -6,19 +6,18 @@
  * - 同时支持：全屏页面（/short-drama/:projectId）与旧 Modal 形态
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Film, X, Plus, Trash2, ChevronDown, Copy, Layers } from 'lucide-react'
+import { Film, X, Plus, Trash2, ChevronDown, Copy, Layers, FileText, Users, Clapperboard, Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import ShortDramaStudioAutoView from '@/components/shortDrama/ShortDramaStudioAutoView'
 import ShortDramaStudioManualView from '@/components/shortDrama/ShortDramaStudioManualView'
 import ShortDramaAssetSidebar from '@/components/shortDrama/ShortDramaAssetSidebar'
+import { QueueMiniBadge } from '@/components/shortDrama/ShortDramaProgressDashboard'
 import {
   loadShortDramaDraftV2,
   saveShortDramaDraftV2,
   listShortDramaProjects,
-  createShortDramaProject,
   deleteShortDramaProject,
-  duplicateShortDramaProject,
   createDefaultDraftV2,
   createEmptyEpisode,
   loadDraftAsync,
@@ -29,7 +28,7 @@ import {
   duplicateProjectAsync,
   type ShortDramaProjectMeta,
 } from '@/lib/shortDrama/draftStorage'
-import { loadShortDramaPrefs, saveShortDramaPrefs } from '@/lib/shortDrama/uiPrefs'
+import { loadShortDramaPrefs, saveShortDramaPrefs, type ShortDramaPanelId } from '@/lib/shortDrama/uiPrefs'
 import { addEpisode, removeEpisode, updateEpisode } from '@/lib/shortDrama/draftOps'
 import { syncAssetHistoryFromCanvasNodes } from '@/lib/assets/syncFromCanvas'
 import { useGraphStore } from '@/graph/store'
@@ -271,11 +270,17 @@ export default function ShortDramaStudioShell({
     })
   }, [setPrefsSafe])
 
+  // 面板Tab
+  const activePanel: ShortDramaPanelId = prefs.activePanel || 'script'
+  const setActivePanel = useCallback((panel: ShortDramaPanelId) => {
+    setPrefsSafe(p => ({ ...p, activePanel: panel }))
+  }, [setPrefsSafe])
+
   // 当前项目信息
   const currentProjectTitle = draft.title || '未命名短剧'
 
   const mode = prefs.mode
-  const setMode = (next: 'auto' | 'manual') => setPrefs((p) => ({ ...p, mode: next }))
+  const setMode = useCallback((next: 'auto' | 'manual') => setPrefsSafe((p) => ({ ...p, mode: next })), [setPrefsSafe])
 
   const body = useMemo(() => {
     if (loading) {
@@ -288,7 +293,7 @@ export default function ShortDramaStudioShell({
         </div>
       )
     }
-    const viewProps = { projectId: pid, draft, setDraft: setDraftSafe, prefs, setPrefs: setPrefsSafe, currentEpisodeId: currentEpisodeId || null }
+    const viewProps = { projectId: pid, draft, setDraft: setDraftSafe, prefs, setPrefs: setPrefsSafe, currentEpisodeId: currentEpisodeId || null, activePanel }
     return mode === 'manual' ? <ShortDramaStudioManualView {...viewProps} /> : <ShortDramaStudioAutoView {...viewProps} />
   }, [pid, draft, prefs, mode, loading, currentEpisodeId])
 
@@ -379,6 +384,7 @@ export default function ShortDramaStudioShell({
         </div>
 
         <div className="flex items-center gap-2">
+          <QueueMiniBadge projectId={pid} />
           <Button
             size="sm"
             variant="ghost"
@@ -427,6 +433,36 @@ export default function ShortDramaStudioShell({
             )
           ) : null}
         </div>
+      </div>
+
+      {/* Panel tabs */}
+      <div className="flex items-center gap-1 border-b border-[var(--border-color)] px-5 py-1.5 shrink-0">
+        {([
+          { id: 'script' as const, label: '剧本/AI', icon: FileText, color: 'blue' },
+          { id: 'assets' as const, label: '角色/场景/资产', icon: Users, color: 'emerald' },
+          { id: 'shots' as const, label: '镜头', icon: Clapperboard, color: 'rose' },
+          { id: 'progress' as const, label: '进度', icon: Activity, color: 'amber' },
+        ]).map((tab) => {
+          const Icon = tab.icon
+          const isActive = activePanel === tab.id
+          const colorMap: Record<string, string> = {
+            blue: isActive ? 'bg-blue-500/10 text-blue-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-blue-500',
+            emerald: isActive ? 'bg-emerald-500/10 text-emerald-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-emerald-500',
+            rose: isActive ? 'bg-rose-500/10 text-rose-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-rose-500',
+            amber: isActive ? 'bg-amber-500/10 text-amber-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-amber-500',
+          }
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              className={cn('flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors', colorMap[tab.color])}
+              onClick={() => setActivePanel(tab.id)}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Episode tabs */}

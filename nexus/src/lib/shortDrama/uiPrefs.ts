@@ -1,13 +1,19 @@
 import type { ShortDramaAutoStrategy, ShortDramaStudioMode } from '@/lib/shortDrama/types'
 
+export type ShortDramaPanelId = 'script' | 'assets' | 'shots' | 'progress'
+export type ShortDramaScriptSubTab = 'import' | 'ai'
+
 export interface ShortDramaStudioPrefsV1 {
   version: 1
   mode: ShortDramaStudioMode
   autoStrategy: ShortDramaAutoStrategy
   imageConcurrency: number
   videoConcurrency: number
+  audioConcurrency: number
   currentEpisodeId?: string
   assetSidebarOpen?: boolean
+  activePanel?: ShortDramaPanelId
+  scriptSubTab?: ShortDramaScriptSubTab
 }
 
 const PREFS_KEY_PREFIX_V1 = 'nexus-short-drama-studio:prefs:v1'
@@ -28,6 +34,7 @@ export const createDefaultShortDramaPrefs = (): ShortDramaStudioPrefsV1 => ({
   autoStrategy: 'fill_only',
   imageConcurrency: 4,
   videoConcurrency: 2,
+  audioConcurrency: 3,
 })
 
 export const loadShortDramaPrefs = (projectId: string): ShortDramaStudioPrefsV1 => {
@@ -38,14 +45,18 @@ export const loadShortDramaPrefs = (projectId: string): ShortDramaStudioPrefsV1 
     const autoStrategy: ShortDramaAutoStrategy = parsed.autoStrategy === 'full_auto' ? 'full_auto' : 'fill_only'
     const imageConcurrency = Math.max(1, Math.min(12, Number(parsed.imageConcurrency || 4)))
     const videoConcurrency = Math.max(1, Math.min(6, Number(parsed.videoConcurrency || 2)))
+    const audioConcurrency = Math.max(1, Math.min(8, Number(parsed.audioConcurrency || 3)))
     return {
       version: 1,
       mode,
       autoStrategy,
       imageConcurrency,
       videoConcurrency,
+      audioConcurrency,
       currentEpisodeId: typeof parsed.currentEpisodeId === 'string' ? parsed.currentEpisodeId : undefined,
       assetSidebarOpen: typeof parsed.assetSidebarOpen === 'boolean' ? parsed.assetSidebarOpen : undefined,
+      activePanel: (['script', 'assets', 'shots', 'progress'] as const).includes(parsed.activePanel) ? parsed.activePanel : undefined,
+      scriptSubTab: (['import', 'ai'] as const).includes(parsed.scriptSubTab) ? parsed.scriptSubTab : undefined,
     }
   }
   return createDefaultShortDramaPrefs()

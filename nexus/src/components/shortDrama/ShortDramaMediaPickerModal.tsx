@@ -7,7 +7,7 @@ import { getMedia } from '@/lib/mediaStorage'
 import { Image as ImageIcon, Video as VideoIcon, X } from 'lucide-react'
 
 type TabKey = 'history' | 'canvas'
-export type ShortDramaPickKind = 'image' | 'video'
+export type ShortDramaPickKind = 'image' | 'video' | 'audio'
 
 type PickedBase = {
   origin: 'history' | 'canvas'

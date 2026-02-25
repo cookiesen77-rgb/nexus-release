@@ -3,6 +3,14 @@ import * as modelsConfig from '@/config/models'
 import { resolveCachedImageUrl, resolveCachedMediaUrl } from '@/lib/workflow/cache'
 import { getJson, postFormData, postJson } from '@/lib/workflow/request'
 import { safeFetch } from '@/lib/safeFetch'
+import { getPresetById } from '@/lib/shortDrama/cinematographyPresets'
+import { buildStageAwarePrompt } from '@/lib/shortDrama/characterStages'
+import type {
+  ShortDramaCharacter,
+  ShortDramaCharacterAnchors,
+  ShortDramaCinematography,
+  ShortDramaScene,
+} from '@/lib/shortDrama/types'
 
 const normalizeText = (text: unknown) => String(text || '').replace(/\r\n/g, '\n').trim()
 const toDataUrl = (b64: string, mime = 'image/png') => `data:${mime};base64,${b64}`
@@ -537,6 +545,7 @@ export type ShortDramaVideoResult = {
   videoUrl: string
   displayUrl: string
   localPath: string
+  durationMs?: number
 }
 
 const extractVideoUrlDeep = (payload: any) => {
@@ -547,18 +556,34 @@ const extractVideoUrlDeep = (payload: any) => {
 
 const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: any) => {
   const maxAttempts = 300
-  const interval = 3000
   let completedWithoutUrl = 0
+  let transientFailures = 0
+
+  const getInterval = (attempt: number, serverEtaMs?: number) => {
+    if (serverEtaMs && serverEtaMs > 5000) return Math.min(serverEtaMs * 0.6, 12000)
+    if (attempt < 10) return 2000
+    if (attempt < 30) return 5000
+    if (attempt < 60) return 8000
+    return 12000
+  }
 
   for (let i = 0; i < maxAttempts; i++) {
     const statusEndpoint = statusEndpointOverride
     if (!statusEndpoint) throw new Error('未配置视频查询端点')
 
     let resp: any
-    if (typeof statusEndpoint === 'function') {
-      resp = await getJson<any>(statusEndpoint(id), undefined, { authMode: modelCfg.authMode })
-    } else {
-      resp = await getJson<any>(statusEndpoint, { id }, { authMode: modelCfg.authMode })
+    try {
+      if (typeof statusEndpoint === 'function') {
+        resp = await getJson<any>(statusEndpoint(id), undefined, { authMode: modelCfg.authMode })
+      } else {
+        resp = await getJson<any>(statusEndpoint, { id }, { authMode: modelCfg.authMode })
+      }
+      transientFailures = 0
+    } catch (err: any) {
+      transientFailures++
+      if (transientFailures >= 3) throw err
+      await new Promise(r => setTimeout(r, 5000))
+      continue
     }
 
     const response = resp?.Response || resp?.response || resp
@@ -583,6 +608,12 @@ const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: 
         ''
     ).toLowerCase()
 
+    const serverEta = Number(
+      response?.estimated_time || response?.estimatedTime || response?.eta ||
+      aigcTask?.estimated_time || aigcTask?.estimatedTime || output?.estimated_time || 0
+    )
+    const serverEtaMs = serverEta > 0 ? (serverEta > 1000 ? serverEta : serverEta * 1000) : undefined
+
     const fileInfos = aigcOutput?.FileInfos || aigcOutput?.file_infos || output?.FileInfos || output?.file_infos || []
     const videoUrlFromFileInfos = Array.isArray(fileInfos)
       ? String(
@@ -596,7 +627,6 @@ const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: 
             fileInfos.find((fi: any) => {
               const fileUrl = fi?.FileUrl || fi?.file_url || fi?.Url || fi?.url || ''
               if (!fileUrl) return false
-              // 兜底：选第一个非图片
               return !/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(String(fileUrl))
             })?.FileUrl ||
             ''
@@ -636,10 +666,8 @@ const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: 
     const isCompleted = /^(finish|finished|completed|complete|success|done|ready|succeeded)$/i.test(status)
     if (isCompleted && !videoUrl) {
       completedWithoutUrl += 1
-      // 对于 sora-openai 格式，视频 URL 是 /v1/videos/{id}/content
       if (modelCfg.format === 'sora-openai') {
         const contentUrl = `/v1/videos/${id}/content`
-        console.log('[pollVideoTask] Sora OpenAI 格式：构造视频下载 URL:', contentUrl)
         return contentUrl
       }
       const errCode = aigcTask?.ErrCode || aigcTask?.err_code || aigcTask?.error_code
@@ -647,7 +675,6 @@ const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: 
       if (errCode || errMsg) {
         throw new Error(String(errMsg || errCode || '视频生成失败'))
       }
-      // 成功状态但没有返回 URL，继续轮询一段时间
       if (completedWithoutUrl >= 10) {
         throw new Error('视频任务已完成但未返回下载地址，请稍后重试或联系后端')
       }
@@ -657,7 +684,7 @@ const pollVideoTask = async (id: string, modelCfg: any, statusEndpointOverride: 
       throw new Error(String(rawErr))
     }
 
-    await new Promise((r) => setTimeout(r, interval))
+    await new Promise((r) => setTimeout(r, getInterval(i, serverEtaMs)))
   }
   throw new Error('视频生成超时')
 }
@@ -1556,10 +1583,174 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
   const cached = await resolveCachedMediaUrl(String(polled || '').trim())
   if (!cached.displayUrl) throw new Error(cached.error || '视频缓存失败')
 
+  const effectiveDuration = Number.isFinite(duration) && duration > 0 ? duration : Number(modelCfg?.defaultParams?.duration || 5)
+
   return {
     taskId: String(id),
     videoUrl: String(polled || '').trim(),
     displayUrl: cached.displayUrl,
     localPath: cached.localPath || '',
+    durationMs: Math.round(effectiveDuration * 1000),
   }
+}
+
+// ── Character Identity & Cinematography Prompt Utilities ──
+
+const LIGHTING_MAP: Record<string, string> = {
+  high_key: 'high-key lighting, bright and even illumination, minimal shadows',
+  low_key: 'low-key lighting, dramatic shadows, high contrast',
+  chiaroscuro: 'dramatic chiaroscuro lighting, deep shadows, strong contrast between light and dark',
+  natural: 'natural ambient lighting, realistic illumination',
+  neon: 'neon glow lighting, vivid colored light sources, cyberpunk atmosphere',
+  golden_hour: 'golden hour warm sunlight, long soft shadows, warm color temperature',
+  candlelight: 'warm candlelight illumination, flickering soft glow, intimate atmosphere',
+}
+
+const CAMERA_RIG_MAP: Record<string, string> = {
+  tripod: 'locked-off tripod shot, perfectly stable frame',
+  steadicam: 'steadicam smooth gliding motion',
+  handheld: 'handheld camera, subtle organic movement',
+  crane: 'crane shot, sweeping elevated perspective',
+  drone: 'aerial drone shot, sweeping overhead perspective',
+  dolly: 'dolly tracking shot, smooth lateral movement',
+  slider: 'slider shot, controlled horizontal glide',
+}
+
+const DOF_MAP: Record<string, string> = {
+  ultra_shallow: 'ultra-shallow depth of field, f/1.4 extreme bokeh',
+  shallow: 'shallow depth of field, f/2.8 soft bokeh background',
+  moderate: 'moderate depth of field, f/5.6 balanced focus',
+  deep: 'deep focus, f/11 everything sharp',
+}
+
+const SPEED_MAP: Record<string, string> = {
+  normal: '',
+  slow_mo: 'slow motion, fluid decelerated movement',
+  speed_up: 'speed ramping, accelerated motion',
+}
+
+export function buildCharacterIdentityBlock(character: ShortDramaCharacter): string {
+  const parts: string[] = []
+  const a = character.anchors
+  if (a) {
+    if (a.facialStructure) parts.push(`脸型: ${a.facialStructure}`)
+    if (a.facialFeatures) parts.push(`五官: ${a.facialFeatures}`)
+    if (a.uniqueMarks) parts.push(`辨识标记: ${a.uniqueMarks}`)
+    if (a.colorAnchors) parts.push(`色彩锚点: ${a.colorAnchors}`)
+    if (a.skinTexture) parts.push(`肤质: ${a.skinTexture}`)
+    if (a.hairStyle) parts.push(`发型: ${a.hairStyle}`)
+  }
+  if (parts.length > 0) return `${character.name}（${parts.join('，')}）`
+  return character.description ? `${character.name}（${character.description}）` : character.name
+}
+
+export function buildCinematographyBlock(cin: ShortDramaCinematography): string {
+  const parts: string[] = []
+  if (cin.presetId) {
+    const preset = getPresetById(cin.presetId)
+    if (preset?.promptGuidance) parts.push(preset.promptGuidance)
+  }
+  if (cin.lighting && LIGHTING_MAP[cin.lighting]) parts.push(LIGHTING_MAP[cin.lighting])
+  if (cin.cameraRig && CAMERA_RIG_MAP[cin.cameraRig]) parts.push(CAMERA_RIG_MAP[cin.cameraRig])
+  if (cin.depthOfField && DOF_MAP[cin.depthOfField]) parts.push(DOF_MAP[cin.depthOfField])
+  if (cin.atmosphere?.length) parts.push(cin.atmosphere.join(', '))
+  if (cin.speedRamp && SPEED_MAP[cin.speedRamp]) parts.push(SPEED_MAP[cin.speedRamp])
+  return parts.filter(Boolean).join('. ')
+}
+
+export function enrichShotPrompt(opts: {
+  basePrompt: string
+  characters?: ShortDramaCharacter[]
+  scene?: ShortDramaScene
+  viewpointDescription?: string
+  cinematography?: ShortDramaCinematography
+  styleText?: string
+  negativeText?: string
+  episodeIndex?: number
+}): string {
+  const parts: string[] = []
+
+  if (opts.cinematography) {
+    const cinBlock = buildCinematographyBlock(opts.cinematography)
+    if (cinBlock) parts.push(cinBlock)
+  }
+
+  if (opts.characters?.length) {
+    const charBlocks = opts.characters.map((c) => {
+      const base = buildCharacterIdentityBlock(c)
+      if (opts.episodeIndex != null) {
+        return buildStageAwarePrompt(c, opts.episodeIndex, base)
+      }
+      return base
+    })
+    parts.push(charBlocks.join('; '))
+  }
+
+  if (opts.viewpointDescription) {
+    parts.push(opts.viewpointDescription)
+  } else if (opts.scene?.description) {
+    parts.push(opts.scene.description)
+  }
+
+  parts.push(opts.basePrompt)
+
+  if (opts.styleText) parts.push(opts.styleText)
+  if (opts.negativeText) parts.push(`Negative: ${opts.negativeText}`)
+
+  return parts.filter(Boolean).join('\n')
+}
+
+export async function generateCharacterThreeView(req: {
+  character: ShortDramaCharacter
+  modelKey?: string
+  styleText?: string
+  negativeText?: string
+  size?: string
+}): Promise<ShortDramaImageResult> {
+  const c = req.character
+  const identityBlock = buildCharacterIdentityBlock(c)
+  const prompt = [
+    'Character reference turnaround sheet: front view, 3/4 view, side view.',
+    `${identityBlock}`,
+    c.description,
+    'White background, character turnaround, consistent proportions across all views, full body visible.',
+    req.styleText || '',
+    req.negativeText ? `Negative: ${req.negativeText}` : '',
+    'masterpiece, best quality, ultra-detailed, 8K resolution, professional character design sheet.',
+  ].filter(Boolean).join('\n')
+
+  return generateShortDramaImage({
+    modelKey: req.modelKey,
+    prompt,
+    size: req.size || '1024x1024',
+  })
+}
+
+export async function generateSceneContactSheet(req: {
+  scene: ShortDramaScene
+  viewpointDescriptions: string[]
+  modelKey?: string
+  styleText?: string
+  size?: string
+}): Promise<ShortDramaImageResult> {
+  const count = req.viewpointDescriptions.length
+  if (count === 0) throw new Error('至少需要一个视角描述')
+
+  const cellPrompts = req.viewpointDescriptions.map(
+    (desc, i) => `[Panel ${i + 1}] ${req.scene.name}: ${desc}`,
+  )
+
+  const prompt = [
+    `Scene reference contact sheet: ${count} viewpoints of "${req.scene.name}".`,
+    req.scene.description,
+    cellPrompts.join('\n'),
+    req.styleText || '',
+    'masterpiece, best quality, consistent lighting and color palette across all panels.',
+  ].filter(Boolean).join('\n')
+
+  return generateShortDramaImage({
+    modelKey: req.modelKey,
+    prompt,
+    size: req.size || '1024x1024',
+  })
 }

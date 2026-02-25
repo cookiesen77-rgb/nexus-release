@@ -4,7 +4,7 @@ export type ShortDramaStudioMode = 'auto' | 'manual'
 
 export type ShortDramaAutoStrategy = 'fill_only' | 'full_auto'
 
-export type ShortDramaMediaKind = 'image' | 'video'
+export type ShortDramaMediaKind = 'image' | 'video' | 'audio'
 
 export type ShortDramaMediaStatus = 'running' | 'success' | 'error'
 
@@ -51,6 +51,8 @@ export interface ShortDramaMediaVariant {
   // Video task id (if any)
   taskId?: string
 
+  durationMs?: number
+
   error?: string
 }
 
@@ -85,6 +87,8 @@ export interface ShortDramaModels {
   videoResolution?: string
   targetShotCount?: number
   defaultFrameMode?: ShotFrameMode
+  ttsModelKey?: string
+  narratorVoice?: ShortDramaVoiceConfig
 }
 
 export interface ShortDramaScriptSource {
@@ -112,25 +116,113 @@ export interface ShortDramaEpisode {
   updatedAt: number
 }
 
+// ── Voice & Audio ──
+
+export type ShortDramaTTSProvider = 'gemini' | 'kling' | 'vidu'
+
+export interface ShortDramaVoiceConfig {
+  provider: ShortDramaTTSProvider
+  voiceId: string
+  voiceName?: string
+  language?: string
+  speed?: number
+}
+
+export interface ShortDramaShotAudio {
+  dialogue: string
+  dialogueCharacterId?: string
+  narration?: string
+  sfxDescription?: string
+  bgmHint?: string
+}
+
+// ── Character Anchors ──
+
+export interface ShortDramaCharacterAnchors {
+  facialStructure?: string
+  facialFeatures?: string
+  uniqueMarks?: string
+  colorAnchors?: string
+  skinTexture?: string
+  hairStyle?: string
+}
+
+export interface ShortDramaCostumeVariation {
+  id: string
+  name: string
+  description: string
+  episodeIds?: string[]
+  ref?: ShortDramaMediaSlot
+  stageType?: 'age' | 'era' | 'costume'
+  episodeRange?: [number, number]
+  ageDescription?: string
+  visualPromptEn?: string
+  visualPromptZh?: string
+}
+
+// ── Scene Viewpoints ──
+
+export interface ShortDramaSceneViewpoint {
+  id: string
+  name: string
+  description: string
+  ref: ShortDramaMediaSlot
+}
+
+// ── Cinematography ──
+
+export type ShortDramaLighting = 'high_key' | 'low_key' | 'chiaroscuro' | 'natural' | 'neon' | 'golden_hour' | 'candlelight'
+export type ShortDramaCameraRig = 'tripod' | 'steadicam' | 'handheld' | 'crane' | 'drone' | 'dolly' | 'slider'
+export type ShortDramaDoF = 'ultra_shallow' | 'shallow' | 'moderate' | 'deep'
+export type ShortDramaSpeedRamp = 'normal' | 'slow_mo' | 'speed_up'
+export type ShortDramaNarrativeFunction = 'setup' | 'escalation' | 'climax' | 'turn' | 'transition' | 'resolution'
+export type ShortDramaShotSize = 'extreme_wide' | 'wide' | 'full' | 'medium' | 'close_up' | 'extreme_close_up' | 'insert'
+export type ShortDramaCameraMovement = 'static' | 'pan_left' | 'pan_right' | 'tilt_up' | 'tilt_down' | 'dolly_in' | 'dolly_out' | 'tracking' | 'orbit' | 'push_in' | 'pull_out'
+
+export interface ShortDramaCinematography {
+  lighting?: ShortDramaLighting
+  cameraRig?: ShortDramaCameraRig
+  depthOfField?: ShortDramaDoF
+  atmosphere?: string[]
+  speedRamp?: ShortDramaSpeedRamp
+  narrativeFunction?: ShortDramaNarrativeFunction
+  presetId?: string
+  shotSize?: ShortDramaShotSize
+  cameraMovement?: ShortDramaCameraMovement
+}
+
+// ── Timeline (Export) ──
+
+export interface ShortDramaTimelineSegment {
+  shotId: string
+  startMs: number
+  durationMs: number
+  videoUrl?: string
+  dialogueUrl?: string
+  narrationUrl?: string
+  sfxUrl?: string
+}
+
+export interface ShortDramaTimeline {
+  episodeId?: string
+  segments: ShortDramaTimelineSegment[]
+  totalDurationMs: number
+}
+
 export interface ShortDramaCharacter {
   id: string
   name: string
   description: string
 
-  /**
-   * Character sheet: front/side/back + expressions (single composite image)
-   */
   sheet: ShortDramaMediaSlot
-
-  /**
-   * Additional reference images
-   */
   refs: ShortDramaMediaSlot[]
-
-  /**
-   * Preferred reference slot id (optional).
-   */
   primaryRefSlotId?: string
+
+  voice?: ShortDramaVoiceConfig
+
+  anchors?: ShortDramaCharacterAnchors
+
+  costumes?: ShortDramaCostumeVariation[]
 
   tags?: string[]
   favorite?: boolean
@@ -141,15 +233,10 @@ export interface ShortDramaScene {
   name: string
   description: string
 
-  /**
-   * Primary scene reference slot.
-   */
   ref: ShortDramaMediaSlot
-
-  /**
-   * Additional reference images (optional).
-   */
   refs?: ShortDramaMediaSlot[]
+
+  viewpoints?: ShortDramaSceneViewpoint[]
 
   tags?: string[]
   favorite?: boolean
@@ -200,27 +287,14 @@ export interface ShortDramaShot {
   episodeId?: string
 
   sceneId?: string
+  viewpointId?: string
   characterIds: string[]
   assetIds?: string[]
 
-  /**
-   * Frame generation mode: first frame only, first+last, or grid layouts
-   */
   frameMode: ShotFrameMode
 
-  /**
-   * Optional beat/intent summary (emotion/action/dialogue)
-   */
   beat?: string
-
-  /**
-   * Original script excerpt this shot corresponds to
-   */
   scriptExcerpt?: string
-
-  /**
-   * Optional video prompt (camera/motion). If empty, auto or manual may derive it.
-   */
   videoPrompt: string
 
   frames: {
@@ -228,20 +302,16 @@ export interface ShortDramaShot {
     end: ShortDramaShotFrame
   }
 
-  /**
-   * Grid mode prompts (one per panel, used when frameMode is grid_4/6/9/25)
-   */
   gridPrompts?: string[]
-
-  /**
-   * Grid mode generated image slot (single composite image)
-   */
   gridSlot?: ShortDramaMediaSlot
 
-  /**
-   * Video versions slot. selectedVariantId is the "adopted" video.
-   */
   video: ShortDramaMediaSlot
+
+  audio?: ShortDramaShotAudio
+  dialogueSlot?: ShortDramaMediaSlot
+  narrationSlot?: ShortDramaMediaSlot
+
+  cinematography?: ShortDramaCinematography
 }
 
 export interface ShortDramaGenerationPlan {

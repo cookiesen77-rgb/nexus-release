@@ -434,7 +434,8 @@ export default function NanaBananaProModal({ open, onClose }: Props) {
     try {
       const store = useGraphStore.getState()
       const vp = store.viewport
-      const cx = (-vp.x + window.innerWidth / 2) / vp.zoom
+      // 向左偏移，避免输出节点被右侧面板遮挡
+      const cx = (-vp.x + (window.innerWidth - 440) / 2) / vp.zoom
       const cy = (-vp.y + window.innerHeight / 2) / vp.zoom
 
       const refBase64: string[] = []
@@ -446,20 +447,25 @@ export default function NanaBananaProModal({ open, onClose }: Props) {
         const x = cx + col * 320 - (Math.min(count, 3) - 1) * 160
         const y = cy + row * 320 - 100
 
+        const tempNodeIds: string[] = []
+
         const configId = store.addNode('imageConfig', { x: -9999, y: -9999 }, {
           model: MODEL_KEY,
           size: aspectRatio,
           quality
         })
+        tempNodeIds.push(configId)
 
         if (prompt.trim()) {
           const textId = store.addNode('text', { x: -9999, y: -9999 - 100 }, { content: prompt })
           store.addEdge(textId, configId, { sourceHandle: 'right', targetHandle: 'left' })
+          tempNodeIds.push(textId)
         }
 
         for (let j = 0; j < refBase64.length; j++) {
           const imgId = store.addNode('image', { x: -9999, y: -9999 + (j + 1) * 100 }, { url: refBase64[j] })
           store.addEdge(imgId, configId, { sourceHandle: 'right', targetHandle: 'left' })
+          tempNodeIds.push(imgId)
         }
 
         const outputId = store.addNode('image', { x, y }, {
@@ -480,15 +486,13 @@ export default function NanaBananaProModal({ open, onClose }: Props) {
           } as any)
         }
 
-        const currentStore = useGraphStore.getState()
-        currentStore.nodes
-          .filter((n) => n.x === -9999 && n.y <= -9999 + 2000 && n.id !== outputId)
-          .forEach((n) => currentStore.removeNode(n.id))
+        useGraphStore.getState().removeNodes(tempNodeIds)
 
         setProgress((prev) => ({ ...prev, done: prev.done + 1 }))
       }
 
       window.$message?.success?.(`${count} 张图片生成完成`)
+      onClose()
     } catch (err: unknown) {
       window.$message?.error?.((err as Error)?.message || '生成失败')
     } finally {
