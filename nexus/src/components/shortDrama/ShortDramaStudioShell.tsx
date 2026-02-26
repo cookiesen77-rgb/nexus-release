@@ -6,7 +6,7 @@
  * - 同时支持：全屏页面（/short-drama/:projectId）与旧 Modal 形态
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Film, X, Plus, Trash2, ChevronDown, Copy, Layers, FileText, Users, Clapperboard, Activity } from 'lucide-react'
+import { Film, X, Plus, Trash2, ChevronDown, Copy, Layers, FileText, Users, Clapperboard, Activity, Camera, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import ShortDramaStudioAutoView from '@/components/shortDrama/ShortDramaStudioAutoView'
@@ -436,26 +436,35 @@ export default function ShortDramaStudioShell({
       </div>
 
       {/* Panel tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--border-color)] px-5 py-1.5 shrink-0">
+      <div className="flex items-center gap-0.5 border-b border-[var(--border-color)] px-4 py-0 shrink-0 bg-[var(--bg-secondary)]/30">
         {([
           { id: 'script' as const, label: '剧本/AI', icon: FileText, color: 'blue' },
-          { id: 'assets' as const, label: '角色/场景/资产', icon: Users, color: 'emerald' },
+          { id: 'assets' as const, label: '资产', icon: Users, color: 'emerald' },
           { id: 'shots' as const, label: '镜头', icon: Clapperboard, color: 'rose' },
+          { id: 'director' as const, label: '导演板', icon: Camera, color: 'violet' },
+          { id: 'timeline' as const, label: '时间线', icon: Clock, color: 'cyan' },
           { id: 'progress' as const, label: '进度', icon: Activity, color: 'amber' },
         ]).map((tab) => {
           const Icon = tab.icon
           const isActive = activePanel === tab.id
-          const colorMap: Record<string, string> = {
-            blue: isActive ? 'bg-blue-500/10 text-blue-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-blue-500',
-            emerald: isActive ? 'bg-emerald-500/10 text-emerald-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-emerald-500',
-            rose: isActive ? 'bg-rose-500/10 text-rose-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-rose-500',
-            amber: isActive ? 'bg-amber-500/10 text-amber-500 font-medium' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] hover:text-amber-500',
+          const activeColor: Record<string, string> = {
+            blue: 'text-blue-400 border-blue-400',
+            emerald: 'text-emerald-400 border-emerald-400',
+            rose: 'text-rose-400 border-rose-400',
+            amber: 'text-amber-400 border-amber-400',
+            violet: 'text-violet-400 border-violet-400',
+            cyan: 'text-cyan-400 border-cyan-400',
           }
           return (
             <button
               key={tab.id}
               type="button"
-              className={cn('flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors', colorMap[tab.color])}
+              className={cn(
+                'relative flex items-center gap-1.5 px-3 py-2 text-[11px] transition-colors border-b-2',
+                isActive
+                  ? cn('font-semibold', activeColor[tab.color])
+                  : 'text-[var(--text-secondary)]/70 border-transparent hover:text-[var(--text-primary)] hover:bg-white/[0.03]',
+              )}
               onClick={() => setActivePanel(tab.id)}
             >
               <Icon className="h-3.5 w-3.5" />

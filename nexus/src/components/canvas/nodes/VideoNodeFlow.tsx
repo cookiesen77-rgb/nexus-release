@@ -9,9 +9,10 @@ import { createPortal } from 'react-dom'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Trash2, Copy, Expand, Video, Image, Eye, Download, X, RefreshCw, Loader2 } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
-import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
+import { saveMedia, getMediaWithFallback, getMediaByNodeIdWithFallback } from '@/lib/mediaStorage'
 import { downloadFile } from '@/lib/download'
 import { resolveCachedMediaUrl } from '@/lib/workflow/cache'
+import { recoverFromLocalPath } from '@/lib/tauriMediaPersist'
 import { useInView } from '@/hooks/useInView'
 import MediaPreviewModal from '@/components/canvas/MediaPreviewModal'
 
@@ -89,8 +90,9 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       return
     }
 
-    // 有 error 标记但有 mediaId/sourceUrl 可恢复时，仍尝试恢复
-    if (!nodeData?.mediaId && !nodeData?.sourceUrl) {
+    const localPath = String((nodeData as any)?.localPath || '').trim()
+    // 有 error 标记但有 mediaId/sourceUrl/localPath 可恢复时，仍尝试恢复
+    if (!nodeData?.mediaId && !nodeData?.sourceUrl && !localPath) {
       return
     }
 
@@ -99,35 +101,48 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
     }
 
     loadAttemptedRef.current = true
-    
+
     const loadMedia = async () => {
+      const projectId = useGraphStore.getState().projectId || 'default'
+
       try {
-        // 1. 首先尝试通过 mediaId 从 IndexedDB 加载
-        if (nodeData?.mediaId) {
-          console.log('[VideoNode] 从 IndexedDB 加载视频, mediaId:', nodeData.mediaId)
-          const record = await getMedia(nodeData.mediaId)
-          if (record?.data) {
+        // 0. 尝试通过 localPath（Tauri 缓存路径）恢复
+        if (localPath) {
+          const assetUrl = await recoverFromLocalPath(localPath)
+          if (assetUrl) {
             useGraphStore.getState().updateNode(id, {
-              data: { url: record.data, loading: false }
+              data: { url: assetUrl, loading: false }
             } as any)
             return
           }
         }
-        
-        // 2. 尝试通过 nodeId 从 IndexedDB 查找
-        console.log('[VideoNode] 通过 nodeId 从 IndexedDB 查找:', id)
-        const recordByNode = await getMediaByNodeId(id)
-        if (recordByNode?.data) {
+
+        // 1. 首先尝试通过 mediaId 从 IndexedDB / Tauri 持久化目录加载
+        if (nodeData?.mediaId) {
+          console.log('[VideoNode] 从 IndexedDB/Tauri 加载视频, mediaId:', nodeData.mediaId)
+          const result = await getMediaWithFallback(nodeData.mediaId, id, projectId)
+          if (result?.data) {
+            useGraphStore.getState().updateNode(id, {
+              data: { url: result.data, loading: false }
+            } as any)
+            return
+          }
+        }
+
+        // 2. 尝试通过 nodeId 从 IndexedDB / Tauri 持久化目录查找
+        console.log('[VideoNode] 通过 nodeId 查找:', id)
+        const resultByNode = await getMediaByNodeIdWithFallback(id, projectId)
+        if (resultByNode?.data) {
           useGraphStore.getState().updateNode(id, {
-            data: { 
-              url: recordByNode.data, 
-              mediaId: recordByNode.id,
-              loading: false 
+            data: {
+              url: resultByNode.data,
+              mediaId: resultByNode.id,
+              loading: false
             }
           } as any)
           return
         }
-        
+
         // 3. 尝试通过 sourceUrl 恢复（支持 http(s) 与 /v1/... 相对 API 路径）
         const sourceUrl = String(nodeData?.sourceUrl || '').trim()
         if (isRecoverableSourceUrl(sourceUrl)) {
@@ -139,13 +154,13 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
           } as any)
           return
         }
-        
+
         console.log('[VideoNode] 无法恢复视频数据，节点需要重新生成')
       } catch (err) {
         console.error('[VideoNode] 加载媒体失败:', err)
       }
     }
-    
+
     loadMedia()
   }, [id, nodeData?.url, nodeData?.mediaId, nodeData?.sourceUrl, nodeData?.loading, nodeData?.error, inView])
 
@@ -450,13 +465,14 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       setCorsMode('none')
       return
     }
-    // 远程 URL 播放失败时，尝试从 IndexedDB 恢复 data URL
+    // 远程 URL 播放失败时，尝试从 IndexedDB / Tauri 持久化目录恢复
     if (nodeData?.mediaId && /^https?:\/\//i.test(url)) {
       void (async () => {
+        const projectId = useGraphStore.getState().projectId || 'default'
         try {
-          const record = await getMedia(nodeData.mediaId!)
-          if (record?.data && record.data !== url) {
-            useGraphStore.getState().updateNode(id, { data: { url: record.data, loading: false } } as any)
+          const result = await getMediaWithFallback(nodeData.mediaId!, id, projectId)
+          if (result?.data && result.data !== url) {
+            useGraphStore.getState().updateNode(id, { data: { url: result.data, loading: false } } as any)
             setVideoError('')
             return
           }

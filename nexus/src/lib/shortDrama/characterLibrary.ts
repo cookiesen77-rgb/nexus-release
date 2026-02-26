@@ -8,7 +8,7 @@ import type {
 } from '@/lib/shortDrama/types'
 
 const DB_NAME = 'nexus-character-library'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'characters'
 
 export interface LibraryCharacter {
@@ -31,7 +31,13 @@ function openDB(): Promise<IDBDatabase> {
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' })
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' })
+        store.createIndex('by_name', 'name', { unique: false })
+        store.createIndex('by_tags', 'tags', { multiEntry: true })
+      } else {
+        const store = req.transaction!.objectStore(STORE_NAME)
+        if (!store.indexNames.contains('by_name')) store.createIndex('by_name', 'name', { unique: false })
+        if (!store.indexNames.contains('by_tags')) store.createIndex('by_tags', 'tags', { multiEntry: true })
       }
     }
     req.onsuccess = () => resolve(req.result)
@@ -158,4 +164,89 @@ export function parseCharacterFromJSON(json: string): LibraryCharacter | null {
   } catch {
     return null
   }
+}
+
+// ── Search & Discovery ──
+
+export async function searchCharacterLibrary(
+  query: string,
+  filters?: { tags?: string[] },
+): Promise<LibraryCharacter[]> {
+  const all = await listLibraryCharacters()
+  const q = query.toLowerCase().trim()
+  let results = all
+
+  if (q) {
+    results = results.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.description.toLowerCase().includes(q) ||
+        (c.tags || []).some((t) => t.toLowerCase().includes(q)),
+    )
+  }
+
+  if (filters?.tags?.length) {
+    const tagSet = new Set(filters.tags.map((t) => t.toLowerCase()))
+    results = results.filter((c) => (c.tags || []).some((t) => tagSet.has(t.toLowerCase())))
+  }
+
+  return results.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+// ── Usage Statistics ──
+
+export async function getCharacterUsageStats(charId: string): Promise<{ projectCount: number; projectIds: string[] }> {
+  const libChar = await getLibraryCharacter(charId)
+  if (!libChar) return { projectCount: 0, projectIds: [] }
+
+  const { listProjectsAsync, loadDraftAsync } = await import('@/lib/shortDrama/draftStorage')
+  const projects = await listProjectsAsync()
+  const matching: string[] = []
+
+  for (const p of projects) {
+    try {
+      const draft = await loadDraftAsync(p.id)
+      if (draft.characters.some((c) => c.name === libChar.name)) {
+        matching.push(p.id)
+      }
+    } catch { /* skip broken projects */ }
+  }
+
+  return { projectCount: matching.length, projectIds: matching }
+}
+
+// ── Bundle Export/Import ──
+
+export function exportCharacterBundle(char: LibraryCharacter): string {
+  return JSON.stringify({
+    _type: 'nexus-character-bundle',
+    _version: 1,
+    character: char,
+    exportedAt: new Date().toISOString(),
+  }, null, 2)
+}
+
+export function parseCharacterBundle(json: string): LibraryCharacter | null {
+  try {
+    const data = JSON.parse(json)
+    if (data._type !== 'nexus-character-bundle') return null
+    return {
+      ...data.character,
+      id: makeId(),
+      updatedAt: Date.now(),
+    }
+  } catch {
+    return null
+  }
+}
+
+// ── Sync from Project back to Library ──
+
+export async function updateLibraryFromProject(
+  projectCharId: string,
+  draft: ShortDramaDraftV2,
+): Promise<string | null> {
+  const char = draft.characters.find((c) => c.id === projectCharId)
+  if (!char) return null
+  return saveCharacterToLibrary(char, draft.projectId)
 }

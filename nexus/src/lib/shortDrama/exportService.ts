@@ -295,17 +295,17 @@ export async function exportStoryboardPDF(
 // ── Download helpers ──
 
 export function downloadManifestJSON(draft: ShortDramaDraftV2) {
-  downloadAsFile(exportManifestJSON(draft), `${draft.title || 'project'}_manifest.json`, 'application/json')
+  void downloadAsFile(exportManifestJSON(draft), `${draft.title || 'project'}_manifest.json`, 'application/json')
 }
 
 export function downloadFCPXML(draft: ShortDramaDraftV2, episodeId?: string) {
   const timeline = buildTimeline(draft, episodeId)
-  downloadAsFile(exportFCPXML(timeline, draft), `${draft.title || 'project'}.xml`, 'application/xml')
+  void downloadAsFile(exportFCPXML(timeline, draft), `${draft.title || 'project'}.xml`, 'application/xml')
 }
 
 export function downloadOTIO(draft: ShortDramaDraftV2, episodeId?: string) {
   const timeline = buildTimeline(draft, episodeId)
-  downloadAsFile(exportOTIO(timeline, draft), `${draft.title || 'project'}.otio`, 'application/json')
+  void downloadAsFile(exportOTIO(timeline, draft), `${draft.title || 'project'}.otio`, 'application/json')
 }
 
 export async function downloadStoryboardPDF(draft: ShortDramaDraftV2, options?: Parameters<typeof exportStoryboardPDF>[1]) {

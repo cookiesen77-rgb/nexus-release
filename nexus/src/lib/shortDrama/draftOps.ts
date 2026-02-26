@@ -1,4 +1,4 @@
-import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, ShortDramaCreatedBy, ShortDramaEpisode } from '@/lib/shortDrama/types'
+import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, ShortDramaCreatedBy, ShortDramaEpisode, CalibrationStatus, ShortDramaCharacterAnchors, ShortDramaStyle } from '@/lib/shortDrama/types'
 
 const patchSlot = (slot: ShortDramaMediaSlot, slotId: string, updater: (s: ShortDramaMediaSlot) => ShortDramaMediaSlot): ShortDramaMediaSlot => {
   if (!slot || slot.id !== slotId) return slot
@@ -47,6 +47,7 @@ export const updateSlotById = (
       ...(sh.dialogueSlot ? { dialogueSlot: upd(sh.dialogueSlot) } : {}),
       ...(sh.narrationSlot ? { narrationSlot: upd(sh.narrationSlot) } : {}),
     })),
+    shotGroups: (draft.shotGroups || []).map((g) => ({ ...g, video: upd(g.video) })),
     updatedAt: Date.now(),
   }
   return changed ? next : draft
@@ -156,5 +157,60 @@ export const reorderEpisodes = (draft: ShortDramaDraftV2, orderedIds: string[]):
       return ep ? { ...ep, order: i } : null
     })
     .filter(Boolean) as ShortDramaEpisode[],
+  updatedAt: Date.now(),
+})
+
+// ---- Calibration ----
+
+export const updateCharacterCalibration = (
+  draft: ShortDramaDraftV2,
+  charId: string,
+  patch: { calibrationStatus?: CalibrationStatus; calibratedDescription?: string; anchors?: ShortDramaCharacterAnchors },
+): ShortDramaDraftV2 => ({
+  ...draft,
+  characters: draft.characters.map((c) => (c.id === charId ? { ...c, ...patch } : c)),
+  updatedAt: Date.now(),
+})
+
+export const updateSceneCalibration = (
+  draft: ShortDramaDraftV2,
+  sceneId: string,
+  patch: { calibrationStatus?: CalibrationStatus; calibratedDescription?: string },
+): ShortDramaDraftV2 => ({
+  ...draft,
+  scenes: draft.scenes.map((s) => (s.id === sceneId ? { ...s, ...patch } : s)),
+  updatedAt: Date.now(),
+})
+
+export const updateShotCalibration = (
+  draft: ShortDramaDraftV2,
+  shotId: string,
+  patch: {
+    calibrationStatus?: CalibrationStatus
+    calibratedVideoPrompt?: string
+    calibratedStartPrompt?: string
+    calibratedEndPrompt?: string
+    narrativeArc?: string
+    transitions?: string
+  },
+): ShortDramaDraftV2 => ({
+  ...draft,
+  shots: draft.shots.map((s) => (s.id === shotId ? { ...s, ...patch } : s)),
+  updatedAt: Date.now(),
+})
+
+// ---- Style Switching ----
+
+export const switchProjectStyle = (
+  draft: ShortDramaDraftV2,
+  newPresetId: string,
+  opts?: { keepCustomText?: boolean },
+): ShortDramaDraftV2 => ({
+  ...draft,
+  style: {
+    ...draft.style,
+    presetId: newPresetId,
+    customText: opts?.keepCustomText ? draft.style.customText : '',
+  },
   updatedAt: Date.now(),
 })

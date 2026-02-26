@@ -10,9 +10,10 @@ import { createPortal } from 'react-dom'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Trash2, Download, Expand, Loader2, Copy, ImageIcon, Crop, Eye, Video, RefreshCw } from 'lucide-react'
 import { useGraphStore } from '@/graph/store'
-import { getMedia, getMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
+import { saveMedia, getMediaWithFallback, getMediaByNodeIdWithFallback } from '@/lib/mediaStorage'
 import { downloadFile } from '@/lib/download'
 import { cacheMedia } from '@/lib/workflow/cache'
+import { recoverFromLocalPath } from '@/lib/tauriMediaPersist'
 import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, IMAGE_MODELS, VIDEO_MODELS } from '@/config/models'
 import { useInView } from '@/hooks/useInView'
 import ImageCropModal from '@/components/canvas/ImageCropModal'
@@ -123,7 +124,8 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
       return
     }
 
-    if (!nodeData?.mediaId && !nodeData?.sourceUrl) {
+    const localPath = String((nodeData as any)?.localPath || '').trim()
+    if (!nodeData?.mediaId && !nodeData?.sourceUrl && !localPath) {
       return
     }
 
@@ -132,35 +134,48 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
     }
 
     loadAttemptedRef.current = true
-    
+
     const loadMedia = async () => {
+      const projectId = useGraphStore.getState().projectId || 'default'
+
       try {
-        // 1. 首先尝试通过 mediaId 从 IndexedDB 加载
-        if (nodeData?.mediaId) {
-          console.log('[ImageNode] 从 IndexedDB 加载图片, mediaId:', nodeData.mediaId)
-          const record = await getMedia(nodeData.mediaId)
-          if (record?.data) {
+        // 0. 尝试通过 localPath（Tauri 缓存路径）恢复
+        if (localPath) {
+          const assetUrl = await recoverFromLocalPath(localPath)
+          if (assetUrl) {
             useGraphStore.getState().updateNode(id, {
-              data: { url: record.data, loading: false }
+              data: { url: assetUrl, loading: false }
             } as any)
             return
           }
         }
-        
-        // 2. 尝试通过 nodeId 从 IndexedDB 查找
-        console.log('[ImageNode] 通过 nodeId 从 IndexedDB 查找:', id)
-        const recordByNode = await getMediaByNodeId(id)
-        if (recordByNode?.data) {
+
+        // 1. 首先尝试通过 mediaId 从 IndexedDB / Tauri 持久化目录加载
+        if (nodeData?.mediaId) {
+          console.log('[ImageNode] 从 IndexedDB/Tauri 加载图片, mediaId:', nodeData.mediaId)
+          const result = await getMediaWithFallback(nodeData.mediaId, id, projectId)
+          if (result?.data) {
+            useGraphStore.getState().updateNode(id, {
+              data: { url: result.data, loading: false }
+            } as any)
+            return
+          }
+        }
+
+        // 2. 尝试通过 nodeId 从 IndexedDB / Tauri 持久化目录查找
+        console.log('[ImageNode] 通过 nodeId 查找:', id)
+        const resultByNode = await getMediaByNodeIdWithFallback(id, projectId)
+        if (resultByNode?.data) {
           useGraphStore.getState().updateNode(id, {
-            data: { 
-              url: recordByNode.data, 
-              mediaId: recordByNode.id,
-              loading: false 
+            data: {
+              url: resultByNode.data,
+              mediaId: resultByNode.id,
+              loading: false
             }
           } as any)
           return
         }
-        
+
         // 3. 如果有 sourceUrl（HTTPS URL），直接使用
         if (nodeData?.sourceUrl && nodeData.sourceUrl.startsWith('http')) {
           console.log('[ImageNode] 使用 sourceUrl:', nodeData.sourceUrl.slice(0, 50))
@@ -169,13 +184,13 @@ export const ImageNodeComponent = memo(function ImageNode({ id, data, selected }
           } as any)
           return
         }
-        
+
         console.log('[ImageNode] 无法恢复图片数据，节点需要重新生成')
       } catch (err) {
         console.error('[ImageNode] 加载媒体失败:', err)
       }
     }
-    
+
     loadMedia()
   }, [id, nodeData?.url, nodeData?.mediaId, nodeData?.sourceUrl, nodeData?.loading, nodeData?.error])
 

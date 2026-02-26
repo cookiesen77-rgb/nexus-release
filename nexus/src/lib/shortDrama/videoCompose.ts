@@ -152,9 +152,29 @@ export function exportTimelineJSON(draft: ShortDramaDraftV2, episodeId?: string)
   }
 }
 
-// ── 触发浏览器下载 ──
+// ── 触发下载（Tauri 走文件对话框） ──
 
-export function downloadAsFile(content: string, filename: string, mimeType = 'text/plain') {
+const _isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
+
+export async function downloadAsFile(content: string, filename: string, mimeType = 'text/plain') {
+  const data = new TextEncoder().encode(content)
+
+  if (_isTauri) {
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog')
+      const { writeFile } = await import('@tauri-apps/plugin-fs')
+      const ext = filename.split('.').pop() || 'txt'
+      const path = await save({
+        defaultPath: filename,
+        filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+      })
+      if (path) {
+        await writeFile(path, data)
+        return
+      }
+    } catch { /* fall through */ }
+  }
+
   const blob = new Blob([content], { type: `${mimeType};charset=utf-8` })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -164,4 +184,59 @@ export function downloadAsFile(content: string, filename: string, mimeType = 'te
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+// ── Editable Timeline (for integrated timeline editor) ──
+
+export interface EditableTimelineSegment extends ShortDramaTimelineSegment {
+  title: string
+  thumbnailUrl?: string
+  dialogueText?: string
+  dialogueSpeaker?: string
+  narrationText?: string
+  bgmTrackId?: string
+  bgmVolume?: number
+}
+
+export function buildEditableTimeline(
+  draft: ShortDramaDraftV2,
+  episodeId?: string,
+): { segments: EditableTimelineSegment[]; totalDurationMs: number } {
+  const shots = episodeId ? draft.shots.filter((s) => s.episodeId === episodeId) : draft.shots
+  const defaultDurationMs = (draft.models.videoDuration || 5) * 1000
+  const charMap = new Map(draft.characters.map((c) => [c.id, c.name]))
+
+  let cursor = 0
+  const segments: EditableTimelineSegment[] = []
+
+  for (const shot of shots) {
+    const videoVariant = getSelectedVariant(shot, 'video')
+    const durationMs = videoVariant?.durationMs || defaultDurationMs
+
+    const startSlot = shot.frames.start.slot
+    const startVariant = startSlot.selectedVariantId
+      ? startSlot.variants.find((v) => v.id === startSlot.selectedVariantId)
+      : startSlot.variants.find((v) => v.status === 'success')
+    const thumbnailUrl = startVariant?.displayUrl || startVariant?.sourceUrl
+
+    const speaker = shot.audio?.dialogueCharacterId ? charMap.get(shot.audio.dialogueCharacterId) : undefined
+
+    segments.push({
+      shotId: shot.id,
+      startMs: cursor,
+      durationMs,
+      videoUrl: getSlotUrl(shot, 'video'),
+      dialogueUrl: getSlotUrl(shot, 'dialogueSlot'),
+      narrationUrl: getSlotUrl(shot, 'narrationSlot'),
+      title: shot.title,
+      thumbnailUrl,
+      dialogueText: shot.audio?.dialogue?.trim() || undefined,
+      dialogueSpeaker: speaker,
+      narrationText: shot.audio?.narration?.trim() || undefined,
+    })
+
+    cursor += durationMs
+  }
+
+  return { segments, totalDurationMs: cursor }
 }

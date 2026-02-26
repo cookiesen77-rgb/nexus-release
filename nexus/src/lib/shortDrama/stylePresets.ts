@@ -6,6 +6,8 @@ export interface ShortDramaStylePreset {
   description: string
   baseStyleText: string
   baseNegativeText: string
+  thumbnailGradient?: string
+  moodTags?: string[]
 }
 
 export const SHORT_DRAMA_STYLE_PRESETS: ShortDramaStylePreset[] = [
@@ -306,3 +308,23 @@ export const buildEffectiveStyle = (style: ShortDramaStyle): { styleText: string
   const negativeText = [preset.baseNegativeText, negative].map((s) => String(s || '').trim()).filter(Boolean).join(', ')
   return { styleText, negativeText }
 }
+
+const PRESET_VISUAL_META: Record<string, { gradient: string; mood: string[] }> = {
+  cinematic_realism: { gradient: 'linear-gradient(135deg, #1a1a2e, #16213e, #0f3460)', mood: ['dramatic', 'cinematic', 'realistic'] },
+  studio_portrait: { gradient: 'linear-gradient(135deg, #f5f5f5, #e0e0e0, #bdbdbd)', mood: ['clean', 'professional', 'commercial'] },
+  k_webtoon_vertical: { gradient: 'linear-gradient(135deg, #fce4ec, #f8bbd0, #f48fb1)', mood: ['romance', 'modern', 'stylized'] },
+  anime_cel_shaded: { gradient: 'linear-gradient(135deg, #e3f2fd, #90caf9, #42a5f5)', mood: ['vibrant', 'dynamic', 'anime'] },
+  chinese_costume_drama: { gradient: 'linear-gradient(135deg, #8d6e63, #d7ccc8, #efebe9)', mood: ['historical', 'elegant', 'traditional'] },
+  chinese_ink_wash: { gradient: 'linear-gradient(135deg, #fafafa, #e0e0e0, #424242)', mood: ['serene', 'artistic', 'traditional'] },
+  watercolor_illustration: { gradient: 'linear-gradient(135deg, #e8f5e9, #c8e6c9, #a5d6a7)', mood: ['soft', 'organic', 'gentle'] },
+  cyberpunk_neon: { gradient: 'linear-gradient(135deg, #0d0221, #0a0c1f, #ff00ff)', mood: ['futuristic', 'neon', 'dark'] },
+  film_noir: { gradient: 'linear-gradient(135deg, #212121, #424242, #616161)', mood: ['dark', 'mysterious', 'classic'] },
+  warm_minimal_illustration: { gradient: 'linear-gradient(135deg, #fff8e1, #ffecb3, #ffe082)', mood: ['warm', 'minimal', 'cozy'] },
+  ghibli_dreamlike: { gradient: 'linear-gradient(135deg, #e8f5e9, #b2dfdb, #80cbc4)', mood: ['dreamy', 'whimsical', 'pastoral'] },
+  ecommerce_product: { gradient: 'linear-gradient(135deg, #fff, #f5f5f5, #eee)', mood: ['clean', 'product', 'commercial'] },
+  ecommerce_lifestyle: { gradient: 'linear-gradient(135deg, #fce4ec, #fff3e0, #fff8e1)', mood: ['lifestyle', 'warm', 'commercial'] },
+  thick_paint_fantasy: { gradient: 'linear-gradient(135deg, #4a148c, #6a1b9a, #ce93d8)', mood: ['fantasy', 'painterly', 'rich'] },
+}
+
+export const getPresetVisualMeta = (presetId: string) =>
+  PRESET_VISUAL_META[presetId] || { gradient: 'linear-gradient(135deg, #666, #999)', mood: [] }

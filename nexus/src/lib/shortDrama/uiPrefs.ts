@@ -1,6 +1,6 @@
 import type { ShortDramaAutoStrategy, ShortDramaStudioMode } from '@/lib/shortDrama/types'
 
-export type ShortDramaPanelId = 'script' | 'assets' | 'shots' | 'progress'
+export type ShortDramaPanelId = 'script' | 'assets' | 'shots' | 'progress' | 'director' | 'timeline'
 export type ShortDramaScriptSubTab = 'import' | 'ai'
 
 export interface ShortDramaStudioPrefsV1 {
@@ -55,7 +55,7 @@ export const loadShortDramaPrefs = (projectId: string): ShortDramaStudioPrefsV1 
       audioConcurrency,
       currentEpisodeId: typeof parsed.currentEpisodeId === 'string' ? parsed.currentEpisodeId : undefined,
       assetSidebarOpen: typeof parsed.assetSidebarOpen === 'boolean' ? parsed.assetSidebarOpen : undefined,
-      activePanel: (['script', 'assets', 'shots', 'progress'] as const).includes(parsed.activePanel) ? parsed.activePanel : undefined,
+      activePanel: (['script', 'assets', 'shots', 'progress', 'director', 'timeline'] as const).includes(parsed.activePanel) ? parsed.activePanel : undefined,
       scriptSubTab: (['import', 'ai'] as const).includes(parsed.scriptSubTab) ? parsed.scriptSubTab : undefined,
     }
   }

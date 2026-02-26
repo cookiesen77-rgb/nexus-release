@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { X, Search, Star, Plus, Tag, ChevronDown, ChevronRight } from 'lucide-react'
+import { X, Search, Star, Plus, Tag, ChevronDown, ChevronRight, BookOpen } from 'lucide-react'
 import { ShortDramaVariantThumb } from '@/components/shortDrama/ShortDramaSlotVersions'
+import ShortDramaCharacterLibraryPanel from '@/components/shortDrama/ShortDramaCharacterLibraryPanel'
 import type { ShortDramaDraftV2, ShortDramaCharacter, ShortDramaScene, ShortDramaAsset, ShortDramaMediaSlot } from '@/lib/shortDrama/types'
 
 interface Props {
@@ -12,7 +13,7 @@ interface Props {
   currentEpisodeId?: string | null
 }
 
-type FilterTab = 'all' | 'character' | 'scene' | 'asset' | 'favorite'
+type FilterTab = 'all' | 'character' | 'scene' | 'asset' | 'favorite' | 'library'
 
 type AssetItem = {
   type: 'character' | 'scene' | 'asset'
@@ -40,6 +41,7 @@ export default function ShortDramaAssetSidebar({ open, onClose, draft, setDraft,
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [addingTagId, setAddingTagId] = useState<string | null>(null)
   const [tagInput, setTagInput] = useState('')
+  const [libraryOpen, setLibraryOpen] = useState(false)
 
   const currentEpisode = useMemo(() =>
     currentEpisodeId ? (draft.episodes || []).find(e => e.id === currentEpisodeId) : undefined,
@@ -209,6 +211,7 @@ export default function ShortDramaAssetSidebar({ open, onClose, draft, setDraft,
     { key: 'scene', label: '场景' },
     { key: 'asset', label: '资产' },
     { key: 'favorite', label: '收藏' },
+    { key: 'library', label: '角色库' },
   ]
 
   const grouped = useMemo(() => {
@@ -385,6 +388,19 @@ export default function ShortDramaAssetSidebar({ open, onClose, draft, setDraft,
       )}
 
       {/* List */}
+      {filterTab === 'library' ? (
+        <div className="flex-1 flex items-center justify-center px-4 pb-4">
+          <button
+            type="button"
+            className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[var(--border-color)] p-8 text-[var(--text-secondary)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)] transition-colors"
+            onClick={() => setLibraryOpen(true)}
+          >
+            <BookOpen className="h-8 w-8" />
+            <span className="text-sm font-medium">打开角色库</span>
+            <span className="text-xs">搜索、导入、导出跨项目角色</span>
+          </button>
+        </div>
+      ) : (
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         {filteredItems.length === 0 ? (
           <div className="flex h-32 items-center justify-center text-xs text-[var(--text-secondary)]">暂无素材</div>
@@ -412,6 +428,14 @@ export default function ShortDramaAssetSidebar({ open, onClose, draft, setDraft,
           </div>
         )}
       </div>
+      )}
+
+      <ShortDramaCharacterLibraryPanel
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        draft={draft}
+        setDraft={setDraft}
+      />
     </div>
   )
 }

@@ -9,8 +9,11 @@ import type {
   ShortDramaCharacter,
   ShortDramaCharacterAnchors,
   ShortDramaCinematography,
+  ShortDramaDraftV2,
   ShortDramaScene,
+  ShortDramaShotGroup,
 } from '@/lib/shortDrama/types'
+import { validateSeedanceAssets } from '@/lib/shortDrama/shotGroupOps'
 
 const normalizeText = (text: unknown) => String(text || '').replace(/\r\n/g, '\n').trim()
 const toDataUrl = (b64: string, mime = 'image/png') => `data:${mime};base64,${b64}`
@@ -538,6 +541,7 @@ export type ShortDramaVideoRequest = {
   resolution?: string
   images?: string[]
   lastFrame?: string
+  lipSyncAudioUrl?: string
 }
 
 export type ShortDramaVideoResult = {
@@ -1238,6 +1242,13 @@ export async function generateShortDramaVideo(req: ShortDramaVideoRequest): Prom
       })
     }
 
+    if (req.lipSyncAudioUrl) {
+      content.push({
+        type: 'audio_url',
+        audio_url: { url: req.lipSyncAudioUrl },
+      })
+    }
+
     payload = {
       model: modelCfg.key,
       content,
@@ -1753,4 +1764,66 @@ export async function generateSceneContactSheet(req: {
     prompt,
     size: req.size || '1024x1024',
   })
+}
+
+// ── Shot Group Video (Seedance 2.0 multi-modal) ──
+
+
+export async function generateShotGroupVideo(
+  group: ShortDramaShotGroup,
+  draft: ShortDramaDraftV2,
+  modelKey?: string,
+): Promise<ShortDramaVideoResult> {
+  const validationErrors = validateSeedanceAssets(group)
+  if (validationErrors.length > 0) {
+    throw new Error(`镜头组资产校验失败: ${validationErrors.join('; ')}`)
+  }
+
+  const prompt = group.calibratedPrompt || group.mergedPrompt
+  if (!prompt?.trim()) throw new Error('镜头组缺少合并提示词')
+
+  const modelK = modelKey || DEFAULT_VIDEO_MODEL
+  const allModels = [...VIDEO_MODELS, ...(modelsConfig as any).EXTRA_VIDEO_MODELS || []]
+  const modelCfg = allModels.find((m: any) => String(m?.key || '') === modelK) || allModels[0]
+  if (!modelCfg) throw new Error('未找到视频模型配置')
+  if (modelCfg.format !== 'volc-seedance-video') {
+    throw new Error('镜头组视频生成仅支持 Seedance 2.0 模型')
+  }
+
+  const content: any[] = [{ type: 'text', text: prompt }]
+
+  for (const ref of group.imageRefs) {
+    if (ref.url) content.push({ type: 'image_url', image_url: { url: ref.url } })
+  }
+  for (const ref of group.videoRefs) {
+    if (ref.url) content.push({ type: 'video_url', video_url: { url: ref.url } })
+  }
+  for (const ref of group.audioRefs) {
+    if (ref.url) content.push({ type: 'audio_url', audio_url: { url: ref.url } })
+  }
+
+  const durValue = group.totalDurationSec || 5
+  const watermark = typeof modelCfg.defaultParams?.watermark === 'boolean' ? modelCfg.defaultParams.watermark : false
+
+  const payload = {
+    model: modelCfg.key,
+    content,
+    ratio: 'adaptive',
+    duration: durValue,
+    watermark,
+  }
+
+  console.log('[generateShotGroupVideo] payload:', JSON.stringify(payload, null, 2))
+
+  const resp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: 60000 })
+  const taskId = resp?.id || resp?.task_id || resp?.data?.task_id || resp?.data?.id || ''
+  if (!taskId) throw new Error('镜头组视频任务创建失败，无 task_id')
+
+  const videoUrl = await pollVideoTask(taskId, modelCfg, undefined)
+  return {
+    taskId,
+    videoUrl,
+    displayUrl: videoUrl,
+    localPath: '',
+  }
 }

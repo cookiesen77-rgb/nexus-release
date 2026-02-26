@@ -9,6 +9,7 @@
  */
 
 import { safeFetch } from '@/lib/safeFetch'
+import { persistMedia, recoverMedia } from '@/lib/tauriMediaPersist'
 
 
 const DB_NAME = 'nexus-media-storage'
@@ -100,6 +101,8 @@ export const saveMedia = async (record: Omit<MediaRecord, 'id' | 'createdAt' | '
     const req = store.put(fullRecord)
     req.onsuccess = () => {
       console.log('[MediaStorage] 保存成功:', id, '大小:', Math.round((record.data?.length || 0) / 1024), 'KB')
+      // Tauri 持久化备份（fire-and-forget，不阻塞 IndexedDB 保存）
+      void persistMedia(record.nodeId, record.projectId, record.data).catch(() => {})
       resolve(id)
     }
     req.onerror = () => reject(req.error)
@@ -392,6 +395,34 @@ export const isLargeData = (data: string | undefined | null): boolean => {
 export const isBase64Data = (data: string | undefined | null): boolean => {
   if (!data || typeof data !== 'string') return false
   return data.startsWith('data:')
+}
+
+/**
+ * 通过 ID 获取媒体数据（带 Tauri 持久化兜底）
+ * IndexedDB → Tauri app_data_dir
+ */
+export const getMediaWithFallback = async (id: string, nodeId: string, projectId: string): Promise<{ data: string; source: 'indexeddb' | 'tauri' } | null> => {
+  const record = await getMedia(id).catch(() => null)
+  if (record?.data) return { data: record.data, source: 'indexeddb' }
+
+  const tauriUrl = await recoverMedia(nodeId, projectId).catch(() => null)
+  if (tauriUrl) return { data: tauriUrl, source: 'tauri' }
+
+  return null
+}
+
+/**
+ * 通过节点 ID 获取媒体数据（带 Tauri 持久化兜底）
+ * IndexedDB (by nodeId) → Tauri app_data_dir
+ */
+export const getMediaByNodeIdWithFallback = async (nodeId: string, projectId: string): Promise<{ data: string; id?: string; source: 'indexeddb' | 'tauri' } | null> => {
+  const record = await getMediaByNodeId(nodeId).catch(() => null)
+  if (record?.data) return { data: record.data, id: record.id, source: 'indexeddb' }
+
+  const tauriUrl = await recoverMedia(nodeId, projectId).catch(() => null)
+  if (tauriUrl) return { data: tauriUrl, source: 'tauri' }
+
+  return null
 }
 
 // ==================== LRU 缓存管理 ====================

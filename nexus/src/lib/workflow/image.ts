@@ -846,7 +846,7 @@ export const generateImageFromConfigNode = async (
             projectId,
             type: 'image',
             data: displayUrl,
-            sourceUrl: imageUrl !== displayUrl ? imageUrl : undefined,
+            sourceUrl: isHttpUrl(imageUrl) ? imageUrl : undefined,
             model: modelKey,
           })
           if (mediaId) useGraphStore.getState().patchNodeDataSilent(outputNodeId, { mediaId })

@@ -2374,7 +2374,7 @@ export const generateVideoFromConfigNode = async (
           projectId,
           type: 'video',
           data: displayUrl,
-          sourceUrl: isPersistableSourceUrl(videoUrl) && videoUrl !== displayUrl ? videoUrl : undefined,
+          sourceUrl: isPersistableSourceUrl(videoUrl) ? videoUrl : undefined,
           model: modelKey,
         })
         console.log('[generateVideo] 视频已保存到 IndexedDB, mediaId:', mediaId)

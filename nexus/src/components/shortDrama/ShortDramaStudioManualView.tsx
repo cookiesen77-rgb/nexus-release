@@ -25,9 +25,15 @@ import type { ShortDramaDraftV2, ShortDramaMediaSlot, ShortDramaMediaVariant, Sh
 import { SHOT_FRAME_MODES } from '@/lib/shortDrama/types'
 import { saveShortDramaPrefs, type ShortDramaStudioPrefsV1, type ShortDramaPanelId, type ShortDramaScriptSubTab } from '@/lib/shortDrama/uiPrefs'
 import { cn } from '@/lib/utils'
-import { Check, CheckSquare, Eye, Image as ImageIcon, Layers, Loader2, Plus, Square, Sword, Trash2, Upload, Video as VideoIcon, Wand2, X } from 'lucide-react'
+import { Check, CheckSquare, ChevronRight, Download, Eye, Film, Image as ImageIcon, Layers, Loader2, Music, Palette, Plus, Square, Sword, Trash2, Upload, Video as VideoIcon, Wand2, X } from 'lucide-react'
 import ShortDramaBlendPanel from '@/components/shortDrama/ShortDramaBlendPanel'
 import ShortDramaExportModal from '@/components/shortDrama/ShortDramaExportModal'
+import ShortDramaDirectorBoard from '@/components/shortDrama/ShortDramaDirectorBoard'
+import ShortDramaTimeline from '@/components/shortDrama/ShortDramaTimeline'
+import ShortDramaRenderModal from '@/components/shortDrama/ShortDramaRenderModal'
+import ShortDramaStyleSwitcher from '@/components/shortDrama/ShortDramaStyleSwitcher'
+import ShortDramaBGMPanel from '@/components/shortDrama/ShortDramaBGMPanel'
+import ShortDramaShotGroupPanel from '@/components/shortDrama/ShortDramaShotGroupPanel'
 import { createEmptyAsset } from '@/lib/shortDrama/draftStorage'
 
 interface Props {
@@ -234,6 +240,7 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
   const navigate = useNavigate()
   const [previewOpen, setPreviewOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [renderModalOpen, setRenderModalOpen] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewType, setPreviewType] = useState<'image' | 'video'>('image')
   const [previewBusy, setPreviewBusy] = useState(false)
@@ -3020,6 +3027,72 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
         </div>
       </div>
         )}
+
+        {activePanel === 'director' && (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <ShortDramaDirectorBoard
+              draft={draft}
+              setDraft={setDraft}
+              currentEpisodeId={currentEpisodeId}
+            />
+            <details className="group/section border-t border-[var(--border-color)]">
+              <summary className="flex items-center gap-2 px-4 py-2 cursor-pointer select-none hover:bg-white/[0.02] transition-colors">
+                <ChevronRight className="h-3 w-3 text-[var(--text-secondary)]/50 transition-transform group-open/section:rotate-90" />
+                <Palette className="h-3.5 w-3.5 text-violet-400" />
+                <span className="text-xs font-medium text-[var(--text-primary)]">视觉风格</span>
+                <span className="text-[10px] text-[var(--text-secondary)]/50 ml-auto">{draft.style?.presetId || '自定义'}</span>
+              </summary>
+              <div className="px-2 pb-3">
+                <ShortDramaStyleSwitcher draft={draft} setDraft={setDraft} />
+              </div>
+            </details>
+            <details className="group/section border-t border-[var(--border-color)]">
+              <summary className="flex items-center gap-2 px-4 py-2 cursor-pointer select-none hover:bg-white/[0.02] transition-colors">
+                <ChevronRight className="h-3 w-3 text-[var(--text-secondary)]/50 transition-transform group-open/section:rotate-90" />
+                <Music className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="text-xs font-medium text-[var(--text-primary)]">BGM</span>
+                <span className="text-[10px] text-[var(--text-secondary)]/50 ml-auto tabular-nums">{(draft.bgmLibrary || []).length} 曲目</span>
+              </summary>
+              <div className="pb-3">
+                <ShortDramaBGMPanel draft={draft} setDraft={setDraft} projectId={projectId} />
+              </div>
+            </details>
+            <details className="group/section border-t border-[var(--border-color)]">
+              <summary className="flex items-center gap-2 px-4 py-2 cursor-pointer select-none hover:bg-white/[0.02] transition-colors">
+                <ChevronRight className="h-3 w-3 text-[var(--text-secondary)]/50 transition-transform group-open/section:rotate-90" />
+                <Film className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="text-xs font-medium text-[var(--text-primary)]">镜头组合并</span>
+                <span className="text-[10px] text-[var(--text-secondary)]/50 ml-auto tabular-nums">{(draft.shotGroups || []).length} 组</span>
+              </summary>
+              <div className="pb-3">
+                <ShortDramaShotGroupPanel draft={draft} setDraft={setDraft} currentEpisodeId={currentEpisodeId} />
+              </div>
+            </details>
+          </div>
+        )}
+
+        {activePanel === 'timeline' && (
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <ShortDramaTimeline
+              draft={draft}
+              setDraft={setDraft}
+              currentEpisodeId={currentEpisodeId}
+            />
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--border-color)] px-4 py-2 shrink-0 bg-[var(--bg-secondary)]/30">
+              <span className="text-[10px] text-[var(--text-secondary)]/50 font-mono">
+                {draft.shots.length} shots
+              </span>
+              <Button
+                size="sm"
+                onClick={() => setRenderModalOpen(true)}
+                className="gap-1.5 bg-gradient-to-r from-[var(--accent-color)] to-violet-500 hover:from-[var(--accent-color)]/90 hover:to-violet-500/90 text-white shadow-lg shadow-[var(--accent-color)]/15"
+              >
+                <Download className="h-3.5 w-3.5" />
+                合成导出 MP4
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <ShortDramaMediaPickerModal
@@ -3060,6 +3133,13 @@ export default function ShortDramaStudioManualView({ projectId, draft, setDraft,
           window.$message?.success?.('融合图片已添加到素材库，可从历史导入到任意位置')
           setBlendPanelOpen(false)
         }}
+      />
+
+      <ShortDramaRenderModal
+        open={renderModalOpen}
+        onClose={() => setRenderModalOpen(false)}
+        draft={draft}
+        currentEpisodeId={currentEpisodeId}
       />
     </>
   )
