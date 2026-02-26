@@ -393,13 +393,12 @@ export const VideoNodeComponent = memo(function VideoNode({ id, data, selected }
       const errMsg = err?.message || String(err) || '未知错误'
       if (errMsg.includes('CORS') || errMsg.includes('Failed to fetch')) {
         window.$message?.warning?.('跨域限制，正在尝试直接打开...')
-        const link = document.createElement('a')
-        link.href = downloadUrl
-        link.target = '_blank'
-        link.rel = 'noopener noreferrer'
-        document.body.appendChild(link)
-        link.click()
-        setTimeout(() => document.body.removeChild(link), 100)
+        try {
+          const { openExternal } = await import('@/lib/openExternal')
+          await openExternal(downloadUrl)
+        } catch {
+          window.$message?.error?.('打开链接失败')
+        }
       } else {
         window.$message?.error?.(`下载失败: ${errMsg}`)
       }

@@ -162,7 +162,7 @@ async function fetchFileData(url: string): Promise<Uint8Array> {
       const needsAuth = shouldAttachBearer(resolvedUrl) && !isCdnUrl(resolvedUrl) && token
       const headers = needsAuth ? { Authorization: `Bearer ${token}` } : undefined
 
-      // 优先使用 Tauri plugin-http（绕过 CORS），失败时回退到 WebView fetch
+      // 优先使用 Tauri plugin-http（绕过 CORS），失败时回退到 Rust cache_remote_media
       try {
         const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
         const response = await tauriFetch(resolvedUrl, { method: 'GET', headers } as any)
@@ -170,24 +170,24 @@ async function fetchFileData(url: string): Promise<Uint8Array> {
         const arrayBuffer = await response.arrayBuffer()
         return new Uint8Array(arrayBuffer)
       } catch (tauriErr: any) {
-        console.warn('[download] Tauri plugin-http 失败, 回退 WebView fetch:', String(tauriErr?.message || '').slice(0, 120))
-        // 回退1: 带 headers
+        console.warn('[download] Tauri plugin-http 失败, 回退 cache_remote_media:', String(tauriErr?.message || '').slice(0, 120))
+        // 回退: 使用 Rust 端 cache_remote_media 下载到本地缓存再读取
         try {
-          const response = await safeFetch(resolvedUrl, headers ? { headers, mode: 'cors' } : { mode: 'cors' })
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          const arrayBuffer = await response.arrayBuffer()
-          return new Uint8Array(arrayBuffer)
-        } catch (fetchErr: any) {
-          // 回退2: 不带 auth 头（某些 CDN 会因为多余 headers 返回 400）
-          if (needsAuth) {
-            console.warn('[download] 带Auth失败, 尝试无Auth:', String(fetchErr?.message || '').slice(0, 80))
-            const response = await safeFetch(resolvedUrl, { mode: 'cors' })
-            if (!response.ok) throw new Error(`HTTP ${response.status}`)
-            const arrayBuffer = await response.arrayBuffer()
-            return new Uint8Array(arrayBuffer)
-          }
-          throw fetchErr
+          const { invoke } = await import('@tauri-apps/api/core')
+          const { readFile } = await import('@tauri-apps/plugin-fs')
+          const localPath = await invoke<string>('cache_remote_media', {
+            url: resolvedUrl,
+            authToken: needsAuth ? token : null
+          })
+          if (localPath) return await readFile(localPath)
+        } catch (cacheErr: any) {
+          console.warn('[download] cache_remote_media 也失败:', String(cacheErr?.message || '').slice(0, 120))
         }
+        // 最终回退: WebView fetch
+        const response = await safeFetch(resolvedUrl, headers ? { headers, mode: 'cors' } : { mode: 'cors' })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const arrayBuffer = await response.arrayBuffer()
+        return new Uint8Array(arrayBuffer)
       }
     } else {
       // Web mode

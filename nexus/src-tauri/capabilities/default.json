@@ -16,6 +16,7 @@
     "fs:allow-write-text-file",
     "fs:write-all",
     "fs:read-all",
+    "shell:allow-open",
     {
       "identifier": "http:default",
       "allow": [
