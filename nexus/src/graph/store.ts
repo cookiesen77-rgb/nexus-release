@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { EdgeType, GraphEdge, GraphNode, NodeType, Viewport } from '@/graph/types'
 import { useProjectsStore } from '@/store/projects'
 import { getNodeSize } from '@/graph/nodeSizing'
-import { computeAutoLayout } from '@/graph/autoLayout'
+import { computeAutoLayout, computeSmartTidy } from '@/graph/autoLayout'
 import { deleteMediaByNodeId, saveMedia } from '@/lib/mediaStorage'
 import {
   createSpatialIndex,
@@ -1028,7 +1028,10 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   autoArrangeNodes: () => {
     const s = get()
     if (s.nodes.length === 0) return
-    const positions = computeAutoLayout(s.nodes, s.edges, getNodeSize)
+    const startIds = s.selectedNodeIds.length > 0
+      ? s.selectedNodeIds
+      : s.selectedNodeId ? [s.selectedNodeId] : []
+    const positions = computeSmartTidy(s.nodes, s.edges, startIds, getNodeSize)
     if (positions.size === 0) return
     const nodes = s.nodes.map(n => {
       const pos = positions.get(n.id)

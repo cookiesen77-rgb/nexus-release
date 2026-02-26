@@ -42,6 +42,7 @@
 | OpenAI Images | `gpt-image-1.5-all` | `/images/generations` | Bearer | `model,prompt,n,size`；`size` 按文档限制映射为 `1024x1024 / 1536x1024 / 1024x1536`（与 UI 画幅对应） | 同上 |
 | OpenAI Images | `jimeng-4.5` | `/images/generations` | Bearer | Apifox 示例里 `size` 使用比例（如 `2:3`），其余字段同上 | 同上 |
 | OpenAI Images | `flux-pro-1.1-ultra` | `/images/generations` | Bearer | OpenAI Images 兼容：`model,prompt,n,size`（返回 `data[].url` / `b64_json`） | 同上 |
+| 豆包 Seedream | `doubao-seedream-5-0-260128` | `/images/generations` | Bearer | `model,prompt,size(1K/2K/4K)`；建议 `sequential_image_generation=disabled`；`response_format=url`；`watermark=false` | 同上 |
 | 豆包 Seedream | `doubao-seedream-4-5-251128` | `/images/generations` | Bearer | `model,prompt,size(1K/2K/4K)`；建议 `sequential_image_generation=disabled`；`response_format=url`；`watermark=false` | 同上 |
 | OpenAI Chat 生图 | `qwen-image-max` | `/chat/completions` | Bearer | 以 Chat 方式请求；项目使用“提取 URL/DataURI”的方式兼容返回形态（建议让模型只输出图片 URL 或 dataURI） | 同上 |
 | OpenAI Chat 生图 | `grok-4-image` | `/chat/completions` | Bearer | 以 Chat 方式请求；项目会深度提取返回里的 `url/image_url`；建议提示词里要求“只输出图片 URL 或 dataURI” | 同上 |
@@ -62,6 +63,9 @@
 | Kling 视频 | `kling-video` | 文生：`/kling/v1/videos/text2video`；图生：`/kling/v1/videos/image2video` | Bearer | 文生查询：`GET /kling/v1/videos/text2video/{id}`；图生查询：`GET /kling/v1/videos/image2video/{id}` | 同上 |
 | Tencent-VOD AIGC | `aigc-video-vidu` | `/tencent-vod/v1/aigc-video` | Bearer | 当前仅支持“接口直接返回 video_url”；若返回任务 ID 需补齐查询端点 | 同上 |
 | Tencent-VOD AIGC | `aigc-video-hailuo` | `/tencent-vod/v1/aigc-video` | Bearer | 同上 | 同上 |
+| 统一视频格式 | `grok-video-3` | `/v1/video/create` | Bearer | `POST /v1/video/query`（需 `images` 必填，公网 URL） | 同上 |
+| 统一视频格式 | `grok-video-3-10s` | `/v1/video/create` | Bearer | 同上 | 同上 |
+| 统一视频格式 | `grok-video-3-15s` | `/v1/video/create` | Bearer | 同上 | 同上 |
 
 ---
 

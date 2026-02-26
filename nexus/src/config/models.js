@@ -94,17 +94,38 @@ export const IMAGE_MODELS = [
         }
     },
     {
+        label: '豆包 Seedream 5.0（doubao-seedream-5-0-260128）',
+        key: 'doubao-seedream-5-0-260128',
+        endpoint: '/images/generations',
+        authMode: 'bearer',
+        format: 'doubao-seedream',
+        timeout: 240000,
+        tips: '支持文生图/多图融合；参考图需 http(s) URL，最多 6 张。',
+        requiresPrompt: true,
+        supportsReferenceImages: true,
+        maxRefImages: 6,
+        qualities: [
+            { label: '1K', key: '1K' },
+            { label: '2K', key: '2K' },
+            { label: '4K', key: '4K' }
+        ],
+        sizes: SEEDREAM_SIZE_OPTIONS.map((o) => o.label),
+        defaultParams: {
+            size: '3:4',
+            quality: '2K'
+        }
+    },
+    {
         label: '豆包 Seedream 4.5（doubao-seedream-4-5-251128）',
         key: 'doubao-seedream-4-5-251128',
         endpoint: '/images/generations',
         authMode: 'bearer',
         format: 'doubao-seedream',
         timeout: 240000,
-        tips: '参考图目前仅支持 1 张。',
-        // 能力描述（用于 UI 限制与运行时校验）
+        tips: '支持文生图/多图融合；参考图需 http(s) URL，最多 6 张。',
         requiresPrompt: true,
         supportsReferenceImages: true,
-        maxRefImages: 1,
+        maxRefImages: 6,
         // 分辨率（方式1）：1K/2K/4K；尺寸（方式2）：通过像素宽高来精确指定比例
         qualities: [
             { label: '1K', key: '1K' },
@@ -125,11 +146,10 @@ export const IMAGE_MODELS = [
         authMode: 'bearer',
         format: 'doubao-seedream',
         timeout: 240000,
-        tips: '支持文生图/图生图；参考图需 http(s) URL，当前最多 1 张。',
-        // 能力描述（用于 UI 限制与运行时校验）
+        tips: '支持文生图/多图生图；参考图需 http(s) URL，最多 6 张。',
         requiresPrompt: true,
         supportsReferenceImages: true,
-        maxRefImages: 1,
+        maxRefImages: 6,
         // 分辨率（方式1）：1K/2K/4K；尺寸（方式2）：通过像素宽高来精确指定比例
         qualities: [
             { label: '1K', key: '1K' },
@@ -1303,6 +1323,28 @@ export const VIDEO_MODELS = [
         durs: [{ label: '10 秒', key: 10 }],
         supportsDuration: false,
         defaultParams: { ratio: '3:2', duration: 10, size: '720P' }
+    },
+    {
+        label: 'Grok Video 3 (15s)',
+        key: 'grok-video-3-15s',
+        endpoint: '/v1/video/create',
+        statusEndpoint: '/v1/video/query',
+        authMode: 'bearer',
+        format: 'unified-video',
+        requiresImages: true,
+        imagesMustBeHttp: true,
+        maxImages: 3,
+        tips: '需要提示词 + 图片（至少 1 张，且必须是公网 URL）。不支持首帧/尾帧语义，全部按参考图处理。',
+        requiresPrompt: true,
+        supportsFirstFrame: false,
+        supportsLastFrame: false,
+        supportsReferenceImages: true,
+        maxRefImages: 3,
+        ratios: ['3:2', '2:3', '1:1'],
+        sizes: [{ label: '720P', key: '720P' }],
+        durs: [{ label: '15 秒', key: 15 }],
+        supportsDuration: false,
+        defaultParams: { ratio: '3:2', duration: 15, size: '720P' }
     },
 ]
 

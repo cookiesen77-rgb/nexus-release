@@ -676,6 +676,51 @@ fn build_chat_messages(
   minimal
 }
 
+fn projects_meta_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+  let dir = canvas_store_dir(app)?;
+  Ok(dir.join("projects-meta.json"))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn save_projects_meta(app: tauri::AppHandle, meta: Value) -> Result<(), String> {
+  let path = projects_meta_path(&app)?;
+  tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+    let bytes = serde_json::to_vec(&meta).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
+    std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+    if let Err(err) = std::fs::rename(&tmp, &path) {
+      if path.exists() {
+        let _ = std::fs::remove_file(&path);
+        if let Err(err2) = std::fs::rename(&tmp, &path) {
+          let _ = std::fs::remove_file(&tmp);
+          return Err(err2.to_string());
+        }
+      } else {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(err.to_string());
+      }
+    }
+    Ok(())
+  })
+  .await
+  .map_err(|e| e.to_string())?
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn load_projects_meta(app: tauri::AppHandle) -> Result<Option<Value>, String> {
+  let path = projects_meta_path(&app)?;
+  tauri::async_runtime::spawn_blocking(move || -> Result<Option<Value>, String> {
+    if !path.exists() {
+      return Ok(None);
+    }
+    let raw = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let value: Value = serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
+    Ok(Some(value))
+  })
+  .await
+  .map_err(|e| e.to_string())?
+}
+
 #[tauri::command(rename_all = "camelCase")]
 async fn load_project_canvas(app: tauri::AppHandle, project_id: String) -> Result<Option<Value>, String> {
   if project_id.trim().is_empty() {
@@ -1342,7 +1387,9 @@ pub fn run() {
       search_memory,
       build_chat_messages,
       load_project_canvas,
-      delete_project_canvas
+      delete_project_canvas,
+      save_projects_meta,
+      load_projects_meta
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -15,36 +15,6 @@ const CANVAS_STORAGE_PREFIX = 'nexus-canvas-v1:'
 
 const makeId = () => `project_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 
-const readProjects = (): ProjectMeta[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .map((p: any) => ({
-        id: String(p?.id || ''),
-        name: String(p?.name || '未命名项目'),
-        description: typeof p?.description === 'string' ? p.description : undefined,
-        thumbnail: typeof p?.thumbnail === 'string' ? p.thumbnail : undefined,
-        createdAt: Number(p?.createdAt || 0),
-        updatedAt: Number(p?.updatedAt || p?.createdAt || 0)
-      }))
-      .filter((p) => p.id)
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-  } catch {
-    return []
-  }
-}
-
-const writeProjects = (projects: ProjectMeta[]) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-  } catch {
-    // ignore
-  }
-}
-
 const tryTauriInvoke = async <T,>(command: string, payload?: Record<string, unknown>) => {
   try {
     const { isTauri, invoke } = await import('@tauri-apps/api/core')
@@ -52,8 +22,65 @@ const tryTauriInvoke = async <T,>(command: string, payload?: Record<string, unkn
     const res = await invoke<T>(command, payload)
     return { ok: true as const, res }
   } catch (err) {
+    console.error(`[projects] tryTauriInvoke(${command}) failed:`, err)
     return { ok: false as const, err }
   }
+}
+
+const parseProjectArray = (raw: unknown): ProjectMeta[] => {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((p: any) => ({
+      id: String(p?.id || ''),
+      name: String(p?.name || '未命名项目'),
+      description: typeof p?.description === 'string' ? p.description : undefined,
+      thumbnail: typeof p?.thumbnail === 'string' ? p.thumbnail : undefined,
+      createdAt: Number(p?.createdAt || 0),
+      updatedAt: Number(p?.updatedAt || p?.createdAt || 0)
+    }))
+    .filter((p) => p.id)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+}
+
+const readProjectsFromLocal = (): ProjectMeta[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    return parseProjectArray(JSON.parse(raw))
+  } catch (err) {
+    console.error('[projects] readProjectsFromLocal failed:', err)
+    return []
+  }
+}
+
+const writeProjectsToLocal = (projects: ProjectMeta[]) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
+  } catch (err) {
+    console.error('[projects] writeProjectsToLocal failed:', err)
+    window.$message?.error?.('项目保存失败（存储空间可能已满），请导出重要数据后清理浏览器缓存')
+  }
+}
+
+const writeProjectsToTauri = (projects: ProjectMeta[]) => {
+  tryTauriInvoke('save_projects_meta', { meta: projects }).catch(() => {})
+}
+
+const mergeProjectLists = (a: ProjectMeta[], b: ProjectMeta[]): ProjectMeta[] => {
+  const map = new Map<string, ProjectMeta>()
+  for (const p of a) map.set(p.id, p)
+  for (const p of b) {
+    const existing = map.get(p.id)
+    if (!existing || p.updatedAt > existing.updatedAt) {
+      map.set(p.id, p)
+    }
+  }
+  return [...map.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+}
+
+const writeProjects = (projects: ProjectMeta[]) => {
+  writeProjectsToLocal(projects)
+  writeProjectsToTauri(projects)
 }
 
 const readCanvasLocal = (projectId: string) => {
@@ -84,7 +111,7 @@ const deleteCanvasLocal = (projectId: string) => {
 
 export type ProjectsState = {
   projects: ProjectMeta[]
-  hydrate: () => void
+  hydrate: () => Promise<void>
   create: (name?: string) => string
   rename: (id: string, name: string) => void
   updateDescription: (id: string, description: string) => void
@@ -95,9 +122,38 @@ export type ProjectsState = {
 }
 
 export const useProjectsStore = create<ProjectsState>((set, get) => ({
-  projects: readProjects(),
+  projects: readProjectsFromLocal(),
 
-  hydrate: () => set({ projects: readProjects() }),
+  hydrate: async () => {
+    const local = readProjectsFromLocal()
+    const tauri = await tryTauriInvoke<ProjectMeta[] | null>('load_projects_meta')
+    const tauriList = tauri.ok && tauri.res ? parseProjectArray(tauri.res) : []
+
+    if (tauriList.length === 0 && local.length === 0) {
+      set({ projects: [] })
+      return
+    }
+
+    if (tauriList.length === 0) {
+      // Tauri 无数据（首次迁移或文件丢失），以 localStorage 为准并回写
+      writeProjectsToTauri(local)
+      set({ projects: local })
+      return
+    }
+
+    if (local.length === 0) {
+      // localStorage 被清空但 Tauri 有数据 → 恢复
+      writeProjectsToLocal(tauriList)
+      set({ projects: tauriList })
+      return
+    }
+
+    // 两边都有数据，合并取最新
+    const merged = mergeProjectLists(local, tauriList)
+    writeProjectsToLocal(merged)
+    writeProjectsToTauri(merged)
+    set({ projects: merged })
+  },
 
   create: (name) => {
     const id = makeId()
@@ -163,7 +219,6 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
     const tauri = await tryTauriInvoke('delete_project_canvas', { projectId: id })
     if (!tauri.ok) deleteCanvasLocal(id)
 
-    // 清理该项目关联的 IndexedDB 媒体，避免长期堆积
     try {
       await deleteMediaByProjectId(id)
     } catch {
@@ -172,9 +227,10 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
   },
 
   touch: (id) => {
-    const projects = get().projects.map((p) => (p.id === id ? { ...p, updatedAt: Date.now() } : p))
+    const current = get().projects
+    if (current.length === 0) return
+    const projects = current.map((p) => (p.id === id ? { ...p, updatedAt: Date.now() } : p))
     writeProjects(projects)
     set({ projects })
   }
 }))
-

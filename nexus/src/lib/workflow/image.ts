@@ -5,6 +5,7 @@ import { getJson, postJson } from '@/lib/workflow/request'
 import { resolveCachedImageUrl } from '@/lib/workflow/cache'
 import { saveMedia, isLargeData, isBase64Data } from '@/lib/mediaStorage'
 import { requestQueue, type QueueTask } from '@/lib/workflow/requestQueue'
+import { ensureHttpImage } from '@/lib/imageUpload'
 import { useAssetsStore } from '@/store/assets'
 import { useSettingsStore } from '@/store/settings'
 import { useProjectsStore } from '@/store/projects'
@@ -549,12 +550,11 @@ export const generateImageFromConfigNode = async (
 
       const imageInputs = limitedRefImages.map((v) => String(v || '').trim()).filter(Boolean)
       if (imageInputs.length > 0) {
-        // 该接口需要“外网可访问的图片 URL”（data:/asset:// 等无法直接使用）
-        const invalid = imageInputs.find((v) => !isHttpUrl(v))
-        if (invalid) {
-          throw new Error('该模型的参考图必须是 http(s) URL（建议先用画布生成的图片，或将本地图片上传到图床后再用）')
+        const resolved: string[] = []
+        for (let i = 0; i < imageInputs.length; i++) {
+          resolved.push(await ensureHttpImage(imageInputs[i], `参考图${i + 1}`))
         }
-        payload.image = imageInputs
+        payload.image = resolved.filter(Boolean)
       }
 
       const rsp = await postJson<any>(modelCfg.endpoint, payload, { authMode: modelCfg.authMode, timeoutMs: modelCfg.timeout || 240000 })

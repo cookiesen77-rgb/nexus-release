@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input } from '@/components/ui/input'
 import SettingsDialog from '@/components/SettingsDialog'
@@ -11,6 +11,8 @@ export default function Home() {
   const projects = useProjectsStore((s) => s.projects)
   const hydrateProjects = useProjectsStore((s) => s.hydrate)
   const createProject = useProjectsStore((s) => s.create)
+
+  useEffect(() => { hydrateProjects() }, [hydrateProjects])
   const renameProject = useProjectsStore((s) => s.rename)
   const updateDescription = useProjectsStore((s) => s.updateDescription)
   const duplicateProject = useProjectsStore((s) => s.duplicate)
@@ -90,7 +92,6 @@ export default function Home() {
   const createWithInput = () => {
     const text = inputText.trim()
     const id = createProject(text ? text.slice(0, 18) : '新项目')
-    hydrateProjects()
     setInputText('')
     nav(`/canvas/${id}`, { state: text ? { initialPrompt: text } : undefined })
   }
@@ -103,7 +104,6 @@ export default function Home() {
   const confirmCreate = () => {
     const name = createName.trim() || '新项目'
     const id = createProject(name)
-    hydrateProjects()
     setCreateOpen(false)
     nav(`/canvas/${id}`)
   }
@@ -422,7 +422,7 @@ export default function Home() {
       )}
 
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <div className="fixed bottom-3 right-4 text-[11px] text-[var(--text-secondary)] opacity-40 select-none">v1.64.0</div>
+      <div className="fixed bottom-3 right-4 text-[11px] text-[var(--text-secondary)] opacity-40 select-none">v1.82.0</div>
     </div>
   )
 }

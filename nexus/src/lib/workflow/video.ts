@@ -1464,7 +1464,12 @@ export const generateVideoFromConfigNode = async (
           // 3) Convert local data to a public URL via image host upload.
           const localReadable = await resolveReadableImageFromNode(n)
           if (localReadable.startsWith('blob:')) {
-            throw new Error('该视频模型不支持 blob 图片，请使用上传/生成后的图片（可转成公网 URL）')
+            const blob = await resolveImageToBlob(localReadable)
+            if (!blob) throw new Error('图片读取失败，请尝试重新导入该图片')
+            const dataUrl = await blobToDataUrl(blob)
+            if (!dataUrl) throw new Error('图片转换失败')
+            const compressed = await compressImageBase64(dataUrl, 900 * 1024)
+            return await uploadBase64ToImageHost(compressed)
           }
           if (isDataUrl(localReadable)) {
             const compressed = await compressImageBase64(localReadable, 900 * 1024)
